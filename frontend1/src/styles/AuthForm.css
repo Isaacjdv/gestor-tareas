@@ -1,0 +1,349 @@
+/* --- Base para toda la página de autenticación --- */
+.login-page-container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    font-family: 'Segoe UI', sans-serif;
+    overflow: hidden;
+    background-color: #1f385c; /* Fondo de fallback para móviles o si la imagen no carga */
+}
+
+/* --- Estilo general para los paneles izquierdo y derecho --- */
+.login-panel {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 30px; /* Reducido para pantallas más pequeñas */
+    height: 100%;
+    box-sizing: border-box;
+}
+
+/* --- Panel Izquierdo (Imagen y Texto) --- */
+.left-panel {
+    background-size: cover;
+    background-position: center;
+    color: white;
+    flex-direction: column;
+    align-items: flex-start;
+    position: relative;
+    z-index: 1;
+    animation: slideInLeft 1s ease-out forwards;
+}
+
+.left-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(40, 20, 80, 0.4); /* Overlay semitransparente */
+    backdrop-filter: blur(8px); /* Efecto cristal */
+    -webkit-backdrop-filter: blur(8px);
+    z-index: -1;
+}
+
+.left-panel-content {
+    animation: fadeInContent 1.5s ease-out 0.5s forwards;
+    opacity: 0;
+    padding: 20px; /* Espaciado interno para el texto */
+}
+
+.left-panel h1 {
+    font-size: 3.5em; /* Más grande */
+    font-weight: 700;
+    margin-bottom: 25px;
+    text-shadow: 0 4px 10px rgba(0, 0, 0, 0.6); /* Sombra más fuerte */
+}
+
+.left-panel p {
+    font-size: 1.3em; /* Más grande */
+    max-width: 500px; /* Aumentar el ancho máximo para texto */
+    line-height: 1.8;
+    text-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* --- Panel Derecho (Formulario) --- */
+.right-panel {
+    background-color: #f9fafb; /* Fondo ligeramente gris para contraste */
+    animation: fadeInRight 1s ease-out 0.5s forwards;
+    opacity: 0;
+}
+
+.auth-form {
+    width: 100%;
+    max-width: 400px; /* Ajuste el ancho para que se vea mejor */
+    padding: 50px; /* Aumentar el padding interno del formulario */
+    background-color: #ffffff;
+    border-radius: 15px; /* Bordes más redondeados */
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15); /* Sombra más pronunciada y suave */
+    border: none; /* Eliminar el borde explícito, la sombra es suficiente */
+    box-sizing: border-box;
+}
+
+.auth-form h2 {
+    text-align: center; /* Centrar el título */
+    color: #333; /* Color oscuro para el texto */
+    font-size: 2.5em; /* Más grande para el título "USER LOGIN" */
+    margin-bottom: 45px; /* Más espacio abajo */
+    font-weight: 700;
+    letter-spacing: 1px; /* Espaciado entre letras */
+    text-transform: uppercase; /* MAYÚSCULAS */
+}
+
+/* --- Contenedor de Input con Icono --- */
+.input-container {
+    position: relative;
+    margin-bottom: 25px; /* Espacio entre los inputs */
+}
+
+.input-container i {
+    position: absolute;
+    left: 20px; /* Posición del icono */
+    top: 50%;
+    transform: translateY(-50%);
+    color: #aaa; /* Color del icono */
+    font-size: 1.1em;
+}
+
+.auth-form input {
+    width: 100%;
+    padding: 16px 30px 16px 10px; /* Más padding a la izquierda para el icono */
+    border: none; /* Sin borde */
+    border-radius: 30px; /* Bordes más redondeados */
+    background-color: #f0f2f5; /* Fondo de input */
+    font-size: 17px;
+    box-sizing: border-box;
+    transition: box-shadow 0.3s ease, background-color 0.3s ease;
+    color: #333;
+    margin-bottom: 10px; /* <-- AQUÍ ESTÁ LA SEPARACIÓN */
+
+}
+
+.auth-form input::placeholder {
+    color: #888;
+}
+
+.auth-form input:focus {
+    outline: none;
+    background-color: #e8eaf0; /* Color de fondo al enfocar */
+    box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.2); /* Sombra suave púrpura */
+}
+
+/* --- Opciones (Remember, Forgot Password) --- */
+.form-options {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px; /* Ajustar margen superior */
+    margin-bottom: 20px; /* Más espacio para el botón */
+    font-size: 1em;
+    color: #666;
+}
+
+.form-options label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.form-options input[type="checkbox"] {
+    appearance: none; /* Oculta el checkbox nativo */
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ccc;
+    border-radius: 40px;
+    margin-right: 8px;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f0f2f5;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.form-options input[type="checkbox"]:checked {
+    background-color: #8A2BE2; /* Color cuando está marcado */
+    border-color: #8A2BE2;
+}
+
+.form-options input[type="checkbox"]:checked::after {
+    content: '✔'; /* Símbolo de verificación */
+    color: white;
+    font-size: 12px;
+    line-height: 1; /* Para centrar el check */
+}
+
+.form-options a {
+    color: #8A2BE2; /* Púrpura */
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.form-options a:hover {
+    color: #C71585; /* Rosa al pasar el ratón */
+    text-decoration: underline;
+}
+
+/* --- Botón LOGIN --- */
+.auth-form button {
+    width: 100%;
+    padding: 16px; /* Más padding para que sea más grande */
+    border: none;
+    border-radius: 50px; /* Bordes más redondeados */
+    background: linear-gradient(90deg, #8A2BE2, #C71585); /* Degradado original */
+    color: white;
+    font-size: 1.2em; /* Texto más grande */
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.auth-form button:hover {
+    box-shadow: 0 8px 20px rgba(138, 43, 226, 0.4); /* Sombra más pronunciada al pasar el ratón */
+    transform: translateY(-3px);
+    opacity: 0.9;
+}
+
+.auth-form button:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 10px rgba(138, 43, 226, 0.3);
+    opacity: 1;
+}
+
+/* --- Mensajes y Enlaces Inferiores --- */
+.auth-form .message {
+    color: #e74c3c; /* Rojo para errores */
+    font-weight: 500;
+    margin-top: 15px;
+    text-align: center;
+    font-size: 0.95em;
+}
+
+.auth-form p {
+    text-align: center;
+    margin-top: 35px; /* Más espacio */
+    font-size: 0.95em;
+    color: #666;
+}
+
+.auth-form p a {
+    color: #8A2BE2;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.auth-form p a:hover {
+    text-decoration: underline;
+}
+
+.small-text {
+    display: block;
+    text-align: center;
+    margin-top: -10px;
+    margin-bottom: 20px; /* Más espacio */
+    color: #888;
+    font-size: 0.85em;
+}
+
+/* --- ANIMACIONES --- */
+@keyframes slideInLeft {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
+}
+
+@keyframes fadeInRight {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes fadeInContent {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- MEDIA QUERIES (RESPONSIVE) --- */
+@media (max-width: 992px) { /* Para tablets grandes y pequeños laptops */
+    .left-panel h1 {
+        font-size: 2.8em;
+    }
+    .left-panel p {
+        font-size: 1.1em;
+        max-width: 400px;
+    }
+    .auth-form {
+        padding: 40px 30px;
+        max-width: 350px;
+    }
+    .auth-form h2 {
+        font-size: 2.2em;
+    }
+}
+
+@media (max-width: 768px) { /* Para tablets y teléfonos */
+    .login-page-container {
+        flex-direction: column; /* Apila los paneles verticalmente */
+    }
+
+    .left-panel {
+        display: none; /* Oculta el panel izquierdo en móviles */
+    }
+
+    .right-panel {
+        flex: 1; /* El panel derecho ocupa todo el espacio */
+        background-color: #f0f2f5;
+        padding: 30px 20px;
+    }
+
+    .auth-form {
+        width: 100%;
+        max-width: 350px; /* Ancho máximo en móvil */
+        margin: auto; /* Centrar el formulario */
+        padding: 30px;
+        box-shadow: none; /* Elimina la sombra en móviles */
+        border: none;
+        background-color: #ffffff; /* Asegura un fondo blanco si el padre es gris */
+    }
+
+    .auth-form h2 {
+        font-size: 2em;
+        margin-bottom: 30px;
+    }
+
+    .auth-form input {
+        padding: 14px 20px 14px 50px; /* Ajustar padding para icono */
+        font-size: 16px;
+    }
+
+    .input-container i {
+        left: 15px; /* Ajustar posición del icono */
+        font-size: 1em;
+    }
+
+    .form-options {
+        font-size: 0.9em;
+        margin-bottom: 30px;
+    }
+
+    .auth-form button {
+        padding: 14px;
+        font-size: 1.1em;
+    }
+
+    .auth-form p {
+        margin-top: 25px;
+        font-size: 0.9em;
+    }
+
+    .small-text {
+        font-size: 0.8em;
+        margin-top: -5px;
+        margin-bottom: 15px;
+    }
+}
