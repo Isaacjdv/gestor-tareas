@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'https://gestor-tareas-backend.onrender.com/api/auth/';
+const API_URL = 'https://gestor-tareas-backend-11hi.onrender.com/api/auth/';
 // Función para registrar un usuario
 const register = (nombre, email, password, whatsapp_number) => {
     return axios.post(API_URL + 'register', {

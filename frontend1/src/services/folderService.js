@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'https://gestor-tareas-backend.onrender.com/api/folders/';
+const API_URL = 'https://gestor-tareas-backend-11hi.onrender.com/api/folders/';
 
 // Función para crear el header de autorización
 const getAuthHeader = () => {

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'https://gestor-tareas-backend.onrender.com/api/files/';
+const API_URL = 'https://gestor-tareas-backend-11hi.onrender.com/api/files/';
 
 const getAuthHeader = () => {
     const token = localStorage.getItem('user_token');
