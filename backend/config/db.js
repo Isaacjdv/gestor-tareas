@@ -4,17 +4,17 @@ require('dotenv').config();
 let pool;
 
 if (process.env.DATABASE_URL) {
-    // Conexión para producción (Render)
+    // This runs in production (on Render)
     pool = new Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: {
             rejectUnauthorized: false
         }
     });
-    console.log('✅ Conectado a la base de datos de producción (PostgreSQL).');
+    console.log('✅ Connected to production database (PostgreSQL).');
 } else {
-    // Conexión para desarrollo local (XAMPP - MySQL)
-    // ¡Necesitas instalar mysql2 para que esto funcione en local! npm install mysql2
+    // This runs on your local computer (XAMPP)
+    // Make sure you have mysql2 installed: npm install mysql2
     const mysql = require('mysql2/promise');
     pool = mysql.createPool({
         host: process.env.DB_HOST || 'localhost',
@@ -22,7 +22,7 @@ if (process.env.DATABASE_URL) {
         password: process.env.DB_PASSWORD || '',
         database: process.env.DB_NAME || 'gestion_tareas_db',
     });
-    console.log('✅ Conectado a la base de datos local (MySQL).');
+    console.log('✅ Connected to local database (MySQL).');
 }
 
 module.exports = pool;
