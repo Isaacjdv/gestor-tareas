@@ -2,15 +2,16 @@ const twilio = require('twilio');
 const userModel = require('../models/userModel');
 const folderModel = require('../models/folderModel');
 const fileModel = require('../models/fileModel');
+const reminderModel = require('../models/reminderModel');
 const aiService = require('../services/aiService');
 const transcriptionService = require('../services/transcriptionService');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const { addSeconds, addMinutes, addHours } = require('date-fns');
 
 // --- FUNCIÓN AUXILIAR ---
-// Convierte un tipo MIME a una extensión de archivo
 function getExtensionFromMimeType(mimeType) {
     if (!mimeType) return '';
     const parts = mimeType.split('/');
@@ -53,12 +54,11 @@ exports.receiveMessage = async (req, res) => {
                 fs.unlinkSync(tempAudioPath);
                 
                 if (!transcribedText || transcribedText.trim() === '') {
-                    twiml.message("Lo siento, no pude entender el audio. Por favor, intenta hablar más claro o envía un mensaje de texto.");
+                    twiml.message("Lo siento, no pude entender el audio. Intenta de nuevo.");
                     res.writeHead(200, { 'Content-Type': 'text/xml' });
                     return res.end(twiml.toString());
                 }
                 
-                console.log("Texto transcrito:", transcribedText);
                 incomingMsg = transcribedText;
             }
 
@@ -259,7 +259,7 @@ exports.receiveMessage = async (req, res) => {
                         
                         twiml.message(`Entendido, estoy generando tu documento sobre "${query}". Un momento...`);
                         
-                        const content = await aiService.generateConversationalResponse(query, user.nombre, { folders:[], files:[] });
+                        const pdfContent = await aiService.generatePdfContent(query, user.nombre);
 
                         const doc = new PDFDocument();
                         const pdfName = `${query.split(' ').slice(0,3).join('_')}_${Date.now()}.pdf`;
@@ -267,9 +267,7 @@ exports.receiveMessage = async (req, res) => {
                         
                         const stream = fs.createWriteStream(pdfPath);
                         doc.pipe(stream);
-                        doc.fontSize(20).text(query.charAt(0).toUpperCase() + query.slice(1), { align: 'center' });
-                        doc.moveDown(1.5);
-                        doc.fontSize(12).text(content, { align: 'justify' });
+                        doc.fontSize(12).text(pdfContent, { align: 'justify' });
                         doc.end();
 
                         await new Promise(resolve => stream.on('finish', resolve));
@@ -293,8 +291,38 @@ exports.receiveMessage = async (req, res) => {
                         }, 1500);
                         break;
                     
+                    case 'set_reminder':
+                        const { entity: reminderMsg, time: reminderTime, contact: reminderContact } = interpretation;
+                        if (!reminderMsg || !reminderTime) {
+                            twiml.message("No entendí bien. Dime qué recordar y cuándo (ej: recuérdame llamar a mamá en 10 mins).");
+                            break;
+                        }
+
+                        let triggerAt = new Date();
+                        const timeValue = parseInt(reminderTime) || 0;
+                        if (reminderTime.includes("segundo")) triggerAt = addSeconds(triggerAt, timeValue);
+                        if (reminderTime.includes("minuto")) triggerAt = addMinutes(triggerAt, timeValue);
+                        if (reminderTime.includes("hora")) triggerAt = addHours(triggerAt, timeValue);
+
+                        let recipientNumber = user.whatsapp_number;
+                        let confirmationMessage = `¡Entendido! Te recordaré "${reminderMsg}" en el momento justo.`;
+
+                        if (reminderContact && !['yo', 'mi', 'mí'].includes(reminderContact.toLowerCase())) {
+                            const recipientUser = await userModel.findByName(reminderContact);
+                            if (!recipientUser) {
+                                twiml.message(`No encontré a un usuario llamado "${reminderContact}".`);
+                                break;
+                            }
+                            recipientNumber = recipientUser.whatsapp_number;
+                            confirmationMessage = `¡Claro! Le recordaré a ${reminderContact} sobre "${reminderMsg}".`;
+                        }
+
+                        await reminderModel.create(user.id, reminderMsg, triggerAt, recipientNumber, user.nombre);
+                        twiml.message(confirmationMessage);
+                        break;
+
                     case 'clarification_needed':
-                        twiml.message("No estoy seguro de a qué archivo o carpeta te refieres. ¿Podrías ser un poco más específico, por favor?");
+                        twiml.message("No estoy seguro de a qué te refieres. ¿Podrías ser un poco más específico?");
                         break;
 
                     // --- INTENCIONES CONVERSACIONALES ---

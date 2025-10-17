@@ -117,43 +117,45 @@ exports.generateConversationalResponse = async (message, userName, userData) => 
     }
 };
 
-// FUNCIÓN 3 (NUEVA): Generador de Contenido para PDF Extenso y Formateado
+// FUNCIÓN 3 (MEJORADA): Generador de Contenido para PDF Extenso y Formateado
 exports.generatePdfContent = async (topic, userName) => {
     const today = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
     const prompt = `
-        Genera un contenido extenso y fácil de entender (al menos 3 páginas si se imprime) sobre el tema "${topic}".
-        El contenido debe ser adecuado para un PDF, con la siguiente estructura y características:
+        Tu tarea es generar un informe detallado y bien estructurado sobre el tema "${topic}". El informe debe ser de al menos 800 palabras y estar listo para ser insertado en un PDF.
 
-        - Encabezado:
-            - "Documento solicitado por: ${userName}"
-            - "Fecha de generación: ${today}"
-            - Un título claro relacionado con el tema.
-        - Tono: Educativo, pero sin mucho tecnicismo, apto para una comprensión general.
-        - Estructura:
-            - Una introducción clara.
-            - Al menos 3-4 secciones principales con subtítulos.
-            - Cada sección debe incluir al menos un ejemplo práctico o analógico para clarificar.
-            - Una conclusión.
-            - Una sección de "Bibliografía Sugerida" con 3-5 fuentes reales de donde obtener la infromación que em diste (ej: "Enciclopedia del Saber", "Artículo científico XYZ", "Libro ABC").
+        El informe DEBE tener la siguiente estructura:
 
-        Asegúrate de que la información sea rica en detalles, explicaciones y ejemplos para alcanzar la extensión deseada.
-        Formato de la respuesta: Texto plano, listo para ser copiado en un PDF, sin incluir directamente el JSON. Usa saltos de línea y doble salto de línea para párrafos.
+        1.  **ENCABEZADO:**
+            - Título: Un título creativo y descriptivo para el tema.
+            - Solicitado por: ${userName}
+            - Fecha: ${today}
+
+        2.  **CONTENIDO (mínimo 800 palabras):**
+            - **Introducción:** Un párrafo que presente el tema y su importancia.
+            - **Secciones:** Al menos 3 o 4 secciones con subtítulos en negrita. Cada sección debe desarrollar un aspecto del tema.
+            - **Ejemplos Prácticos:** Dentro de cada sección, incluye al menos un ejemplo claro y fácil de entender para ilustrar los puntos.
+            - **Tono:** Redacta de forma educativa y clara, evitando tecnicismos excesivos.
+            - **Conclusión:** Un párrafo final que resuma los puntos clave.
+
+        3.  **BIBLIOGRAFÍA:**
+            - Al final, incluye una sección llamada "Fuentes Consultadas" con 3 a 5 referencias de libros, artículos o sitios web realistas).
+
+        Genera únicamente el texto del informe, siguiendo esta estructura al pie de la letra.
     `;
 
     try {
         const response = await axios.post('https://api.ai21.com/studio/v1/chat/completions', {
-            model: 'jamba-large', // Puedes probar con otros modelos si están disponibles y son más potentes para esto
+            model: 'jamba-large',
             messages: [{ role: 'user', content: prompt }],
-            max_tokens: 2000, // Aumentado para generar contenido largo
-            temperature: 0.7, // Un poco más creativo para generar texto
-            top_p: 0.9,
+            max_tokens: 3000, // Aumentamos para permitir respuestas largas
+            temperature: 0.6, // Un poco más creativo para la redacción
         }, {
             headers: { 'Authorization': `Bearer ${AI21_API_KEY}`, 'Content-Type': 'application/json' }
         });
 
-        return response.data?.choices?.[0]?.message?.content?.trim() || "No pude generar el contenido solicitado para el PDF.";
+        return response.data?.choices?.[0]?.message?.content?.trim() || "No pude generar el contenido para el PDF.";
     } catch (error) {
-        console.error("Error al generar contenido extenso para PDF:", error.response?.data || error.message);
-        return "Lo siento, tuve un problema al generar el contenido extenso para tu PDF.";
+        console.error("Error al generar contenido para PDF:", error);
+        return "Lo siento, tuve un problema al generar el contenido de tu documento.";
     }
 };

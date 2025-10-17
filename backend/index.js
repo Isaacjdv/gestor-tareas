@@ -52,6 +52,18 @@ async function initializeDatabase() {
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
             );
+            -- NUEVA TABLA PARA RECORDATORIOS --
+            CREATE TABLE IF NOT EXISTS reminders (
+                id SERIAL PRIMARY KEY,
+                usuario_id INT NOT NULL, -- Quién pidió el recordatorio
+                recipient_whatsapp_number VARCHAR(25) NOT NULL, -- A quién se le envía
+                message TEXT NOT NULL,
+                trigger_at TIMESTAMPTZ NOT NULL,
+                status VARCHAR(20) DEFAULT 'pending', -- pending, sent, error
+                task_type VARCHAR(50) DEFAULT 'simple', -- 'simple' o 'investigation'
+                user_name VARCHAR(100),
+                FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+            );
         `;
         await pool.query(createTablesQuery);
         console.log("✅ Estructura de la base de datos verificada/creada con éxito.");
