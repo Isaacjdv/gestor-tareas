@@ -4,9 +4,14 @@ const reminderModel = require('../models/reminderModel');
 const aiService = require('../services/aiService');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
+const path = require('path');
 
 // Render establece automáticamente la URL pública del servicio en esta variable
+// Usamos el 'hostname' para asegurar que el path sea correcto.
 const RENDER_PUBLIC_URL = process.env.RENDER_EXTERNAL_URL;
+
+// Función auxiliar para esperar un tiempo
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * Inicia el programador de tareas que se ejecuta cada minuto.
@@ -47,7 +52,12 @@ exports.startScheduler = () => {
                         // 2. Crear el PDF
                         const doc = new PDFDocument();
                         const pdfName = `${reminder.message.split(' ').slice(0, 3).join('_')}_${Date.now()}.pdf`;
-                        const pdfPath = `uploads/${pdfName}`;
+                        
+                        // Guardar en una carpeta temporal para el usuario (para mantener la consistencia del path)
+                        const userUploadsPath = path.join(__dirname, '..', 'uploads', `${reminder.usuario_id}`);
+                        if (!fs.existsSync(userUploadsPath)) fs.mkdirSync(userUploadsPath, { recursive: true });
+
+                        const pdfPath = path.join('uploads', `${reminder.usuario_id}`, pdfName);
                         
                         const stream = fs.createWriteStream(pdfPath);
                         doc.pipe(stream);
@@ -57,24 +67,26 @@ exports.startScheduler = () => {
                         await new Promise(resolve => stream.on('finish', resolve));
 
                         // 3. Crear la URL de descarga usando la URL pública de Render
-                        mediaUrl = `${RENDER_PUBLIC_URL}/${pdfPath}`;
+                        // El path debe usar '/' en lugar de '\'
+                        mediaUrl = `${RENDER_PUBLIC_URL}/${pdfPath.replace(/\\/g, '/')}`;
                         messageBody = `¡Hola! Aquí tienes el PDF que me pediste sobre "${reminder.message}":`;
                     }
 
                     // Envía el mensaje de WhatsApp
                     await client.messages.create({
                         from: process.env.TWILIO_WHATSAPP_NUMBER,
-                        to: `whatsapp:${reminder.whatsapp_number}`,
+                        to: `whatsapp:${reminder.recipient_whatsapp_number}`, // Usamos el número del destinatario
                         body: messageBody,
-                        mediaUrl: mediaUrl,
+                        mediaUrl: mediaUrl ? [mediaUrl] : undefined, // Twilio requiere un array para mediaUrl
                     });
                     
                     // Actualiza el estado del recordatorio a 'sent'
                     await reminderModel.updateStatus(reminder.id, 'sent');
-                    console.log(`Recordatorio #${reminder.id} enviado a ${reminder.whatsapp_number}`);
+                    console.log(`Recordatorio #${reminder.id} enviado a ${reminder.recipient_whatsapp_number}`);
 
                 } catch (sendError) {
                     console.error(`Error al enviar el recordatorio #${reminder.id}:`, sendError);
+                    // Actualiza el estado a 'error' para que no lo intente de nuevo
                     await reminderModel.updateStatus(reminder.id, 'error');
                 }
             }
