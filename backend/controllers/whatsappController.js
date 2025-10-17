@@ -2,6 +2,7 @@ const twilio = require('twilio');
 const userModel = require('../models/userModel');
 const folderModel = require('../models/folderModel');
 const fileModel = require('../models/fileModel');
+const reminderModel = require('../models/reminderModel'); // <--- 🚨 CORRECCIÓN 1: Importar el modelo de recordatorios
 const aiService = require('../services/aiService');
 const transcriptionService = require('../services/transcriptionService');
 const axios = require('axios');
@@ -258,7 +259,6 @@ exports.receiveMessage = async (req, res) => {
                         const query = interpretation.entity;
                         if (!query) { twiml.message("Claro, dime sobre qué quieres que escriba en el PDF."); break; }
                         
-                        // 1. Enviar acuse de recibo inmediatamente a través de TwiML
                         twiml.message(`Entendido, estoy generando tu documento sobre "${query}". Esto puede tardar unos segundos...`);
                         
                         const pdfContent = await aiService.generatePdfContent(query, user.nombre);
@@ -284,7 +284,6 @@ exports.receiveMessage = async (req, res) => {
                         const publicPdfPath = pdfPath.replace(/\\/g, '/');
                         const fileUrlPdf = `${RENDER_URL}/${publicPdfPath}`;
                         
-                        // Guardar la sesión para la acción de guardar el archivo
                         userSessions[from] = { pendingAction: 'save_generated_file', filePath: pdfPath, originalName: pdfName };
 
                         const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -293,7 +292,7 @@ exports.receiveMessage = async (req, res) => {
                             // 2. Enviar el PDF al usuario
                             await client.messages.create({
                                 from: process.env.TWILIO_WHATSAPP_NUMBER,
-                                body: `¡Aquí tienes tu documento sobre "${query}"! 📄`, // Mensaje descriptivo
+                                body: `¡Aquí tienes tu documento sobre "${query}"! 📄`, 
                                 mediaUrl: [fileUrlPdf],
                                 to: `whatsapp:${from}`
                             });
@@ -308,11 +307,10 @@ exports.receiveMessage = async (req, res) => {
                             console.error("Error al enviar PDF o seguimiento con Twilio Client API:", e);
                             await client.messages.create({
                                 from: process.env.TWILIO_WHATSAPP_NUMBER,
-                                body: "Lo siento, no pude enviarte el PDF en este momento, pero ya está generado. Intenta pedirlo de nuevo en un minuto o revisa si se guardó automáticamente.",
+                                body: "Lo siento, no pude enviarte el PDF en este momento. Revisa si se guardó automáticamente o intenta pedirlo de nuevo.",
                                 to: `whatsapp:${from}`
                             });
                         }
-                        // El `twiml.toString()` se enviará al final de la ejecución de `receiveMessage`
                         break;
                     
                     case 'set_reminder':
@@ -323,10 +321,26 @@ exports.receiveMessage = async (req, res) => {
                         }
 
                         let triggerAt = new Date();
-                        const timeValue = parseInt(reminderTime) || 0;
-                        if (reminderTime.includes("segundo")) triggerAt = addSeconds(triggerAt, timeValue);
-                        if (reminderTime.includes("minuto")) triggerAt = addMinutes(triggerAt, timeValue);
-                        if (reminderTime.includes("hora")) triggerAt = addHours(triggerAt, timeValue);
+                        
+                        // FIX: 🚨 CORRECCIÓN 2: Usar RegExp para extraer el número de forma segura
+                        const match = reminderTime.match(/\d+/);
+                        const timeValue = match ? parseInt(match[0]) : 0;
+                        
+                        if (timeValue === 0) {
+                             twiml.message(`Lo siento, no pude entender la cantidad de tiempo en "${reminderTime}". Por favor, usa un formato como 'en 5 minutos' o 'en 30 segundos'.`);
+                             break;
+                        }
+
+                        if (reminderTime.includes("segundo")) {
+                             triggerAt = addSeconds(triggerAt, timeValue);
+                        } else if (reminderTime.includes("minuto")) {
+                             triggerAt = addMinutes(triggerAt, timeValue);
+                        } else if (reminderTime.includes("hora")) {
+                             triggerAt = addHours(triggerAt, timeValue);
+                        } else {
+                            twiml.message(`Lo siento, solo puedo programar recordatorios en relación a segundos, minutos u horas (ej: 'en 5 minutos').`);
+                            break;
+                        }
 
                         let recipientNumber = user.whatsapp_number;
                         let confirmationMessage = `¡Entendido! Te recordaré "${reminderMsg}" en el momento justo.`;
@@ -338,13 +352,13 @@ exports.receiveMessage = async (req, res) => {
                                 break;
                             }
                             recipientNumber = recipientUser.whatsapp_number;
-                            confirmationMessage = `¡Claro! Le recordaré a ${recipientContact} sobre "${reminderMsg}".`;
+                            confirmationMessage = `¡Claro! Le recordaré a ${reminderContact} sobre "${reminderMsg}".`;
                         }
                         
                         const isInvestigation = reminderMsg.toLowerCase().includes('investigar') || reminderMsg.toLowerCase().includes('hacer un informe');
                         const taskType = isInvestigation ? 'investigation' : 'simple';
 
-                        await reminderModel.create(user.id, reminderMsg, triggerAt, recipientNumber, user.nombre, taskType);
+                        await reminderModel.create(user.id, reminderMsg, triggerAt, recipientNumber, user.nombre, taskType); 
                         twiml.message(confirmationMessage);
                         break;
 

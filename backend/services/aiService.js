@@ -131,11 +131,13 @@ exports.generatePdfContent = async (topic, userName) => {
             - Fecha: ${today}
 
         2.  **CONTENIDO (mínimo 800 palabras):**
+            - **documento:** No pongar arteriscocos ni numerales en el documento.
             - **Introducción:** Un párrafo que presente el tema y su importancia.
             - **Secciones:** Al menos 3 o 4 secciones con subtítulos en negrita. Cada sección debe desarrollar un aspecto del tema.
             - **Ejemplos Prácticos:** Dentro de cada sección, incluye al menos un ejemplo claro y fácil de entender para ilustrar los puntos.
             - **Tono:** Redacta de forma educativa y clara, evitando tecnicismos excesivos.
             - **Conclusión:** Un párrafo final que resuma los puntos clave.
+
 
         3.  **BIBLIOGRAFÍA:**
             - Al final, incluye una sección llamada "Fuentes Consultadas" con 3 a 5 referencias de libros, artículos o sitios web realistas).
