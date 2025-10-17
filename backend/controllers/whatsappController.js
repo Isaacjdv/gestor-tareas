@@ -237,7 +237,7 @@ exports.receiveMessage = async (req, res) => {
                         if (!fileToSend) {
                             twiml.message(`No encontré el archivo que pediste.`);
                         } else {
-                            const ngrokUrl = "https://6c8eecea21d5.ngrok-free.app"; // <-- DEBES REEMPLAZAR ESTO
+                            const renderUrl = "https://gestor-tareas-backend-11hi.onrender.com"; // <--
                             const fileUrl = `${ngrokUrl}/${fileToSend.path_archivo.replace(/\\/g, '/')}`;
                             console.log("Intentando enviar archivo desde la URL:", fileUrl);
                             
@@ -267,7 +267,7 @@ exports.receiveMessage = async (req, res) => {
 
                         await new Promise(resolve => stream.on('finish', resolve));
 
-                        const ngrokUrlPdf = "https://6c8eecea21d5.ngrok-free.app"; // <-- DEBES REEMPLAZAR ESTO
+                       const renderUrl = "https://gestor-tareas-backend-11hi.onrender.com"; // <-- 
                         const fileUrlPdf = `${ngrokUrlPdf}/${pdfPath}`;
                         const messagePdf = twiml.message('Aquí tienes tu documento:');
                         messagePdf.media(fileUrlPdf);
