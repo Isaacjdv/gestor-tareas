@@ -1,7 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
-const pool = require('./config/db'); // Importamos la conexión a la base de datos
+const pool = require('./config/db');
+const schedulerService = require('./services/schedulerService'); // Importa el programador
 
 // --- FUNCIÓN PARA INICIALIZAR LA BASE DE DATOS ---
 async function initializeDatabase() {
@@ -38,6 +39,19 @@ async function initializeDatabase() {
                 FOREIGN KEY (carpeta_id) REFERENCES carpetas(id) ON DELETE CASCADE,
                 FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS reminders (
+                id SERIAL PRIMARY KEY,
+                usuario_id INT NOT NULL,
+                message TEXT NOT NULL,
+                trigger_at TIMESTAMPTZ NOT NULL,
+                status VARCHAR(20) DEFAULT 'pending', -- pending, sent, error
+                task_type VARCHAR(50), -- 'simple', 'investigation'
+                user_name VARCHAR(100), -- Para el encabezado del PDF
+                whatsapp_number VARCHAR(25), -- Para enviar el mensaje
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+            );
         `;
         await pool.query(createTablesQuery);
         console.log("✅ Estructura de la base de datos verificada/creada con éxito.");
@@ -69,5 +83,6 @@ app.use('/api/whatsapp', whatsappRoutes);
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`🚀 Servidor backend corriendo en http://localhost:${PORT}`);
-    initializeDatabase(); // <-- Llamamos a la función de inicialización aquí
+    initializeDatabase(); // Llama a la función de inicialización de la BD
+    schedulerService.startScheduler(); // Llama a la función para iniciar el programador de tareas
 });

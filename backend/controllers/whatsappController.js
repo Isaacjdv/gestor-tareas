@@ -10,6 +10,7 @@ const path = require('path');
 const PDFDocument = require('pdfkit');
 
 // --- FUNCIÓN AUXILIAR ---
+// Convierte un tipo MIME a una extensión de archivo
 function getExtensionFromMimeType(mimeType) {
     if (!mimeType) return '';
     const parts = mimeType.split('/');
@@ -52,7 +53,7 @@ exports.receiveMessage = async (req, res) => {
                 fs.unlinkSync(tempAudioPath);
                 
                 if (!transcribedText || transcribedText.trim() === '') {
-                    twiml.message("Lo siento, no pude entender el audio. Por favor, intenta hablar más claro.");
+                    twiml.message("Lo siento, no pude entender el audio. Por favor, intenta hablar más claro o envía un mensaje de texto.");
                     res.writeHead(200, { 'Content-Type': 'text/xml' });
                     return res.end(twiml.toString());
                 }
@@ -122,7 +123,7 @@ exports.receiveMessage = async (req, res) => {
                     }
                 }
             } else {
-                // --- FLUJO NORMAL (SIN SESIÓN PENDIENTE) ---
+                // --- FLUJO HÍBRIDO (SIN SESIÓN PENDIENTE) ---
                 const interpretation = await aiService.interpretMessage(incomingMsg || "El usuario adjuntó un archivo");
                 console.log('Interpretación de la IA:', interpretation);
 
@@ -172,7 +173,7 @@ exports.receiveMessage = async (req, res) => {
                                     method: 'get', url: mediaUrl, responseType: 'stream',
                                     auth: { username: process.env.TWILIO_ACCOUNT_SID, password: process.env.TWILIO_AUTH_TOKEN }
                                 });
-
+                                
                                 const userUploadsPath = path.join(__dirname, '..', 'uploads', `${user.id}`);
                                 if (!fs.existsSync(userUploadsPath)) fs.mkdirSync(userUploadsPath, { recursive: true });
                                 
@@ -215,9 +216,9 @@ exports.receiveMessage = async (req, res) => {
                         else {
                             const subFolders = await folderModel.findByParentId(user.id, targetFolder.id);
                             const files = await fileModel.findByFolderId(targetFolder.id);
-                            let content = `*Contenido de "${folderEntity}":*\n`;
+                            let content = `*Contenido de "${targetFolder.nombre}":*\n`;
                             if (subFolders.length === 0 && files.length === 0) {
-                                content = `La carpeta "${folderEntity}" está vacía.`;
+                                content = `La carpeta "${targetFolder.nombre}" está vacía.`;
                             } else {
                                 if (subFolders.length > 0) {
                                     content += `\n*Subcarpetas:*\n` + subFolders.map(f => `📁 ${f.nombre}`).join('\n');
@@ -290,6 +291,10 @@ exports.receiveMessage = async (req, res) => {
                                 });
                             } catch (e) { console.error("Error al enviar mensaje de seguimiento:", e); }
                         }, 1500);
+                        break;
+                    
+                    case 'clarification_needed':
+                        twiml.message("No estoy seguro de a qué archivo o carpeta te refieres. ¿Podrías ser un poco más específico, por favor?");
                         break;
 
                     // --- INTENCIONES CONVERSACIONALES ---
