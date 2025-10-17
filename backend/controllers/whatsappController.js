@@ -10,12 +10,16 @@ const path = require('path');
 const PDFDocument = require('pdfkit');
 
 // --- FUNCIÓN AUXILIAR ---
+// Convierte un tipo MIME a una extensión de archivo
 function getExtensionFromMimeType(mimeType) {
     if (!mimeType) return '';
+    // Ej: 'image/jpeg' -> '.jpeg'
     const parts = mimeType.split('/');
     let extension = `.${parts[parts.length - 1]}`;
+    // Casos comunes que no coinciden directamente
     if (extension === '.jpeg') return '.jpg';
     if (extension === '.quicktime') return '.mov';
+    // Para audios de WhatsApp que a veces vienen como 'ogg; codecs=opus'
     if (extension.startsWith('.ogg')) return '.ogg';
     return extension;
 }
@@ -52,7 +56,7 @@ exports.receiveMessage = async (req, res) => {
                 fs.unlinkSync(tempAudioPath);
                 
                 if (!transcribedText || transcribedText.trim() === '') {
-                    twiml.message("Lo siento, no pude entender el audio. Por favor, intenta hablar más claro.");
+                    twiml.message("Lo siento, no pude entender el audio. Por favor, intenta hablar más claro o envía un mensaje de texto.");
                     res.writeHead(200, { 'Content-Type': 'text/xml' });
                     return res.end(twiml.toString());
                 }
@@ -156,7 +160,7 @@ exports.receiveMessage = async (req, res) => {
                         break;
                     
                     case 'upload_file':
-                         const destFolder = interpretation.entity;
+                         const destFolder = interpretation.entity || interpretation.parent_entity;
                          if (!mediaUrl) { twiml.message("Adjunta un archivo y dime dónde guardarlo."); }
                          else if (!destFolder) {
                              userSessions[from] = { pendingAction: 'upload_file', mediaUrl, mediaType };
@@ -190,7 +194,7 @@ exports.receiveMessage = async (req, res) => {
                             }
                          }
                          break;
-
+                    
                     case 'list_folders':
                         const rootFolders = await folderModel.findByParentId(user.id, null);
                         if (rootFolders.length === 0) {
@@ -237,11 +241,11 @@ exports.receiveMessage = async (req, res) => {
                         if (!fileToSend) {
                             twiml.message(`No encontré el archivo que pediste.`);
                         } else {
-                            const renderUrl = "https://gestor-tareas-backend-11hi.onrender.com"; // <--
-                            const fileUrl = `${ngrokUrl}/${fileToSend.path_archivo.replace(/\\/g, '/')}`;
+                            const renderUrl = "https://gestor-tareas-backend-11hi.onrender.com";
+                            const fileUrl = `${renderUrl}/${fileToSend.path_archivo.replace(/\\/g, '/')}`;
                             console.log("Intentando enviar archivo desde la URL:", fileUrl);
                             
-                            const message = twiml.message(); // Crea un mensaje vacío para adjuntar el medio
+                            const message = twiml.message();
                             message.media(fileUrl);
                         }
                         break;
@@ -267,8 +271,8 @@ exports.receiveMessage = async (req, res) => {
 
                         await new Promise(resolve => stream.on('finish', resolve));
 
-                       const renderUrl = "https://gestor-tareas-backend-11hi.onrender.com"; // <-- 
-                        const fileUrlPdf = `${ngrokUrlPdf}/${pdfPath}`;
+                        const renderUrlPdf = "https://gestor-tareas-backend-11hi.onrender.com";
+                        const fileUrlPdf = `${renderUrlPdf}/${pdfPath}`;
                         const messagePdf = twiml.message('Aquí tienes tu documento:');
                         messagePdf.media(fileUrlPdf);
                         
