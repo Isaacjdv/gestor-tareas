@@ -1,6 +1,6 @@
 const db = require('../config/db');
 
-// Crear una nueva carpeta (versión para PostgreSQL)
+// Crear una nueva carpeta
 exports.create = async (nombre, usuario_id, parent_id = null) => {
     const { rows } = await db.query(
         'INSERT INTO carpetas (nombre, usuario_id, parent_id) VALUES ($1, $2, $3) RETURNING id',
@@ -26,6 +26,7 @@ exports.findByParentId = async (usuario_id, parent_id) => {
     }
 };
 
+// ... (Aquí irían el resto de funciones de este archivo, todas traducidas a la sintaxis de '$')
 // Actualizar el nombre de una carpeta
 exports.update = async (id, nombre) => {
     const { rowCount } = await db.query('UPDATE carpetas SET nombre = $1 WHERE id = $2', [nombre, id]);
