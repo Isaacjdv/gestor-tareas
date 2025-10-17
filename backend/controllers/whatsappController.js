@@ -32,6 +32,9 @@ exports.receiveMessage = async (req, res) => {
     const mediaUrl = numMedia > 0 ? req.body.MediaUrl0 : null;
     const mediaType = numMedia > 0 ? req.body.MediaContentType0 : null;
 
+    // Obtener la URL base del servicio de Render (se establece automáticamente)
+    const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+
     try {
         const user = await userModel.findByWhatsapp(from);
         if (!user) {
@@ -39,7 +42,8 @@ exports.receiveMessage = async (req, res) => {
         } else {
             // --- MANEJO DE AUDIOS ---
             if (numMedia > 0 && mediaType.startsWith('audio/')) {
-                console.log("Detectado mensaje de audio. Transcribiendo...");
+                // ... (lógica de transcripción de audios, sin cambios)
+                
                 const audioResponse = await axios({
                     method: 'get', url: mediaUrl, responseType: 'stream',
                     auth: { username: process.env.TWILIO_ACCOUNT_SID, password: process.env.TWILIO_AUTH_TOKEN }
@@ -53,12 +57,11 @@ exports.receiveMessage = async (req, res) => {
                 fs.unlinkSync(tempAudioPath);
                 
                 if (!transcribedText || transcribedText.trim() === '') {
-                    twiml.message("Lo siento, no pude entender el audio. Por favor, intenta hablar más claro.");
+                    twiml.message("Lo siento, no pude entender el audio. Por favor, intenta hablar más claro o envía un mensaje de texto.");
                     res.writeHead(200, { 'Content-Type': 'text/xml' });
                     return res.end(twiml.toString());
                 }
                 
-                console.log("Texto transcrito:", transcribedText);
                 incomingMsg = transcribedText;
             }
 
@@ -75,7 +78,7 @@ exports.receiveMessage = async (req, res) => {
                             method: 'get', url: session.mediaUrl, responseType: 'stream',
                             auth: { username: process.env.TWILIO_ACCOUNT_SID, password: process.env.TWILIO_AUTH_TOKEN }
                         });
-
+                        
                         const userUploadsPath = path.join(__dirname, '..', 'uploads', `${user.id}`);
                         if (!fs.existsSync(userUploadsPath)) fs.mkdirSync(userUploadsPath, { recursive: true });
                         
@@ -128,6 +131,7 @@ exports.receiveMessage = async (req, res) => {
                 console.log('Interpretación de la IA:', interpretation);
 
                 switch (interpretation.intent) {
+                    // --- ACCIONES DE EJECUCIÓN DIRECTA (CRUD y Upload) ---
                     case 'create_folder':
                         const { entity: newFolderName, parent_entity: parentFolderName } = interpretation;
                         if (!newFolderName) { twiml.message("Dime el nombre de la carpeta a crear."); break; }
@@ -159,7 +163,7 @@ exports.receiveMessage = async (req, res) => {
                         break;
                     
                     case 'upload_file':
-                         const destFolder = interpretation.entity || interpretation.parent_entity;
+                         const destFolder = interpretation.entity;
                          if (!mediaUrl) { twiml.message("Adjunta un archivo y dime dónde guardarlo."); }
                          else if (!destFolder) {
                              userSessions[from] = { pendingAction: 'upload_file', mediaUrl, mediaType };
@@ -172,7 +176,7 @@ exports.receiveMessage = async (req, res) => {
                                     method: 'get', url: mediaUrl, responseType: 'stream',
                                     auth: { username: process.env.TWILIO_ACCOUNT_SID, password: process.env.TWILIO_AUTH_TOKEN }
                                 });
-
+                                
                                 const userUploadsPath = path.join(__dirname, '..', 'uploads', `${user.id}`);
                                 if (!fs.existsSync(userUploadsPath)) fs.mkdirSync(userUploadsPath, { recursive: true });
                                 
@@ -188,15 +192,15 @@ exports.receiveMessage = async (req, res) => {
                                 await new Promise((resolve, reject) => { writer.on('finish', resolve); writer.on('error', reject); });
 
                                 await fileModel.create({
-                                    nombre_original: newFilename,
-                                    path_archivo: savePath, tipo_mime: mediaType,
+                                    nombre_original: newFilename, path_archivo: savePath, tipo_mime: mediaType,
                                     carpeta_id: folder.id, usuario_id: user.id
                                 });
                                 twiml.message(`¡Listo! Guardé el archivo como "${newFilename}" en "${destFolder}".`);
                             }
                          }
                          break;
-
+                    
+                    // --- ACCIONES DE CONSULTA CON FORMATO ---
                     case 'list_folders':
                         const rootFolders = await folderModel.findByParentId(user.id, null);
                         if (rootFolders.length === 0) {
@@ -243,7 +247,7 @@ exports.receiveMessage = async (req, res) => {
                         if (!fileToSend) {
                             twiml.message(`No encontré el archivo que pediste.`);
                         } else {
-                            const renderUrl = "https://gestor-tareas-backend-11hi.onrender.com";
+                            const renderUrl = process.env.RENDER_EXTERNAL_URL || "https://gestor-tareas-backend-11hi.onrender.com"; // Usa la variable de Render
                             const fileUrl = `${renderUrl}/${fileToSend.path_archivo.replace(/\\/g, '/')}`;
                             console.log("Intentando enviar archivo desde la URL:", fileUrl);
                             
@@ -259,18 +263,21 @@ exports.receiveMessage = async (req, res) => {
                         twiml.message(`Entendido, estoy generando tu documento sobre "${query}". Un momento...`);
                         
                         const pdfContent = await aiService.generatePdfContent(query, user.nombre);
+
                         const doc = new PDFDocument();
                         const pdfName = `${query.split(' ').slice(0,3).join('_')}_${Date.now()}.pdf`;
                         const pdfPath = `uploads/${pdfName}`;
                         
                         const stream = fs.createWriteStream(pdfPath);
                         doc.pipe(stream);
+                        doc.fontSize(20).text(query.charAt(0).toUpperCase() + query.slice(1), { align: 'center' });
+                        doc.moveDown(1.5);
                         doc.fontSize(12).text(pdfContent, { align: 'justify' });
                         doc.end();
 
                         await new Promise(resolve => stream.on('finish', resolve));
 
-                        const renderUrlPdf = "https://gestor-tareas-backend-11hi.onrender.com";
+                        const renderUrlPdf = process.env.RENDER_EXTERNAL_URL || "https://gestor-tareas-backend-11hi.onrender.com"; // Usa la variable de Render
                         const fileUrlPdf = `${renderUrlPdf}/${pdfPath}`;
                         const messagePdf = twiml.message('Aquí tienes tu documento:');
                         messagePdf.media(fileUrlPdf);
@@ -314,13 +321,17 @@ exports.receiveMessage = async (req, res) => {
                             recipientNumber = recipientUser.whatsapp_number;
                             confirmationMessage = `¡Claro! Le recordaré a ${reminderContact} sobre "${reminderMsg}".`;
                         }
+                        
+                        // Determinar el tipo de tarea
+                        const isInvestigation = reminderMsg.toLowerCase().includes('investigar') || reminderMsg.toLowerCase().includes('hacer un informe');
+                        const taskType = isInvestigation ? 'investigation' : 'simple';
 
-                        await reminderModel.create(user.id, reminderMsg, triggerAt, recipientNumber, user.nombre);
+                        await reminderModel.create(user.id, reminderMsg, triggerAt, recipientNumber, user.nombre, taskType);
                         twiml.message(confirmationMessage);
                         break;
 
                     case 'clarification_needed':
-                        twiml.message("No estoy seguro de a qué te refieres. ¿Podrías ser un poco más específico?");
+                        twiml.message("No estoy seguro de a qué archivo o carpeta te refieres. ¿Podrías ser un poco más específico, por favor?");
                         break;
 
                     // --- INTENCIONES CONVERSACIONALES ---
