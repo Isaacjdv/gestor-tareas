@@ -246,8 +246,7 @@ exports.receiveMessage = async (req, res) => {
                         if (!fileToSend) {
                             twiml.message(`No encontré el archivo que pediste.`);
                         } else {
-                            const renderUrl = RENDER_URL;
-                            const fileUrl = `${renderUrl}/${fileToSend.path_archivo.replace(/\\/g, '/')}`;
+                            const fileUrl = `${RENDER_URL}/${fileToSend.path_archivo.replace(/\\/g, '/')}`;
                             console.log("Intentando enviar archivo desde la URL:", fileUrl);
                             
                             const message = twiml.message();
@@ -259,39 +258,63 @@ exports.receiveMessage = async (req, res) => {
                         const query = interpretation.entity;
                         if (!query) { twiml.message("Claro, dime sobre qué quieres que escriba en el PDF."); break; }
                         
-                        twiml.message(`Entendido, estoy generando tu documento sobre "${query}". Un momento...`);
+                        // 1. Enviar acuse de recibo inmediatamente a través de TwiML
+                        twiml.message(`Entendido, estoy generando tu documento sobre "${query}". Esto puede tardar unos segundos...`);
                         
                         const pdfContent = await aiService.generatePdfContent(query, user.nombre);
 
                         const doc = new PDFDocument();
-                        const pdfName = `${query.split(' ').slice(0,3).join('_')}_${Date.now()}.pdf`;
-                        const pdfPath = `uploads/${pdfName}`;
+                        const sanitizedQuery = query.split(' ').slice(0,3).join('_').replace(/[^a-zA-Z0-9_]/g, '');
+                        const pdfName = `${sanitizedQuery}_${Date.now()}.pdf`;
+                        
+                        const userUploadsPath = path.join(__dirname, '..', 'uploads', `${user.id}`);
+                        if (!fs.existsSync(userUploadsPath)) fs.mkdirSync(userUploadsPath, { recursive: true });
+                        
+                        const pdfPath = path.join('uploads', `${user.id}`, pdfName);
                         
                         const stream = fs.createWriteStream(pdfPath);
                         doc.pipe(stream);
+                        doc.fontSize(20).text(query.charAt(0).toUpperCase() + query.slice(1), { align: 'center' });
+                        doc.moveDown(1.5);
                         doc.fontSize(12).text(pdfContent, { align: 'justify' });
                         doc.end();
 
                         await new Promise(resolve => stream.on('finish', resolve));
 
-                        const fileUrlPdf = `${RENDER_URL}/${pdfPath}`;
-                        const messagePdf = twiml.message('Aquí tienes tu documento:');
-                        messagePdf.media(fileUrlPdf);
+                        const publicPdfPath = pdfPath.replace(/\\/g, '/');
+                        const fileUrlPdf = `${RENDER_URL}/${publicPdfPath}`;
                         
+                        // Guardar la sesión para la acción de guardar el archivo
                         userSessions[from] = { pendingAction: 'save_generated_file', filePath: pdfPath, originalName: pdfName };
-                        
-                        setTimeout(async () => {
-                            try {
-                                const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-                                await client.messages.create({
-                                   from: process.env.TWILIO_WHATSAPP_NUMBER,
-                                   body: "¿Quieres que guarde este archivo en alguna de tus carpetas?",
-                                   to: `whatsapp:${from}`
-                                });
-                            } catch (e) { console.error("Error al enviar mensaje de seguimiento:", e); }
-                        }, 1500);
-                        break;
 
+                        const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+                        
+                        try {
+                            // 2. Enviar el PDF al usuario
+                            await client.messages.create({
+                                from: process.env.TWILIO_WHATSAPP_NUMBER,
+                                body: `¡Aquí tienes tu documento sobre "${query}"! 📄`, // Mensaje descriptivo
+                                mediaUrl: [fileUrlPdf],
+                                to: `whatsapp:${from}`
+                            });
+
+                            // 3. Enviar la pregunta de seguimiento (después del PDF)
+                            await client.messages.create({
+                                from: process.env.TWILIO_WHATSAPP_NUMBER,
+                                body: "¿Te gustaría guardar este archivo en alguna de tus carpetas?",
+                                to: `whatsapp:${from}`
+                            });
+                        } catch (e) {
+                            console.error("Error al enviar PDF o seguimiento con Twilio Client API:", e);
+                            await client.messages.create({
+                                from: process.env.TWILIO_WHATSAPP_NUMBER,
+                                body: "Lo siento, no pude enviarte el PDF en este momento, pero ya está generado. Intenta pedirlo de nuevo en un minuto o revisa si se guardó automáticamente.",
+                                to: `whatsapp:${from}`
+                            });
+                        }
+                        // El `twiml.toString()` se enviará al final de la ejecución de `receiveMessage`
+                        break;
+                    
                     case 'set_reminder':
                         const { entity: reminderMsg, time: reminderTime, contact: reminderContact } = interpretation;
                         if (!reminderMsg || !reminderTime) {
