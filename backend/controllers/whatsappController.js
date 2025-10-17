@@ -2,7 +2,6 @@ const twilio = require('twilio');
 const userModel = require('../models/userModel');
 const folderModel = require('../models/folderModel');
 const fileModel = require('../models/fileModel');
-const reminderModel = require('../models/reminderModel');
 const aiService = require('../services/aiService');
 const transcriptionService = require('../services/transcriptionService');
 const axios = require('axios');
@@ -54,11 +53,12 @@ exports.receiveMessage = async (req, res) => {
                 fs.unlinkSync(tempAudioPath);
                 
                 if (!transcribedText || transcribedText.trim() === '') {
-                    twiml.message("Lo siento, no pude entender el audio. Intenta de nuevo.");
+                    twiml.message("Lo siento, no pude entender el audio. Por favor, intenta hablar más claro.");
                     res.writeHead(200, { 'Content-Type': 'text/xml' });
                     return res.end(twiml.toString());
                 }
                 
+                console.log("Texto transcrito:", transcribedText);
                 incomingMsg = transcribedText;
             }
 
@@ -128,7 +128,6 @@ exports.receiveMessage = async (req, res) => {
                 console.log('Interpretación de la IA:', interpretation);
 
                 switch (interpretation.intent) {
-                    // --- ACCIONES DE EJECUCIÓN DIRECTA ---
                     case 'create_folder':
                         const { entity: newFolderName, parent_entity: parentFolderName } = interpretation;
                         if (!newFolderName) { twiml.message("Dime el nombre de la carpeta a crear."); break; }
@@ -173,7 +172,7 @@ exports.receiveMessage = async (req, res) => {
                                     method: 'get', url: mediaUrl, responseType: 'stream',
                                     auth: { username: process.env.TWILIO_ACCOUNT_SID, password: process.env.TWILIO_AUTH_TOKEN }
                                 });
-                                
+
                                 const userUploadsPath = path.join(__dirname, '..', 'uploads', `${user.id}`);
                                 if (!fs.existsSync(userUploadsPath)) fs.mkdirSync(userUploadsPath, { recursive: true });
                                 
@@ -260,7 +259,6 @@ exports.receiveMessage = async (req, res) => {
                         twiml.message(`Entendido, estoy generando tu documento sobre "${query}". Un momento...`);
                         
                         const pdfContent = await aiService.generatePdfContent(query, user.nombre);
-
                         const doc = new PDFDocument();
                         const pdfName = `${query.split(' ').slice(0,3).join('_')}_${Date.now()}.pdf`;
                         const pdfPath = `uploads/${pdfName}`;
@@ -290,7 +288,7 @@ exports.receiveMessage = async (req, res) => {
                             } catch (e) { console.error("Error al enviar mensaje de seguimiento:", e); }
                         }, 1500);
                         break;
-                    
+
                     case 'set_reminder':
                         const { entity: reminderMsg, time: reminderTime, contact: reminderContact } = interpretation;
                         if (!reminderMsg || !reminderTime) {
