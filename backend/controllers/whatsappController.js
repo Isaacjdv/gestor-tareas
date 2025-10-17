@@ -31,9 +31,10 @@ exports.receiveMessage = async (req, res) => {
     const numMedia = parseInt(req.body.NumMedia) || 0;
     const mediaUrl = numMedia > 0 ? req.body.MediaUrl0 : null;
     const mediaType = numMedia > 0 ? req.body.MediaContentType0 : null;
-
+    
     // Obtener la URL base del servicio de Render (se establece automáticamente)
-    const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+    const RENDER_URL = process.env.RENDER_EXTERNAL_URL || "https://gestor-tareas-backend-11hi.onrender.com";
+
 
     try {
         const user = await userModel.findByWhatsapp(from);
@@ -42,8 +43,7 @@ exports.receiveMessage = async (req, res) => {
         } else {
             // --- MANEJO DE AUDIOS ---
             if (numMedia > 0 && mediaType.startsWith('audio/')) {
-                // ... (lógica de transcripción de audios, sin cambios)
-                
+                console.log("Detectado mensaje de audio. Transcribiendo...");
                 const audioResponse = await axios({
                     method: 'get', url: mediaUrl, responseType: 'stream',
                     auth: { username: process.env.TWILIO_ACCOUNT_SID, password: process.env.TWILIO_AUTH_TOKEN }
@@ -62,6 +62,7 @@ exports.receiveMessage = async (req, res) => {
                     return res.end(twiml.toString());
                 }
                 
+                console.log("Texto transcrito:", transcribedText);
                 incomingMsg = transcribedText;
             }
 
@@ -126,12 +127,11 @@ exports.receiveMessage = async (req, res) => {
                     }
                 }
             } else {
-                // --- FLUJO HÍBRIDO (SIN SESIÓN PENDIENTE) ---
+                // --- FLUJO HÍBRIDO: INTERPRETAR Y ACTUAR/CONVERSAR ---
                 const interpretation = await aiService.interpretMessage(incomingMsg || "El usuario adjuntó un archivo");
                 console.log('Interpretación de la IA:', interpretation);
 
                 switch (interpretation.intent) {
-                    // --- ACCIONES DE EJECUCIÓN DIRECTA (CRUD y Upload) ---
                     case 'create_folder':
                         const { entity: newFolderName, parent_entity: parentFolderName } = interpretation;
                         if (!newFolderName) { twiml.message("Dime el nombre de la carpeta a crear."); break; }
@@ -199,8 +199,7 @@ exports.receiveMessage = async (req, res) => {
                             }
                          }
                          break;
-                    
-                    // --- ACCIONES DE CONSULTA CON FORMATO ---
+
                     case 'list_folders':
                         const rootFolders = await folderModel.findByParentId(user.id, null);
                         if (rootFolders.length === 0) {
@@ -247,7 +246,7 @@ exports.receiveMessage = async (req, res) => {
                         if (!fileToSend) {
                             twiml.message(`No encontré el archivo que pediste.`);
                         } else {
-                            const renderUrl = process.env.RENDER_EXTERNAL_URL || "https://gestor-tareas-backend-11hi.onrender.com"; // Usa la variable de Render
+                            const renderUrl = RENDER_URL;
                             const fileUrl = `${renderUrl}/${fileToSend.path_archivo.replace(/\\/g, '/')}`;
                             console.log("Intentando enviar archivo desde la URL:", fileUrl);
                             
@@ -270,15 +269,12 @@ exports.receiveMessage = async (req, res) => {
                         
                         const stream = fs.createWriteStream(pdfPath);
                         doc.pipe(stream);
-                        doc.fontSize(20).text(query.charAt(0).toUpperCase() + query.slice(1), { align: 'center' });
-                        doc.moveDown(1.5);
                         doc.fontSize(12).text(pdfContent, { align: 'justify' });
                         doc.end();
 
                         await new Promise(resolve => stream.on('finish', resolve));
 
-                        const renderUrlPdf = process.env.RENDER_EXTERNAL_URL || "https://gestor-tareas-backend-11hi.onrender.com"; // Usa la variable de Render
-                        const fileUrlPdf = `${renderUrlPdf}/${pdfPath}`;
+                        const fileUrlPdf = `${RENDER_URL}/${pdfPath}`;
                         const messagePdf = twiml.message('Aquí tienes tu documento:');
                         messagePdf.media(fileUrlPdf);
                         
@@ -319,10 +315,9 @@ exports.receiveMessage = async (req, res) => {
                                 break;
                             }
                             recipientNumber = recipientUser.whatsapp_number;
-                            confirmationMessage = `¡Claro! Le recordaré a ${reminderContact} sobre "${reminderMsg}".`;
+                            confirmationMessage = `¡Claro! Le recordaré a ${recipientContact} sobre "${reminderMsg}".`;
                         }
                         
-                        // Determinar el tipo de tarea
                         const isInvestigation = reminderMsg.toLowerCase().includes('investigar') || reminderMsg.toLowerCase().includes('hacer un informe');
                         const taskType = isInvestigation ? 'investigation' : 'simple';
 
