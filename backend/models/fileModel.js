@@ -40,15 +40,17 @@ exports.findAllByUserId = async (usuario_id) => {
     return rows;
 };
 
-// Encontrar un archivo por su nombre y el ID del usuario (PostgreSQL)
+// Encontrar un archivo por su nombre y el ID del usuario (insensible a mayúsculas)
 exports.findByNameAndUserId = async (nombre_original, usuario_id) => {
     const cleanName = nombre_original.split('.')[0].trim();
+    // CAMBIO CLAVE: Usamos ILIKE para ignorar mayúsculas/minúsculas
     const { rows } = await db.query(
-        'SELECT * FROM archivos WHERE nombre_original LIKE $1 AND usuario_id = $2 ORDER BY created_at DESC',
+        'SELECT * FROM archivos WHERE nombre_original ILIKE $1 AND usuario_id = $2 ORDER BY created_at DESC',
         [`${cleanName}%`, usuario_id]
     );
     return rows[0];
 };
+
 
 // Encontrar el archivo más reciente de un usuario (PostgreSQL)
 exports.findLatestByUserId = async (usuario_id) => {

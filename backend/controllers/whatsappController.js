@@ -10,16 +10,12 @@ const path = require('path');
 const PDFDocument = require('pdfkit');
 
 // --- FUNCIÓN AUXILIAR ---
-// Convierte un tipo MIME a una extensión de archivo
 function getExtensionFromMimeType(mimeType) {
     if (!mimeType) return '';
-    // Ej: 'image/jpeg' -> '.jpeg'
     const parts = mimeType.split('/');
     let extension = `.${parts[parts.length - 1]}`;
-    // Casos comunes que no coinciden directamente
     if (extension === '.jpeg') return '.jpg';
     if (extension === '.quicktime') return '.mov';
-    // Para audios de WhatsApp que a veces vienen como 'ogg; codecs=opus'
     if (extension.startsWith('.ogg')) return '.ogg';
     return extension;
 }
@@ -56,7 +52,7 @@ exports.receiveMessage = async (req, res) => {
                 fs.unlinkSync(tempAudioPath);
                 
                 if (!transcribedText || transcribedText.trim() === '') {
-                    twiml.message("Lo siento, no pude entender el audio. Por favor, intenta hablar más claro o envía un mensaje de texto.");
+                    twiml.message("Lo siento, no pude entender el audio. Por favor, intenta hablar más claro.");
                     res.writeHead(200, { 'Content-Type': 'text/xml' });
                     return res.end(twiml.toString());
                 }
@@ -78,13 +74,16 @@ exports.receiveMessage = async (req, res) => {
                             method: 'get', url: session.mediaUrl, responseType: 'stream',
                             auth: { username: process.env.TWILIO_ACCOUNT_SID, password: process.env.TWILIO_AUTH_TOKEN }
                         });
+
+                        const userUploadsPath = path.join(__dirname, '..', 'uploads', `${user.id}`);
+                        if (!fs.existsSync(userUploadsPath)) fs.mkdirSync(userUploadsPath, { recursive: true });
                         
                         const fileType = session.mediaType.split('/')[0];
-                        const baseName = fileType === 'application' ? 'documento' : fileType;
+                        const baseName = fileType === 'application' ? 'documento' : (fileType === 'image' ? 'imagen' : fileType);
                         const count = await fileModel.countByTypeInFolder(folder.id, fileType);
                         const extension = getExtensionFromMimeType(session.mediaType);
                         const newFilename = `${baseName}_${count + 1}${extension}`;
-                        const savePath = `uploads/${newFilename}`;
+                        const savePath = path.join('uploads', `${user.id}`, newFilename);
 
                         const writer = fs.createWriteStream(savePath);
                         response.data.pipe(writer);
@@ -173,13 +172,16 @@ exports.receiveMessage = async (req, res) => {
                                     method: 'get', url: mediaUrl, responseType: 'stream',
                                     auth: { username: process.env.TWILIO_ACCOUNT_SID, password: process.env.TWILIO_AUTH_TOKEN }
                                 });
+
+                                const userUploadsPath = path.join(__dirname, '..', 'uploads', `${user.id}`);
+                                if (!fs.existsSync(userUploadsPath)) fs.mkdirSync(userUploadsPath, { recursive: true });
                                 
                                 const fileType = mediaType.split('/')[0];
                                 const baseName = fileType === 'application' ? 'documento' : (fileType === 'image' ? 'imagen' : fileType);
                                 const count = await fileModel.countByTypeInFolder(folder.id, fileType);
                                 const extension = getExtensionFromMimeType(mediaType);
                                 const newFilename = `${baseName}_${count + 1}${extension}`;
-                                const savePath = `uploads/${newFilename}`;
+                                const savePath = path.join('uploads', `${user.id}`, newFilename);
 
                                 const writer = fs.createWriteStream(savePath);
                                 response.data.pipe(writer);
@@ -194,7 +196,7 @@ exports.receiveMessage = async (req, res) => {
                             }
                          }
                          break;
-                    
+
                     case 'list_folders':
                         const rootFolders = await folderModel.findByParentId(user.id, null);
                         if (rootFolders.length === 0) {

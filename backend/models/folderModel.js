@@ -15,15 +15,14 @@ exports.findByUserId = async (usuario_id) => {
     return rows;
 };
 
-// Encontrar carpetas por su parent_id
-exports.findByParentId = async (usuario_id, parent_id) => {
-    if (parent_id === null) {
-        const { rows } = await db.query('SELECT * FROM carpetas WHERE usuario_id = $1 AND parent_id IS NULL ORDER BY created_at DESC', [usuario_id]);
-        return rows;
-    } else {
-        const { rows } = await db.query('SELECT * FROM carpetas WHERE usuario_id = $1 AND parent_id = $2 ORDER BY created_at DESC', [usuario_id, parent_id]);
-        return rows;
-    }
+// Encontrar una carpeta por su nombre y el ID del usuario (insensible a mayúsculas)
+exports.findByNameAndUserId = async (nombre, usuario_id) => {
+    // CAMBIO CLAVE: Usamos ILIKE en lugar de '=' para ignorar mayúsculas/minúsculas
+    const { rows } = await db.query(
+        'SELECT * FROM carpetas WHERE nombre ILIKE $1 AND usuario_id = $2',
+        [nombre, usuario_id]
+    );
+    return rows[0];
 };
 
 // ... (Aquí irían el resto de funciones de este archivo, todas traducidas a la sintaxis de '$')
