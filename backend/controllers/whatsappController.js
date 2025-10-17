@@ -2,7 +2,7 @@ const twilio = require('twilio');
 const userModel = require('../models/userModel');
 const folderModel = require('../models/folderModel');
 const fileModel = require('../models/fileModel');
-const reminderModel = require('../models/reminderModel'); // <--- 🚨 CORRECCIÓN 1: Importar el modelo de recordatorios
+const reminderModel = require('../models/reminderModel');
 const aiService = require('../services/aiService');
 const transcriptionService = require('../services/transcriptionService');
 const axios = require('axios');
@@ -33,9 +33,8 @@ exports.receiveMessage = async (req, res) => {
     const mediaUrl = numMedia > 0 ? req.body.MediaUrl0 : null;
     const mediaType = numMedia > 0 ? req.body.MediaContentType0 : null;
     
-    // Obtener la URL base del servicio de Render (se establece automáticamente)
+    // Obtener la URL base del servicio de Render
     const RENDER_URL = process.env.RENDER_EXTERNAL_URL || "https://gestor-tareas-backend-11hi.onrender.com";
-
 
     try {
         const user = await userModel.findByWhatsapp(from);
@@ -164,7 +163,7 @@ exports.receiveMessage = async (req, res) => {
                         break;
                     
                     case 'upload_file':
-                         const destFolder = interpretation.entity;
+                         const destFolder = interpretation.entity || interpretation.parent_entity;
                          if (!mediaUrl) { twiml.message("Adjunta un archivo y dime dónde guardarlo."); }
                          else if (!destFolder) {
                              userSessions[from] = { pendingAction: 'upload_file', mediaUrl, mediaType };
@@ -259,6 +258,7 @@ exports.receiveMessage = async (req, res) => {
                         const query = interpretation.entity;
                         if (!query) { twiml.message("Claro, dime sobre qué quieres que escriba en el PDF."); break; }
                         
+                        // 1. Enviar acuse de recibo inmediatamente a través de TwiML
                         twiml.message(`Entendido, estoy generando tu documento sobre "${query}". Esto puede tardar unos segundos...`);
                         
                         const pdfContent = await aiService.generatePdfContent(query, user.nombre);
@@ -281,23 +281,24 @@ exports.receiveMessage = async (req, res) => {
 
                         await new Promise(resolve => stream.on('finish', resolve));
 
-                        const publicPdfPath = pdfPath.replace(/\\/g, '/');
-                        const fileUrlPdf = `${RENDER_URL}/${publicPdfPath}`;
+                        const fileUrlPdf = `${RENDER_URL}/${pdfPath}`;
                         
+                        // Guardar la sesión para la acción de guardar el archivo
                         userSessions[from] = { pendingAction: 'save_generated_file', filePath: pdfPath, originalName: pdfName };
 
+                        // 2. Usar Twilio CLIENT API para asegurar el envío del archivo
                         const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
                         
                         try {
-                            // 2. Enviar el PDF al usuario
+                            // Enviar el PDF (Cliente API)
                             await client.messages.create({
                                 from: process.env.TWILIO_WHATSAPP_NUMBER,
-                                body: `¡Aquí tienes tu documento sobre "${query}"! 📄`, 
+                                body: `¡Aquí tienes tu documento sobre "${query}"! 📄`, // Mensaje descriptivo
                                 mediaUrl: [fileUrlPdf],
                                 to: `whatsapp:${from}`
                             });
 
-                            // 3. Enviar la pregunta de seguimiento (después del PDF)
+                            // Enviar la pregunta de seguimiento (Cliente API)
                             await client.messages.create({
                                 from: process.env.TWILIO_WHATSAPP_NUMBER,
                                 body: "¿Te gustaría guardar este archivo en alguna de tus carpetas?",
@@ -312,7 +313,7 @@ exports.receiveMessage = async (req, res) => {
                             });
                         }
                         break;
-                    
+
                     case 'set_reminder':
                         const { entity: reminderMsg, time: reminderTime, contact: reminderContact } = interpretation;
                         if (!reminderMsg || !reminderTime) {
@@ -352,13 +353,13 @@ exports.receiveMessage = async (req, res) => {
                                 break;
                             }
                             recipientNumber = recipientUser.whatsapp_number;
-                            confirmationMessage = `¡Claro! Le recordaré a ${reminderContact} sobre "${reminderMsg}".`;
+                            confirmationMessage = `¡Claro! Le recordaré a ${recipientUser.nombre} sobre "${reminderMsg}".`;
                         }
                         
                         const isInvestigation = reminderMsg.toLowerCase().includes('investigar') || reminderMsg.toLowerCase().includes('hacer un informe');
                         const taskType = isInvestigation ? 'investigation' : 'simple';
 
-                        await reminderModel.create(user.id, reminderMsg, triggerAt, recipientNumber, user.nombre, taskType); 
+                        await reminderModel.create(user.id, reminderMsg, triggerAt, recipientNumber, user.nombre, taskType);
                         twiml.message(confirmationMessage);
                         break;
 
