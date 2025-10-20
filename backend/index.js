@@ -2,9 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const pool = require('./config/db');
-const schedulerService = require('./services/schedulerService'); 
-const chatRoutes = require('./routes/chatRoutes');
-app.use('/api/chat', chatRoutes); 
+const schedulerService = require('./services/schedulerService');
 
 // --- FUNCIÓN PARA INICIALIZAR LA BASE DE DATOS ---
 async function initializeDatabase() {
@@ -42,7 +40,6 @@ async function initializeDatabase() {
                 FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
             );
 
-            -- TABLA DE RECORDATORIOS FINAL (Unificada) --
             CREATE TABLE IF NOT EXISTS reminders (
                 id SERIAL PRIMARY KEY,
                 usuario_id INT NOT NULL,
@@ -51,7 +48,7 @@ async function initializeDatabase() {
                 trigger_at TIMESTAMPTZ NOT NULL,
                 status VARCHAR(20) DEFAULT 'pending', -- pending, sent, error
                 task_type VARCHAR(50) DEFAULT 'simple', -- 'simple' o 'investigation'
-                user_name VARCHAR(100), -- Para el encabezado del PDF
+                user_name VARCHAR(100),
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
             );
@@ -63,29 +60,32 @@ async function initializeDatabase() {
     }
 }
 
+// 1. Crear la aplicación Express
 const app = express();
 
-// Middlewares
+// 2. Usar los middlewares
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use('/uploads', express.static('uploads'));
 
-// Importar y usar rutas
+// 3. Importar y usar las rutas
 const authRoutes = require('./routes/authRoutes');
 const folderRoutes = require('./routes/folderRoutes');
 const fileRoutes = require('./routes/fileRoutes');
 const whatsappRoutes = require('./routes/whatsappRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/chat', chatRoutes);
 
-// Iniciar servidor
+// 4. Iniciar el servidor
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`🚀 Servidor backend corriendo en http://localhost:${PORT}`);
-    initializeDatabase(); // Llama a la función de inicialización de la BD
-    schedulerService.startScheduler(); // Llama a la función para iniciar el programador de tareas
+    initializeDatabase();
+    schedulerService.startScheduler();
 });
