@@ -67,3 +67,4 @@ exports.countByTypeInFolder = async (carpeta_id, mimeTypePrefix) => {
     );
     return parseInt(rows[0].count, 10);
 };
+
