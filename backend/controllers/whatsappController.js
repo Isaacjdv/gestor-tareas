@@ -11,7 +11,7 @@ const path = require('path');
 const PDFDocument = require('pdfkit');
 const { addSeconds, addMinutes, addHours } = require('date-fns');
 
-// --- HELPER FUNCTION ---
+// --- FUNCIÓN AUXILIAR ---
 function getExtensionFromMimeType(mimeType) {
     if (!mimeType) return '';
     const parts = mimeType.split('/');
@@ -38,9 +38,9 @@ exports.receiveMessage = async (req, res) => {
     try {
         const user = await userModel.findByWhatsapp(from);
         if (!user) {
-            twiml.message('Your number is not registered.');
+            twiml.message('Tu número no está registrado.');
         } else {
-            // --- AUDIO HANDLING ---
+            // --- MANEJO DE AUDIOS ---
             if (numMedia > 0 && mediaType.startsWith('audio/')) {
                 const audioResponse = await axios({
                     method: 'get', url: mediaUrl, responseType: 'stream',
@@ -55,22 +55,23 @@ exports.receiveMessage = async (req, res) => {
                 fs.unlinkSync(tempAudioPath);
                 
                 if (!transcribedText || transcribedText.trim() === '') {
-                    twiml.message("Sorry, I couldn't understand the audio. Please try speaking more clearly or send a text message.");
+                    twiml.message("Lo siento, no pude entender el audio. Por favor, intenta hablar más claro.");
                     res.writeHead(200, { 'Content-Type': 'text/xml' });
                     return res.end(twiml.toString());
                 }
                 
+                console.log("Texto transcrito:", transcribedText);
                 incomingMsg = transcribedText;
             }
 
-            // --- SESSION-BASED LOGIC ---
+            // --- LÓGICA DE MEMORIA PARA CONVERSACIONES PENDIENTES ---
             const session = userSessions[from];
             if (session) {
                 if (session.pendingAction === 'upload_file') {
                     const destFolder = incomingMsg;
                     const folder = await folderModel.findByNameAndUserId(destFolder, user.id);
                     if (!folder) {
-                        twiml.message(`I couldn't find the folder "${destFolder}".`);
+                        twiml.message(`No encontré la carpeta "${destFolder}".`);
                     } else {
                         const response = await axios({
                             method: 'get', url: session.mediaUrl, responseType: 'stream',
@@ -81,7 +82,7 @@ exports.receiveMessage = async (req, res) => {
                         if (!fs.existsSync(userUploadsPath)) fs.mkdirSync(userUploadsPath, { recursive: true });
                         
                         const fileType = session.mediaType.split('/')[0];
-                        const baseName = fileType === 'application' ? 'document' : (fileType === 'image' ? 'image' : fileType);
+                        const baseName = fileType === 'application' ? 'documento' : (fileType === 'image' ? 'imagen' : fileType);
                         const count = await fileModel.countByTypeInFolder(folder.id, fileType);
                         const extension = getExtensionFromMimeType(session.mediaType);
                         const newFilename = `${baseName}_${count + 1}${extension}`;
@@ -95,7 +96,7 @@ exports.receiveMessage = async (req, res) => {
                             nombre_original: newFilename, path_archivo: savePath, tipo_mime: session.mediaType,
                             carpeta_id: folder.id, usuario_id: user.id
                         });
-                        twiml.message(`Done! I've saved the file as "${newFilename}" in the "${destFolder}" folder.`);
+                        twiml.message(`¡Hecho! Guardé el archivo como "${newFilename}" en la carpeta "${destFolder}".`);
                     }
                     delete userSessions[from];
                 } else if (session.pendingAction === 'save_generated_file') {
@@ -103,71 +104,72 @@ exports.receiveMessage = async (req, res) => {
                     if (interpretation.intent === 'confirm_save_yes') {
                         const folderName = interpretation.entity;
                         if (!folderName) {
-                            twiml.message("Understood. Which folder should I save it in?");
+                            twiml.message("Entendido. ¿En qué carpeta lo guardo?");
                         } else {
                             const folder = await folderModel.findByNameAndUserId(folderName, user.id);
                             if (!folder) {
-                                twiml.message(`I couldn't find the folder "${folderName}".`);
+                                twiml.message(`No encontré la carpeta "${folderName}".`);
                             } else {
                                 await fileModel.create({
                                     nombre_original: session.originalName, path_archivo: session.filePath,
                                     tipo_mime: 'application/pdf', carpeta_id: folder.id, usuario_id: user.id
                                 });
-                                twiml.message(`Done! I've saved "${session.originalName}" in the "${folderName}" folder.`);
+                                twiml.message(`¡Listo! Guardé "${session.originalName}" en la carpeta "${folderName}".`);
                             }
                             delete userSessions[from];
                         }
                     } else {
                         fs.unlinkSync(session.filePath);
-                        twiml.message("Okay, I haven't saved it.");
+                        twiml.message("De acuerdo, no lo he guardado.");
                         delete userSessions[from];
                     }
                 }
             } else {
-                // --- HYBRID FLOW (NO PENDING SESSION) ---
-                const interpretation = await aiService.interpretMessage(incomingMsg || "User attached a file");
-                console.log('AI Interpretation:', interpretation);
+                // --- FLUJO HÍBRIDO (SIN SESIÓN PENDIENTE) ---
+                const interpretation = await aiService.interpretMessage(incomingMsg || "El usuario adjuntó un archivo");
+                console.log('Interpretación de la IA:', interpretation);
 
                 switch (interpretation.intent) {
+                    // --- ACCIONES DE EJECUCIÓN DIRECTA ---
                     case 'create_folder':
                         const { entity: newFolderName, parent_entity: parentFolderName } = interpretation;
-                        if (!newFolderName) { twiml.message("What should I name the new folder?"); break; }
+                        if (!newFolderName) { twiml.message("Dime el nombre de la carpeta a crear."); break; }
                         let parentId = null;
                         if (parentFolderName) {
                             const parentFolder = await folderModel.findByNameAndUserId(parentFolderName, user.id);
-                            if (!parentFolder) { twiml.message(`I couldn't find the parent folder "${parentFolderName}".`); break; }
+                            if (!parentFolder) { twiml.message(`No encontré la carpeta padre "${parentFolderName}".`); break; }
                             parentId = parentFolder.id;
                         }
                         await folderModel.create(newFolderName, user.id, parentId);
-                        const location = parentFolderName ? ` inside "${parentFolderName}"` : '';
-                        twiml.message(`Folder "${newFolderName}" created${location}.`);
+                        const location = parentFolderName ? ` dentro de "${parentFolderName}"` : '';
+                        twiml.message(`Carpeta "${newFolderName}" creada${location}.`);
                         break;
 
                     case 'edit_folder':
                         const { entity: oldName, new_entity: newName } = interpretation;
-                        if (!oldName || !newName) { twiml.message("What folder should I rename, and what's the new name?"); break; }
+                        if (!oldName || !newName) { twiml.message("Dime qué carpeta renombrar y el nuevo nombre (ej: renombra X a Y)."); break; }
                         const folderToEdit = await folderModel.findByNameAndUserId(oldName, user.id);
-                        if (!folderToEdit) { twiml.message(`I couldn't find the folder "${oldName}".`); }
-                        else { await folderModel.update(folderToEdit.id, newName); twiml.message(`Folder renamed to "${newName}".`); }
+                        if (!folderToEdit) { twiml.message(`No encontré la carpeta "${oldName}".`); }
+                        else { await folderModel.update(folderToEdit.id, newName); twiml.message(`Carpeta renombrada a "${newName}".`); }
                         break;
 
                     case 'delete_folder':
                         const folderToDeleteName = interpretation.entity;
-                        if (!folderToDeleteName) { twiml.message("Which folder should I delete?"); break; }
+                        if (!folderToDeleteName) { twiml.message("Dime qué carpeta eliminar."); break; }
                         const folderToDelete = await folderModel.findByNameAndUserId(folderToDeleteName, user.id);
-                        if (!folderToDelete) { twiml.message(`I couldn't find the folder "${folderToDeleteName}".`); }
-                        else { await folderModel.remove(folderToDelete.id); twiml.message(`Folder "${folderToDeleteName}" deleted.`); }
+                        if (!folderToDelete) { twiml.message(`No encontré la carpeta "${folderToDeleteName}".`); }
+                        else { await folderModel.remove(folderToDelete.id); twiml.message(`Carpeta "${folderToDeleteName}" eliminada.`); }
                         break;
                     
                     case 'upload_file':
                          const destFolder = interpretation.entity || interpretation.parent_entity;
-                         if (!mediaUrl) { twiml.message("Please attach a file and tell me where to save it."); }
+                         if (!mediaUrl) { twiml.message("Adjunta un archivo y dime dónde guardarlo."); }
                          else if (!destFolder) {
                              userSessions[from] = { pendingAction: 'upload_file', mediaUrl, mediaType };
-                             twiml.message("Understood. Which folder should I save this file in?");
+                             twiml.message("Entendido. ¿En qué carpeta lo guardo?");
                          } else {
                             const folder = await folderModel.findByNameAndUserId(destFolder, user.id);
-                            if (!folder) { twiml.message(`I couldn't find the folder "${destFolder}".`);}
+                            if (!folder) { twiml.message(`No encontré la carpeta "${destFolder}".`);}
                             else {
                                 const response = await axios({
                                     method: 'get', url: mediaUrl, responseType: 'stream',
@@ -178,7 +180,7 @@ exports.receiveMessage = async (req, res) => {
                                 if (!fs.existsSync(userUploadsPath)) fs.mkdirSync(userUploadsPath, { recursive: true });
                                 
                                 const fileType = mediaType.split('/')[0];
-                                const baseName = fileType === 'application' ? 'document' : (fileType === 'image' ? 'image' : fileType);
+                                const baseName = fileType === 'application' ? 'documento' : (fileType === 'image' ? 'imagen' : fileType);
                                 const count = await fileModel.countByTypeInFolder(folder.id, fileType);
                                 const extension = getExtensionFromMimeType(mediaType);
                                 const newFilename = `${baseName}_${count + 1}${extension}`;
@@ -192,7 +194,7 @@ exports.receiveMessage = async (req, res) => {
                                     nombre_original: newFilename, path_archivo: savePath, tipo_mime: mediaType,
                                     carpeta_id: folder.id, usuario_id: user.id
                                 });
-                                twiml.message(`Done! I've saved the file as "${newFilename}" in "${destFolder}".`);
+                                twiml.message(`¡Listo! Guardé el archivo como "${newFilename}" en "${destFolder}".`);
                             }
                          }
                          break;
@@ -200,30 +202,30 @@ exports.receiveMessage = async (req, res) => {
                     case 'list_folders':
                         const rootFolders = await folderModel.findByParentId(user.id, null);
                         if (rootFolders.length === 0) {
-                            twiml.message("You don't have any main folders.");
+                            twiml.message('No tienes carpetas principales.');
                         } else {
                             const folderList = rootFolders.map(f => `📁 ${f.nombre}`).join('\n');
-                            twiml.message(`Of course, ${user.nombre}. Here are your main folders:\n\n${folderList}`);
+                            twiml.message(`Claro, ${user.nombre}. Estas son tus carpetas principales:\n\n${folderList}`);
                         }
                         break;
                     
                     case 'view_folder':
                         const folderEntity = interpretation.entity;
-                        if (!folderEntity) { twiml.message("Which folder would you like to see?"); break; }
+                        if (!folderEntity) { twiml.message("Dime el nombre de la carpeta que quieres ver."); break; }
                         const targetFolder = await folderModel.findByNameAndUserId(folderEntity, user.id);
-                        if (!targetFolder) { twiml.message(`I couldn't find the folder "${folderEntity}".`); }
+                        if (!targetFolder) { twiml.message(`No encontré la carpeta "${folderEntity}".`); }
                         else {
                             const subFolders = await folderModel.findByParentId(user.id, targetFolder.id);
                             const files = await fileModel.findByFolderId(targetFolder.id);
-                            let content = `*Contents of "${targetFolder.nombre}":*\n`;
+                            let content = `*Contenido de "${targetFolder.nombre}":*\n`;
                             if (subFolders.length === 0 && files.length === 0) {
-                                content = `The folder "${targetFolder.nombre}" is empty.`;
+                                content = `La carpeta "${targetFolder.nombre}" está vacía.`;
                             } else {
                                 if (subFolders.length > 0) {
-                                    content += `\n*Subfolders:*\n` + subFolders.map(f => `📁 ${f.nombre}`).join('\n');
+                                    content += `\n*Subcarpetas:*\n` + subFolders.map(f => `📁 ${f.nombre}`).join('\n');
                                 }
                                 if (files.length > 0) {
-                                    content += `\n\n*Files:*\n` + files.map(f => `📄 ${f.nombre_original}`).join('\n');
+                                    content += `\n\n*Archivos:*\n` + files.map(f => `📄 ${f.nombre_original}`).join('\n');
                                 }
                             }
                             twiml.message(content.trim());
@@ -237,14 +239,14 @@ exports.receiveMessage = async (req, res) => {
                             fileToSend = await fileModel.findLatestByUserId(user.id);
                         } else {
                             const fileEntity = interpretation.entity;
-                            if (!fileEntity) { twiml.message("Which file do you need?"); break; }
+                            if (!fileEntity) { twiml.message("Dime el nombre del archivo que necesitas."); break; }
                             fileToSend = await fileModel.findByNameAndUserId(fileEntity, user.id);
                         }
                         if (!fileToSend) {
-                            twiml.message(`I couldn't find the file you asked for.`);
+                            twiml.message(`No encontré el archivo que pediste.`);
                         } else {
                             const fileUrl = `${RENDER_URL}/${fileToSend.path_archivo.replace(/\\/g, '/')}`;
-                            console.log("Attempting to send file from URL:", fileUrl);
+                            console.log("Intentando enviar archivo desde la URL:", fileUrl);
                             
                             const message = twiml.message();
                             message.media(fileUrl);
@@ -253,14 +255,14 @@ exports.receiveMessage = async (req, res) => {
                     
                     case 'generate_pdf':
                         const query = interpretation.entity;
-                        if (!query) { twiml.message("Sure, what topic should the PDF be about?"); break; }
+                        if (!query) { twiml.message("Claro, dime sobre qué quieres que escriba en el PDF."); break; }
                         
-                        twiml.message(`Understood, I'm generating your document about "${query}". This might take a moment...`);
+                        twiml.message(`Entendido, estoy generando tu documento sobre "${query}". Esto puede tardar unos segundos...`);
                         
                         const pdfData = await aiService.generatePdfContent(query, user.nombre);
 
                         if (!pdfData || !pdfData.textContent) {
-                            twiml.message("Sorry, I couldn't generate the content for your PDF right now.");
+                            twiml.message("Lo siento, no pude generar el contenido para tu PDF en este momento.");
                             break;
                         }
 
@@ -275,6 +277,12 @@ exports.receiveMessage = async (req, res) => {
                         
                         const stream = fs.createWriteStream(pdfPath);
                         doc.pipe(stream);
+                        
+                        doc.fontSize(22).text(pdfData.topic.charAt(0).toUpperCase() + pdfData.topic.slice(1), { align: 'center' });
+                        doc.moveDown(0.5);
+                        doc.fontSize(10).text(`Solicitado por: ${pdfData.userName}`, { align: 'center' });
+                        doc.fontSize(10).text(`Fecha: ${pdfData.today}`, { align: 'center' });
+                        doc.moveDown(2);
 
                         if (pdfData.imageUrl) {
                             try {
@@ -282,7 +290,7 @@ exports.receiveMessage = async (req, res) => {
                                 const imageBuffer = Buffer.from(imageResponse.data, 'binary');
                                 doc.image(imageBuffer, { fit: [500, 250], align: 'center' }).moveDown(2);
                             } catch (imgError) {
-                                console.error("Could not add image to PDF:", imgError.message);
+                                console.error("No se pudo añadir la imagen al PDF:", imgError.message);
                             }
                         }
                         
@@ -301,67 +309,61 @@ exports.receiveMessage = async (req, res) => {
                         try {
                             await client.messages.create({
                                 from: process.env.TWILIO_WHATSAPP_NUMBER,
-                                body: `Here is your document about "${query}"! 📄`,
+                                body: `¡Aquí tienes tu documento sobre "${query}"! 📄`,
                                 mediaUrl: [fileUrlPdf],
                                 to: `whatsapp:${from}`
                             });
                             await client.messages.create({
                                 from: process.env.TWILIO_WHATSAPP_NUMBER,
-                                body: "Would you like to save this file to one of your folders?",
+                                body: "¿Te gustaría guardar este archivo en alguna de tus carpetas?",
                                 to: `whatsapp:${from}`
                             });
                         } catch (e) {
-                            console.error("Error sending PDF or follow-up with Twilio Client API:", e);
-                            await client.messages.create({
-                                from: process.env.TWILIO_WHATSAPP_NUMBER,
-                                body: "Sorry, I couldn't send you the PDF right now, but it has been generated. Try asking for it again in a minute, or check if it was saved automatically.",
-                                to: `whatsapp:${from}`
-                            });
+                            console.error("Error al enviar PDF o seguimiento con Twilio Client API:", e);
                         }
                         break;
 
                     case 'set_reminder':
                         const { entity: reminderMsg, time: reminderTime, contact: reminderContact } = interpretation;
                         if (!reminderMsg || !reminderTime) {
-                            twiml.message("I didn't quite get that. Please tell me what to remember and when (e.g., 'remind me to call mom in 10 mins').");
+                            twiml.message("No entendí bien. Dime qué recordar y cuándo (ej: recuérdame llamar a mamá en 10 mins).");
                             break;
                         }
 
                         let triggerAt = new Date();
-                        
                         const match = reminderTime.match(/\d+/);
                         const timeValue = match ? parseInt(match[0]) : 0;
                         
                         if (timeValue === 0) {
-                             twiml.message(`Sorry, I couldn't understand the time amount in "${reminderTime}".`);
+                             twiml.message(`No pude entender la cantidad de tiempo en "${reminderTime}".`);
                              break;
                         }
 
-                        if (reminderTime.includes("second")) {
+                        if (reminderTime.includes("segundo")) {
                              triggerAt = addSeconds(triggerAt, timeValue);
-                        } else if (reminderTime.includes("minute")) {
+                        } else if (reminderTime.includes("minuto")) {
                              triggerAt = addMinutes(triggerAt, timeValue);
-                        } else if (reminderTime.includes("hour")) {
+                        } else if (reminderTime.includes("hora")) {
                              triggerAt = addHours(triggerAt, timeValue);
                         } else {
-                            twiml.message(`I can only schedule reminders in seconds, minutes, or hours.`);
+                            twiml.message(`Solo puedo programar en segundos, minutos u horas.`);
                             break;
                         }
 
                         let recipientNumber = user.whatsapp_number;
-                        let confirmationMessage = `Got it! I'll remind you "${reminderMsg}" at the right time.`;
+                        let confirmationMessage = `¡Entendido! Te recordaré "${reminderMsg}" en el momento justo.`;
 
-                        if (reminderContact && !['me', 'myself', 'i'].includes(reminderContact.toLowerCase())) {
+                        if (reminderContact && !['yo', 'mi', 'mí'].includes(reminderContact.toLowerCase())) {
                             const recipientUser = await userModel.findByName(reminderContact);
                             if (!recipientUser) {
-                                twiml.message(`I couldn't find a user named "${reminderContact}".`);
+                                twiml.message(`No encontré a un usuario llamado "${reminderContact}".`);
                                 break;
                             }
                             recipientNumber = recipientUser.whatsapp_number;
-                            confirmationMessage = `Of course! I'll remind ${recipientUser.nombre} about "${reminderMsg}".`;
+                            confirmationMessage = `¡Claro! Le recordaré a ${recipientUser.nombre} sobre "${reminderMsg}".`;
                         }
                         
-                        const isInvestigation = reminderMsg.toLowerCase().includes('research') || reminderMsg.toLowerCase().includes('make a report on');
+                        const isInvestigation = reminderMsg.toLowerCase().includes('investigar') || reminderMsg.toLowerCase().includes('hacer un informe');
                         const taskType = isInvestigation ? 'investigation' : 'simple';
 
                         await reminderModel.create(user.id, reminderMsg, triggerAt, recipientNumber, user.nombre, taskType);
@@ -369,10 +371,10 @@ exports.receiveMessage = async (req, res) => {
                         break;
 
                     case 'clarification_needed':
-                        twiml.message("I'm not sure which file or folder you're referring to. Could you be a bit more specific, please?");
+                        twiml.message("No estoy seguro de a qué archivo o carpeta te refieres. ¿Podrías ser un poco más específico, por favor?");
                         break;
 
-                    // --- CONVERSATIONAL INTENTS ---
+                    // --- INTENCIONES CONVERSACIONALES ---
                     case 'greeting':
                     case 'get_summary':
                     case 'unknown':
@@ -388,8 +390,8 @@ exports.receiveMessage = async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'text/xml' });
         res.end(twiml.toString());
     } catch (error) {
-        console.error("Critical error in WhatsApp webhook:", error);
-        twiml.message('Sorry, an internal error occurred while processing your message.');
+        console.error("Error crítico en el webhook de WhatsApp:", error);
+        twiml.message('Lo siento, ocurrió un error interno al procesar tu mensaje.');
         res.writeHead(200, { 'Content-Type': 'text/xml' });
         res.end(twiml.toString());
     }

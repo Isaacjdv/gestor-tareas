@@ -8,17 +8,29 @@ exports.interpretMessage = async (message) => {
         Tu trabajo es analizar el mensaje de un usuario para un bot de gestión de tareas y convertirlo en un comando JSON.
         Responde SIEMPRE y ÚNICAMENTE con un objeto JSON.
 
-        Las intenciones posibles son: "greeting", "list_folders", "view_folder", "create_folder", "edit_folder", "delete_folder", "upload_file", "send_file", "send_latest_file", "get_summary", "generate_pdf", "confirm_save_yes", "confirm_save_no", "set_reminder", "schedule_file_send", "clarification_needed", "unknown".
+        Las intenciones posibles son:
+        "greeting", "list_folders", "view_folder", "create_folder", "edit_folder", "delete_folder",
+        "upload_file", "send_file", "send_latest_file", "get_summary", "generate_pdf",
+        "confirm_save_yes", "confirm_save_no", "set_reminder", "schedule_file_send",
+        "clarification_needed", "unknown".
 
-        REGLAS CRÍTICAS:
-        1. Sé EXTREMADAMENTE LITERAL al extraer nombres en "entity", "parent_entity" o "new_entity". No simplifiques "Base de datos II" a "Base de datos".
-        2. Para "upload_file", la "entity" es SIEMPRE el nombre de la carpeta destino.
-        3. Para "generate_pdf", extrae el tema de la consulta en "entity".
-        4. Para "set_reminder" y "schedule_file_send", extrae la descripción, el contacto (si existe) y el tiempo.
-        5. Si una acción necesita un nombre (ver, editar, etc.) y no está claro, usa "clarification_needed".
+        REGLAS CRÍTICAS para la extracción de entidades:
+        1. Al extraer nombres en "entity", "parent_entity" o "new_entity", sé EXTREMADAMENTE LITERAL. No simplifiques "Base de datos II" a "Base de datos". Mantén mayúsculas y minúsculas tal como las escribe el usuario.
+        2. Para "upload_file", la "entity" es SIEMPRE el nombre de la carpeta de destino. NUNCA uses palabras genéricas como "esto" o "archivo".
+        3. Para "generate_pdf", extrae la consulta completa en "entity".
+        4. Para "confirm_save_yes", si se menciona una carpeta, extráela en "entity".
+        5. Para "set_reminder":
+           - "entity": La descripción de la actividad o el recordatorio.
+           - "time": La hora o período de tiempo (ej: "en 2 horas", "mañana a las 9 am").
+        6. Para "schedule_file_send":
+           - "entity": El nombre del archivo a enviar.
+           - "contact": El nombre o número del contacto.
+           - "time": La hora o período de tiempo.
+           - "message": Un mensaje adicional (opcional).
+        7. Si una acción necesita un nombre y no está claro, usa la intención "clarification_needed".
 
         ### Ejemplos ###
-        - Usuario: "hola que tal" -> {"intent": "greeting"}
+        - Usuario: "hola" -> {"intent": "greeting"}
         - Usuario: "muéstrame mis carpetas" -> {"intent": "list_folders"}
         - Usuario: "qué hay dentro de la carpeta Base de datos II" -> {"intent": "view_folder", "entity": "Base de datos II"}
         - Usuario: "crea la carpeta 'Impuestos 2025' dentro de 'Facturas'" -> {"intent": "create_folder", "entity": "Impuestos 2025", "parent_entity": "Facturas"}
@@ -46,7 +58,7 @@ exports.interpretMessage = async (message) => {
         const rawResponse = response.data?.choices?.[0]?.message?.content?.trim();
         const jsonMatch = rawResponse.match(/{[\s\S]*}/);
         const cleanedJsonString = jsonMatch ? jsonMatch[0] : rawResponse;
-        try { return JSON.parse(cleanedJsonString); } 
+        try { return JSON.parse(cleanedJsonString); }
         catch (parseError) { return { intent: "unknown" }; }
     } catch (error) { return { intent: "error" }; }
 };
@@ -88,7 +100,7 @@ exports.generateConversationalResponse = async (message, userName, userData) => 
     }
 };
 
-// FUNCIÓN 3: Generador de Contenido para PDF Extenso con Imagen
+// --- FUNCIÓN PARA BUSCAR IMÁGENES ---
 async function fetchRelevantImage(topic) {
     if (!UNSPLASH_ACCESS_KEY) return null;
     try {
@@ -103,6 +115,7 @@ async function fetchRelevantImage(topic) {
     }
 }
 
+// FUNCIÓN 3: Generador de Contenido para PDF Extenso con Imagen
 exports.generatePdfContent = async (topic, userName) => {
     const today = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
     const prompt = `
