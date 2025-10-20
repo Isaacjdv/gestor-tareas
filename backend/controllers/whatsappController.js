@@ -33,7 +33,6 @@ exports.receiveMessage = async (req, res) => {
     const mediaUrl = numMedia > 0 ? req.body.MediaUrl0 : null;
     const mediaType = numMedia > 0 ? req.body.MediaContentType0 : null;
     
-    // Obtener la URL base del servicio de Render
     const RENDER_URL = process.env.RENDER_EXTERNAL_URL || "https://gestor-tareas-backend-11hi.onrender.com";
 
     try {
@@ -43,7 +42,6 @@ exports.receiveMessage = async (req, res) => {
         } else {
             // --- MANEJO DE AUDIOS ---
             if (numMedia > 0 && mediaType.startsWith('audio/')) {
-                console.log("Detectado mensaje de audio. Transcribiendo...");
                 const audioResponse = await axios({
                     method: 'get', url: mediaUrl, responseType: 'stream',
                     auth: { username: process.env.TWILIO_ACCOUNT_SID, password: process.env.TWILIO_AUTH_TOKEN }
@@ -57,12 +55,10 @@ exports.receiveMessage = async (req, res) => {
                 fs.unlinkSync(tempAudioPath);
                 
                 if (!transcribedText || transcribedText.trim() === '') {
-                    twiml.message("Lo siento, no pude entender el audio. Por favor, intenta hablar más claro o envía un mensaje de texto.");
+                    twiml.message("Lo siento, no pude entender el audio. Por favor, intenta hablar más claro.");
                     res.writeHead(200, { 'Content-Type': 'text/xml' });
                     return res.end(twiml.toString());
                 }
-                
-                console.log("Texto transcrito:", transcribedText);
                 incomingMsg = transcribedText;
             }
 
@@ -127,11 +123,12 @@ exports.receiveMessage = async (req, res) => {
                     }
                 }
             } else {
-                // --- FLUJO HÍBRIDO: INTERPRETAR Y ACTUAR/CONVERSAR ---
+                // --- FLUJO HÍBRIDO (SIN SESIÓN PENDIENTE) ---
                 const interpretation = await aiService.interpretMessage(incomingMsg || "El usuario adjuntó un archivo");
                 console.log('Interpretación de la IA:', interpretation);
 
                 switch (interpretation.intent) {
+                    // --- ACCIONES DE EJECUCIÓN DIRECTA ---
                     case 'create_folder':
                         const { entity: newFolderName, parent_entity: parentFolderName } = interpretation;
                         if (!newFolderName) { twiml.message("Dime el nombre de la carpeta a crear."); break; }
@@ -258,10 +255,14 @@ exports.receiveMessage = async (req, res) => {
                         const query = interpretation.entity;
                         if (!query) { twiml.message("Claro, dime sobre qué quieres que escriba en el PDF."); break; }
                         
-                        // 1. Enviar acuse de recibo inmediatamente a través de TwiML
                         twiml.message(`Entendido, estoy generando tu documento sobre "${query}". Esto puede tardar unos segundos...`);
                         
-                        const pdfContent = await aiService.generatePdfContent(query, user.nombre);
+                        const pdfData = await aiService.generatePdfContent(query, user.nombre);
+
+                        if (!pdfData || !pdfData.textContent) {
+                            twiml.message("Lo siento, no pude generar el contenido para tu PDF en este momento.");
+                            break;
+                        }
 
                         const doc = new PDFDocument();
                         const sanitizedQuery = query.split(' ').slice(0,3).join('_').replace(/[^a-zA-Z0-9_]/g, '');
@@ -274,31 +275,42 @@ exports.receiveMessage = async (req, res) => {
                         
                         const stream = fs.createWriteStream(pdfPath);
                         doc.pipe(stream);
-                        doc.fontSize(20).text(query.charAt(0).toUpperCase() + query.slice(1), { align: 'center' });
-                        doc.moveDown(1.5);
-                        doc.fontSize(12).text(pdfContent, { align: 'justify' });
+                        
+                        doc.fontSize(22).text(pdfData.topic.charAt(0).toUpperCase() + pdfData.topic.slice(1), { align: 'center' });
+                        doc.moveDown(0.5);
+                        doc.fontSize(10).text(`Solicitado por: ${pdfData.userName}`, { align: 'center' });
+                        doc.fontSize(10).text(`Fecha: ${pdfData.today}`, { align: 'center' });
+                        doc.moveDown(2);
+
+                        if (pdfData.imageUrl) {
+                            try {
+                                const imageResponse = await axios.get(pdfData.imageUrl, { responseType: 'arraybuffer' });
+                                const imageBuffer = Buffer.from(imageResponse.data, 'binary');
+                                doc.image(imageBuffer, { fit: [500, 250], align: 'center' }).moveDown(2);
+                            } catch (imgError) {
+                                console.error("No se pudo añadir la imagen al PDF:", imgError.message);
+                            }
+                        }
+                        
+                        doc.fontSize(12).text(pdfData.textContent, { align: 'justify' });
                         doc.end();
 
                         await new Promise(resolve => stream.on('finish', resolve));
 
-                        const fileUrlPdf = `${RENDER_URL}/${pdfPath}`;
+                        const publicPdfPath = pdfPath.replace(/\\/g, '/');
+                        const fileUrlPdf = `${RENDER_URL}/${publicPdfPath}`;
                         
-                        // Guardar la sesión para la acción de guardar el archivo
                         userSessions[from] = { pendingAction: 'save_generated_file', filePath: pdfPath, originalName: pdfName };
 
-                        // 2. Usar Twilio CLIENT API para asegurar el envío del archivo
                         const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
                         
                         try {
-                            // Enviar el PDF (Cliente API)
                             await client.messages.create({
                                 from: process.env.TWILIO_WHATSAPP_NUMBER,
-                                body: `¡Aquí tienes tu documento sobre "${query}"! 📄`, // Mensaje descriptivo
+                                body: `¡Aquí tienes tu documento sobre "${query}"! 📄`,
                                 mediaUrl: [fileUrlPdf],
                                 to: `whatsapp:${from}`
                             });
-
-                            // Enviar la pregunta de seguimiento (Cliente API)
                             await client.messages.create({
                                 from: process.env.TWILIO_WHATSAPP_NUMBER,
                                 body: "¿Te gustaría guardar este archivo en alguna de tus carpetas?",
@@ -306,11 +318,6 @@ exports.receiveMessage = async (req, res) => {
                             });
                         } catch (e) {
                             console.error("Error al enviar PDF o seguimiento con Twilio Client API:", e);
-                            await client.messages.create({
-                                from: process.env.TWILIO_WHATSAPP_NUMBER,
-                                body: "Lo siento, no pude enviarte el PDF en este momento. Revisa si se guardó automáticamente o intenta pedirlo de nuevo.",
-                                to: `whatsapp:${from}`
-                            });
                         }
                         break;
 
@@ -322,13 +329,11 @@ exports.receiveMessage = async (req, res) => {
                         }
 
                         let triggerAt = new Date();
-                        
-                        // FIX: 🚨 CORRECCIÓN 2: Usar RegExp para extraer el número de forma segura
                         const match = reminderTime.match(/\d+/);
                         const timeValue = match ? parseInt(match[0]) : 0;
                         
                         if (timeValue === 0) {
-                             twiml.message(`Lo siento, no pude entender la cantidad de tiempo en "${reminderTime}". Por favor, usa un formato como 'en 5 minutos' o 'en 30 segundos'.`);
+                             twiml.message(`No pude entender la cantidad de tiempo en "${reminderTime}".`);
                              break;
                         }
 
@@ -339,7 +344,7 @@ exports.receiveMessage = async (req, res) => {
                         } else if (reminderTime.includes("hora")) {
                              triggerAt = addHours(triggerAt, timeValue);
                         } else {
-                            twiml.message(`Lo siento, solo puedo programar recordatorios en relación a segundos, minutos u horas (ej: 'en 5 minutos').`);
+                            twiml.message(`Solo puedo programar en segundos, minutos u horas.`);
                             break;
                         }
 
@@ -364,7 +369,7 @@ exports.receiveMessage = async (req, res) => {
                         break;
 
                     case 'clarification_needed':
-                        twiml.message("No estoy seguro de a qué archivo o carpeta te refieres. ¿Podrías ser un poco más específico, por favor?");
+                        twiml.message("No estoy seguro de a qué te refieres. ¿Podrías ser más específico, por favor?");
                         break;
 
                     // --- INTENCIONES CONVERSACIONALES ---

@@ -2,7 +2,9 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const pool = require('./config/db');
-const schedulerService = require('./services/schedulerService'); // Importa el programador
+const schedulerService = require('./services/schedulerService'); 
+const chatRoutes = require('./routes/chatRoutes');
+app.use('/api/chat', chatRoutes); 
 
 // --- FUNCIÓN PARA INICIALIZAR LA BASE DE DATOS ---
 async function initializeDatabase() {

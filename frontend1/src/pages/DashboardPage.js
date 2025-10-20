@@ -3,7 +3,7 @@ import folderService from '../services/folderService';
 import fileService from '../services/fileService';
 import '../styles/DashboardPage.css';
 
-// URL de tu backend en Render
+// URL de tu backend en Render (DEBE SER LA CORRECTA)
 const RENDER_BACKEND_URL = 'https://gestor-tareas-backend-11hi.onrender.com';
 
 const DashboardPage = () => {
@@ -16,6 +16,8 @@ const DashboardPage = () => {
     const [uploading, setUploading] = useState(false);
     const [editingFolder, setEditingFolder] = useState(null);
     const [editingFile, setEditingFile] = useState(null);
+
+    // --- ESTADOS PARA NAVEGACIÓN DE SUBCARPETAS ---
     const [currentFolder, setCurrentFolder] = useState(null); // Objeto de la carpeta actual (null es la raíz)
     const [path, setPath] = useState([]); // Historial para el botón "Volver"
 
@@ -160,13 +162,11 @@ const DashboardPage = () => {
                 </ul>
             </div>
             
-            {/* Contenido Principal: Archivos */}
             <div className="main-content">
                 {currentFolder ? (
                     <>
                         <h2>Archivos en: {currentFolder.nombre}</h2>
                         
-                        {/* Formulario de Subida de Archivo */}
                         <form onSubmit={handleUploadFile} className="upload-form">
                              <input type="file" id="fileInput" onChange={handleFileChange} />
                              <button type="submit" disabled={!selectedFile || uploading}>
@@ -176,7 +176,6 @@ const DashboardPage = () => {
                         
                         {message && <p className="message">{message}</p>}
                         
-                        {/* Lista de Archivos */}
                         <ul className="file-list">
                              {files.map(file => (
                                 <li key={file.id}>
@@ -187,7 +186,6 @@ const DashboardPage = () => {
                                             <button type="button" onClick={() => setEditingFile(null)}>✖</button>
                                         </form>
                                     ) : (
-                                        // RUTA CORREGIDA: Usa la URL de Render para el envío seguro
                                         <a href={`${RENDER_BACKEND_URL}/${file.path_archivo.replace(/\\/g, '/')}`} target="_blank" rel="noopener noreferrer">
                                             📄 {file.nombre_original}
                                         </a>
