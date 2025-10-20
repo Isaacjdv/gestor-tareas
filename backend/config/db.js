@@ -4,7 +4,9 @@ require('dotenv').config();
 let pool;
 
 if (process.env.DATABASE_URL) {
-    // This runs in production (on Render)
+    // --- CONEXIÓN PARA PRODUCCIÓN (RENDER / POSTGRESQL) ---
+    // Render proporciona DATABASE_URL automáticamente.
+    // Usamos el módulo 'pg' para PostgreSQL.
     pool = new Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: {
@@ -13,8 +15,8 @@ if (process.env.DATABASE_URL) {
     });
     console.log('✅ Connected to production database (PostgreSQL).');
 } else {
-    // This runs on your local computer (XAMPP)
-    // Make sure you have mysql2 installed: npm install mysql2
+    // --- CONEXIÓN PARA DESARROLLO LOCAL (XAMPP / MYSQL) ---
+    // Usamos el módulo 'mysql2' para MySQL.
     const mysql = require('mysql2/promise');
     pool = mysql.createPool({
         host: process.env.DB_HOST || 'localhost',

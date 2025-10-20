@@ -3,7 +3,8 @@ import folderService from '../services/folderService';
 import fileService from '../services/fileService';
 import '../styles/DashboardPage.css';
 
-// URL de tu backend en Render (DEBE SER LA CORRECTA)
+// URL de tu backend en Render (DEBES REVISAR QUE COINCIDA CON LA TUYA)
+// La URL que usaste en la última corrección de los servicios fue:
 const RENDER_BACKEND_URL = 'https://gestor-tareas-backend-11hi.onrender.com';
 
 const DashboardPage = () => {
@@ -16,17 +17,20 @@ const DashboardPage = () => {
     const [uploading, setUploading] = useState(false);
     const [editingFolder, setEditingFolder] = useState(null);
     const [editingFile, setEditingFile] = useState(null);
+
+    // --- ESTADOS PARA NAVEGACIÓN DE SUBCARPETAS ---
     const [currentFolder, setCurrentFolder] = useState(null); // Objeto de la carpeta actual (null es la raíz)
     const [path, setPath] = useState([]); // Historial para el botón "Volver"
 
     // --- EFECTOS ---
+    // Carga carpetas y archivos cada vez que navegamos a una nueva carpeta
     useEffect(() => {
         const folderId = currentFolder ? currentFolder.id : null;
         loadFolders(folderId);
         if (folderId) {
             loadFiles(folderId);
         } else {
-            setFiles([]);
+            setFiles([]); // Limpia los archivos si estamos en la raíz
         }
     }, [currentFolder]);
 
@@ -47,6 +51,7 @@ const DashboardPage = () => {
 
     // --- LÓGICA DE NAVEGACIÓN ---
     const handleFolderClick = (folder) => {
+        // Al hacer clic, guarda el estado actual en el historial y navega
         setPath([...path, currentFolder]);
         setCurrentFolder(folder);
     };
@@ -55,7 +60,7 @@ const DashboardPage = () => {
         const newPath = [...path];
         const parent = newPath.pop();
         setPath(newPath);
-        setCurrentFolder(parent);
+        setCurrentFolder(parent); // Vuelve a la carpeta padre
     };
     
     // --- MANEJADORES DE ACCIONES ---
@@ -97,7 +102,8 @@ const DashboardPage = () => {
 
     const handleUploadFile = async (e) => {
         e.preventDefault();
-        if (!selectedFile || !currentFolder) return;
+        // Usamos currentFolder.id para la subida
+        if (!selectedFile || !currentFolder) return; 
         setUploading(true);
         setMessage('Subiendo archivo...');
         try {
@@ -139,16 +145,20 @@ const DashboardPage = () => {
             <div className="sidebar">
                 <h2>{currentFolder ? currentFolder.nombre : 'Carpetas Principales'}</h2>
                 
+                {/* Botón de Volver */}
                 {path.length > 0 && <button onClick={handleGoBack} className="back-button">← Volver</button>}
 
+                {/* Formulario de Creación de Carpeta/Subcarpeta */}
                 <form onSubmit={handleCreateFolder} className="folder-form">
                     <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Nueva carpeta..."/>
                     <button type="submit">+</button>
                 </form>
                 
+                {/* Lista de Carpetas */}
                 <ul className="folder-list">
                     {folders.map(folder => (
                         <li key={folder.id}>
+                            {/* La navegación se activa al hacer click en el nombre */}
                             <span onClick={() => handleFolderClick(folder)}>📁 {folder.nombre}</span>
                             <div className="actions">
                                 <button onClick={() => setEditingFolder(folder)}>✏️</button>
@@ -158,17 +168,24 @@ const DashboardPage = () => {
                     ))}
                 </ul>
             </div>
+            
+            {/* Contenido Principal: Archivos */}
             <div className="main-content">
                 {currentFolder ? (
                     <>
                         <h2>Archivos en: {currentFolder.nombre}</h2>
+                        
+                        {/* Formulario de Subida de Archivo */}
                         <form onSubmit={handleUploadFile} className="upload-form">
                              <input type="file" id="fileInput" onChange={handleFileChange} />
                              <button type="submit" disabled={!selectedFile || uploading}>
                                 {uploading ? 'Subiendo...' : 'Subir Archivo'}
                             </button>
                         </form>
+                        
                         {message && <p className="message">{message}</p>}
+                        
+                        {/* Lista de Archivos */}
                         <ul className="file-list">
                              {files.map(file => (
                                 <li key={file.id}>
@@ -179,7 +196,7 @@ const DashboardPage = () => {
                                             <button type="button" onClick={() => setEditingFile(null)}>✖</button>
                                         </form>
                                     ) : (
-                                        // RUTA CORREGIDA: Usa la URL de Render para el envío seguro
+                                        // RUTA CORREGIDA: Usa la URL de Render
                                         <a href={`${RENDER_BACKEND_URL}/${file.path_archivo.replace(/\\/g, '/')}`} target="_blank" rel="noopener noreferrer">
                                             📄 {file.nombre_original}
                                         </a>
