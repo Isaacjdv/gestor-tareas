@@ -40,15 +40,16 @@ async function initializeDatabase() {
                 FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
             );
 
+            -- TABLA DE RECORDATORIOS FINAL (Unificada) --
             CREATE TABLE IF NOT EXISTS reminders (
                 id SERIAL PRIMARY KEY,
                 usuario_id INT NOT NULL,
                 recipient_whatsapp_number VARCHAR(25) NOT NULL,
                 message TEXT NOT NULL,
                 trigger_at TIMESTAMPTZ NOT NULL,
-                status VARCHAR(20) DEFAULT 'pending',
-                task_type VARCHAR(50) DEFAULT 'simple',
-                user_name VARCHAR(100),
+                status VARCHAR(20) DEFAULT 'pending', -- pending, sent, error
+                task_type VARCHAR(50) DEFAULT 'simple', -- 'simple' o 'investigation'
+                user_name VARCHAR(100), -- Para el encabezado del PDF
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
             );

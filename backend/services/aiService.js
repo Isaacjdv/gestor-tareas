@@ -6,7 +6,7 @@ const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
 exports.interpretMessage = async (message) => {
     const prompt = `
         Tu trabajo es analizar un mensaje y clasificarlo en una intención. Responde SIEMPRE con un objeto JSON.
-        Las intenciones son: "greeting", "list_folders", "view_folder", "create_folder", "edit_folder", "delete_folder", "upload_file", "send_file", "send_latest_file", "get_summary", "generate_pdf", "confirm_save_yes", "confirm_save_no", "set_reminder", "clarification_needed", "unknown".
+        Las intenciones son: "greeting", "list_folders", "view_folder", "create_folder", "edit_folder", "delete_folder", "upload_file", "send_file", "send_latest_file", "get_summary", "generate_pdf", "confirm_save_yes", "confirm_save_no", "set_reminder", "schedule_file_send", "clarification_needed", "unknown".
         
         REGLAS CRÍTICAS:
         1. Sé EXTREMADAMENTE LITERAL al extraer nombres en "entity", "parent_entity" o "new_entity". No simplifiques "Base de datos II" a "Base de datos".

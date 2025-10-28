@@ -251,7 +251,6 @@ exports.receiveMessage = async (req, res) => {
                             
                             const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
                             try {
-                                // Despertar el servidor
                                 await axios.get(fileUrl);
                             } catch (wakeUpError) {
                                 console.log("Servidor despertado o ya estaba despierto.");
@@ -333,7 +332,7 @@ exports.receiveMessage = async (req, res) => {
                         } catch (wakeUpError) {
                             console.log("PDF despertado.");
                         }
-
+                        
                         try {
                             await clientPdf.messages.create({
                                 from: process.env.TWILIO_WHATSAPP_NUMBER,
