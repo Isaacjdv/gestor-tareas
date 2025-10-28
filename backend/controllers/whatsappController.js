@@ -33,7 +33,6 @@ exports.receiveMessage = async (req, res) => {
     const mediaUrl = numMedia > 0 ? req.body.MediaUrl0 : null;
     const mediaType = numMedia > 0 ? req.body.MediaContentType0 : null;
     
-    // Obtener la URL base del servicio de Render
     const RENDER_URL = process.env.RENDER_EXTERNAL_URL || "https://gestor-tareas-backend-11hi.onrender.com";
 
     try {
@@ -132,7 +131,6 @@ exports.receiveMessage = async (req, res) => {
                 console.log('Interpretación de la IA:', interpretation);
 
                 switch (interpretation.intent) {
-                    // --- ACCIONES DE EJECUCIÓN DIRECTA ---
                     case 'create_folder':
                         const { entity: newFolderName, parent_entity: parentFolderName } = interpretation;
                         if (!newFolderName) { twiml.message("Dime el nombre de la carpeta a crear."); break; }
@@ -253,6 +251,13 @@ exports.receiveMessage = async (req, res) => {
                             
                             const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
                             try {
+                                // Despertar el servidor
+                                await axios.get(fileUrl);
+                            } catch (wakeUpError) {
+                                console.log("Servidor despertado o ya estaba despierto.");
+                            }
+
+                            try {
                                 await client.messages.create({
                                     from: process.env.TWILIO_WHATSAPP_NUMBER,
                                     mediaUrl: [fileUrl],
@@ -322,6 +327,13 @@ exports.receiveMessage = async (req, res) => {
 
                         const clientPdf = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
                         
+                        try {
+                            // "Calentar" el PDF
+                            await axios.get(fileUrlPdf); 
+                        } catch (wakeUpError) {
+                            console.log("PDF despertado.");
+                        }
+
                         try {
                             await clientPdf.messages.create({
                                 from: process.env.TWILIO_WHATSAPP_NUMBER,
