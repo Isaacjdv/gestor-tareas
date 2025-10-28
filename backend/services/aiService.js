@@ -7,17 +7,22 @@ exports.interpretMessage = async (message) => {
     const prompt = `
         Tu trabajo es analizar un mensaje y clasificarlo en una intención. Responde SIEMPRE con un objeto JSON.
 
-        Las intenciones posibles son:
-        "greeting", "list_folders", "view_folder", "create_folder", "edit_folder", "delete_folder",
-        "upload_file", "send_file", "send_latest_file", "get_summary", "generate_pdf",
-        "confirm_save_yes", "confirm_save_no", "clarification_needed", "unknown".
+        Las intenciones posibles son: "greeting", "list_folders", "view_folder", "create_folder", "edit_folder", "delete_folder", "upload_file", "send_file", "send_latest_file", "get_summary", "generate_pdf", "confirm_save_yes", "confirm_save_no", "set_reminder", "schedule_file_send", "clarification_needed", "unknown".
 
         REGLAS CRÍTICAS:
         1. Sé EXTREMADAMENTE LITERAL al extraer nombres en "entity", "parent_entity" o "new_entity". No simplifiques "Base de datos II" a "Base de datos".
         2. Para "upload_file", la "entity" es SIEMPRE el nombre de la carpeta destino.
         3. Para "generate_pdf", extrae el tema de la consulta en "entity".
         4. Para "confirm_save_yes", si se menciona una carpeta, extráela en "entity".
-        5. Si una acción necesita un nombre y no está claro, usa "clarification_needed".
+        5. Para "set_reminder":
+           - "entity": La descripción de la actividad o el recordatorio.
+           - "time": La hora o período de tiempo (ej: "en 2 horas", "mañana a las 9 am").
+        6. Para "schedule_file_send":
+           - "entity": El nombre del archivo a enviar.
+           - "contact": El nombre o número del contacto.
+           - "time": La hora o período de tiempo.
+           - "message": Un mensaje adicional (opcional).
+        7. Si una acción necesita un nombre y no está claro, usa "clarification_needed".
 
         ### Ejemplos ###
         - Usuario: "hola" -> {"intent": "greeting"}
@@ -29,9 +34,8 @@ exports.interpretMessage = async (message) => {
         - Usuario: "pásame el primer archivo" -> {"intent": "send_latest_file"}
         - Usuario: "pásame el archivo" -> {"intent": "clarification_needed"}
         - Usuario: "haz un resumen de la segunda guerra mundial en pdf" -> {"intent": "generate_pdf", "entity": "la segunda guerra mundial"}
-        - Usuario: "si, guárdalo en la carpeta 'resúmenes de IA'" -> {"intent": "confirm_save_yes", "entity": "resúmenes de IA"}
-        - Usuario: "no, no hace falta" -> {"intent": "confirm_save_no"}
-        - Usuario: "gracias" -> {"intent": "greeting"}
+        - Usuario: "recuérdame hacer la compra en 30 minutos" -> {"intent": "set_reminder", "entity": "hacer la compra", "time": "en 30 minutos"}
+        - Usuario: "envíale el reporte a Juan en 5 minutos con el mensaje 'Ahí te va'" -> {"intent": "schedule_file_send", "entity": "reporte", "contact": "Juan", "time": "en 5 minutos", "message": "Ahí te va"}
 
         Analiza: "${message}"
     `;
@@ -40,7 +44,7 @@ exports.interpretMessage = async (message) => {
         const response = await axios.post('https://api.ai21.com/studio/v1/chat/completions', {
             model: 'jamba-large',
             messages: [{ role: 'user', content: prompt }],
-            max_tokens: 150,
+            max_tokens: 250,
             temperature: 0.0,
         }, {
             headers: { 'Authorization': `Bearer ${AI21_API_KEY}`, 'Content-Type': 'application/json' }
@@ -92,7 +96,7 @@ async function fetchRelevantImage(topic) {
     if (!UNSPLASH_ACCESS_KEY) return null;
     try {
         const response = await axios.get('https://api.unsplash.com/search/photos', {
-            params: { query: topic, per_page: 1, orientation: 'landscape' },
+            params: { query: topic, per_page: 1, orientation: 'landscape', lang: 'es' },
             headers: { 'Authorization': `Client-ID ${UNSPLASH_ACCESS_KEY}` }
         });
         return response.data.results[0]?.urls?.regular;
@@ -105,29 +109,71 @@ async function fetchRelevantImage(topic) {
 // FUNCIÓN 3: Generador de Contenido para PDF Extenso con Imagen
 exports.generatePdfContent = async (topic, userName) => {
     const today = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
-    const prompt = `
-        Genera un informe detallado y bien estructurado sobre "${topic}". El informe debe tener al menos 800 palabras y estar listo para un PDF.
-        Estructura obligatoria:
-        1.  CONTENIDO (mínimo 800 palabras):
-            - Introducción, Secciones con subtítulos en negrita y ejemplos, Conclusión.
-        2.  BIBLIOGRAFÍA:
-            - Al final, una sección "Fuentes Consultadas" con 3-5 referencias realistas.
+
+    // --- PROMPT 1: Generar la estructura del documento ---
+    const structurePrompt = `
+        Tu tarea es generar la estructura de un informe sobre "${topic}". Responde SIEMPRE y ÚNICAMENTE con un objeto JSON.
+        El JSON debe tener: "titulo", "introduccion", y un array "secciones".
+        Cada sección debe tener "subtitulo" (el tema de la sección) y "consulta_imagen" (una frase corta para buscar una imagen en Unsplash sobre ese subtitulo).
+        
+        Ejemplo de JSON:
+        {
+          "titulo": "La Revolución de la Inteligencia Artificial",
+          "introduccion": "La IA está transformando nuestro mundo...",
+          "secciones": [
+            { "subtitulo": "Redes Neuronales: El Cerebro de la IA", "consulta_imagen": "cerebro red neuronal abstracta" },
+            { "subtitulo": "IA en la Medicina: Salvando Vidas", "consulta_imagen": "doctor IA tecnología hospital" },
+            { "subtitulo": "El Futuro: IA y la Sociedad", "consulta_imagen": "ciudad futurista IA" }
+          ],
+          "conclusion": "En conclusión, la IA promete..."
+        }
     `;
 
+    let structure;
+    try {
+        const structureResponse = await axios.post('https://api.ai21.com/studio/v1/chat/completions', {
+            model: 'jamba-large',
+            messages: [{ role: 'user', content: structurePrompt }],
+            max_tokens: 1500,
+            temperature: 0.5,
+        }, { headers: { 'Authorization': `Bearer ${AI21_API_KEY}`, 'Content-Type': 'application/json' } });
+
+        const jsonString = structureResponse.data?.choices?.[0]?.message?.content?.trim();
+        const jsonMatch = jsonString.match(/{[\s\S]*}/);
+        structure = JSON.parse(jsonMatch[0]);
+    } catch (e) {
+        console.error("Error al generar la ESTRUCTURA del PDF:", e);
+        return null;
+    }
+
+    // --- PROMPT 2: Generar el contenido de texto ---
+    const contentPrompt = `
+        Escribe un informe detallado (mínimo 800 palabras) sobre "${topic}". Usa un tono educativo y fácil de entender.
+        Debes seguir esta estructura (ignora las consultas de imagen):
+        - Título: ${structure.titulo}
+        - Introducción: ${structure.introduccion}
+        - Secciones:
+        ${structure.secciones.map(s => `  - ${s.subtitulo}\n`).join('')}
+        - Conclusión: ${structure.conclusion}
+        - Bibliografía: (Añade una sección de 3 a 5 fuentes realistas)
+    `;
+    
     try {
         const textResponse = await axios.post('https://api.ai21.com/studio/v1/chat/completions', {
             model: 'jamba-large',
-            messages: [{ role: 'user', content: prompt }],
+            messages: [{ role: 'user', content: contentPrompt }],
             max_tokens: 3500,
             temperature: 0.6,
-        }, {
-            headers: { 'Authorization': `Bearer ${AI21_API_KEY}`, 'Content-Type': 'application/json' }
-        });
-        const textContent = textResponse.data?.choices?.[0]?.message?.content?.trim();
+        }, { headers: { 'Authorization': `Bearer ${AI21_API_KEY}`, 'Content-Type': 'application/json' } });
         
-        const imageUrl = await fetchRelevantImage(topic);
+        const textContent = textResponse.data?.choices?.[0]?.message?.content?.trim();
 
-        return { textContent, imageUrl, userName, today, topic };
+        // --- Búsqueda de Imágenes en Paralelo ---
+        for (const section of structure.secciones) {
+            section.imageUrl = await fetchRelevantImage(section.consulta_imagen);
+        }
+
+        return { textContent, structure, userName, today, topic };
     } catch (error) {
         console.error("Error al generar contenido para PDF:", error);
         return null;

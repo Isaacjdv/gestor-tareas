@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import folderService from '../services/folderService';
 import fileService from '../services/fileService';
+import { UserContext } from '../App'; // Importa el contexto de usuario
 import '../styles/DashboardPage.css';
 import ChatComponent from '../components/ChatComponent'; // Importa el chat
 
@@ -17,20 +18,20 @@ const DashboardPage = () => {
     const [uploading, setUploading] = useState(false);
     const [editingFolder, setEditingFolder] = useState(null);
     const [editingFile, setEditingFile] = useState(null);
+    const [currentFolder, setCurrentFolder] = useState(null);
+    const [path, setPath] = useState([]);
 
-    // --- ESTADOS PARA NAVEGACIÓN DE SUBCARPETAS ---
-    const [currentFolder, setCurrentFolder] = useState(null); // Objeto de la carpeta actual (null es la raíz)
-    const [path, setPath] = useState([]); // Historial para el botón "Volver"
+    // --- CONTEXTO ---
+    const { user } = useContext(UserContext); // Obtiene el usuario del contexto
 
     // --- EFECTOS ---
-    // Carga carpetas y archivos cada vez que navegamos a una nueva carpeta
     useEffect(() => {
         const folderId = currentFolder ? currentFolder.id : null;
         loadFolders(folderId);
         if (folderId) {
             loadFiles(folderId);
         } else {
-            setFiles([]); // Limpia los archivos si estamos en la raíz
+            setFiles([]);
         }
     }, [currentFolder]);
 
@@ -59,7 +60,7 @@ const DashboardPage = () => {
         const newPath = [...path];
         const parent = newPath.pop();
         setPath(newPath);
-        setCurrentFolder(parent); // Vuelve a la carpeta padre
+        setCurrentFolder(parent);
     };
     
     // --- MANEJADORES DE ACCIONES ---
@@ -145,9 +146,10 @@ const DashboardPage = () => {
         <div className="dashboard-container">
             {/* Columna 1: Sidebar de Carpetas */}
             <div className="sidebar">
-                <h2>{currentFolder ? currentFolder.nombre : 'Carpetas Principales'}</h2>
+                {/* Mensaje de bienvenida personalizado */}
+                {user && <h2>Hola, {user.nombre}</h2>}
                 
-                {path.length > 0 && <button onClick={handleGoBack} className="back-button">← Volver</button>}
+                {path.length > 0 && <button onClick={handleGoBack} className="back-button">← Volver a {path[path.length - 1]?.nombre || 'Carpetas Principales'}</button>}
 
                 <form onSubmit={handleCreateFolder} className="folder-form">
                     <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Nueva carpeta..."/>
@@ -157,7 +159,7 @@ const DashboardPage = () => {
                 <ul className="folder-list">
                     {folders.map(folder => (
                         <li key={folder.id} className={currentFolder?.id === folder.id ? 'active' : ''}>
-                            <span onClick={() => handleFolderClick(folder)}> {folder.nombre}</span>
+                            <span onClick={() => handleFolderClick(folder)}>📁 {folder.nombre}</span>
                             <div className="actions">
                                 <button onClick={() => setEditingFolder(folder)}>✏️</button>
                                 <button onClick={() => handleDeleteFolder(folder.id)}>❌</button>
@@ -176,7 +178,7 @@ const DashboardPage = () => {
                             
                             <form onSubmit={handleUploadFile} className="upload-form">
                                  <input type="file" id="fileInput" onChange={handleFileChange} />
-                                 <button typeS="submit" disabled={!selectedFile || uploading}>
+                                 <button type="submit" disabled={!selectedFile || uploading}>
                                     {uploading ? 'Subiendo...' : 'Subir Archivo'}
                                 </button>
                             </form>
