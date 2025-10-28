@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import folderService from '../services/folderService';
 import fileService from '../services/fileService';
 import '../styles/DashboardPage.css';
-import ChatComponent from '../components/ChatComponent'; // Import the new chat component
+import ChatComponent from '../components/ChatComponent'; // Importa el chat
 
-// Your backend URL on Render
+// URL de tu backend en Render
 const RENDER_BACKEND_URL = 'https://gestor-tareas-backend-11hi.onrender.com';
 
 const DashboardPage = () => {
-    // --- STATES ---
+    // --- ESTADOS ---
     const [folders, setFolders] = useState([]);
     const [files, setFiles] = useState([]);
     const [message, setMessage] = useState('');
@@ -18,38 +18,38 @@ const DashboardPage = () => {
     const [editingFolder, setEditingFolder] = useState(null);
     const [editingFile, setEditingFile] = useState(null);
 
-    // --- STATES FOR SUBFOLDER NAVIGATION ---
-    const [currentFolder, setCurrentFolder] = useState(null); // Current folder object (null is root)
-    const [path, setPath] = useState([]); // History for the "Back" button
+    // --- ESTADOS PARA NAVEGACIÓN DE SUBCARPETAS ---
+    const [currentFolder, setCurrentFolder] = useState(null); // Objeto de la carpeta actual (null es la raíz)
+    const [path, setPath] = useState([]); // Historial para el botón "Volver"
 
-    // --- EFFECTS ---
-    // Load folders and files whenever we navigate to a new folder
+    // --- EFECTOS ---
+    // Carga carpetas y archivos cada vez que navegamos a una nueva carpeta
     useEffect(() => {
         const folderId = currentFolder ? currentFolder.id : null;
         loadFolders(folderId);
         if (folderId) {
             loadFiles(folderId);
         } else {
-            setFiles([]); // Clear files if we are at the root
+            setFiles([]); // Limpia los archivos si estamos en la raíz
         }
     }, [currentFolder]);
 
-    // --- DATA LOADING LOGIC ---
+    // --- LÓGICA DE CARGA ---
     const loadFolders = async (parentId) => {
         try {
             const response = await folderService.getFolders(parentId);
             setFolders(response.data);
-        } catch (error) { setMessage('Error loading folders.'); }
+        } catch (error) { setMessage('Error al cargar carpetas.'); }
     };
 
     const loadFiles = async (folderId) => {
         try {
             const response = await fileService.getFilesByFolder(folderId);
             setFiles(response.data);
-        } catch (error) { setMessage('Error loading files.'); }
+        } catch (error) { setMessage('Error al cargar archivos.'); }
     };
 
-    // --- NAVIGATION LOGIC ---
+    // --- LÓGICA DE NAVEGACIÓN ---
     const handleFolderClick = (folder) => {
         setPath([...path, currentFolder]);
         setCurrentFolder(folder);
@@ -59,10 +59,10 @@ const DashboardPage = () => {
         const newPath = [...path];
         const parent = newPath.pop();
         setPath(newPath);
-        setCurrentFolder(parent);
+        setCurrentFolder(parent); // Vuelve a la carpeta padre
     };
     
-    // --- ACTION HANDLERS ---
+    // --- MANEJADORES DE ACCIONES ---
     const handleCreateFolder = async (e) => {
         e.preventDefault();
         if (!newFolderName.trim()) return;
@@ -70,28 +70,28 @@ const DashboardPage = () => {
             const parentId = currentFolder ? currentFolder.id : null;
             await folderService.createFolder(newFolderName, parentId);
             setNewFolderName('');
-            setMessage(`Folder "${newFolderName}" created.`);
+            setMessage(`Carpeta "${newFolderName}" creada.`);
             loadFolders(parentId);
-        } catch (error) { setMessage('Error creating folder.'); }
+        } catch (error) { setMessage('Error al crear la carpeta.'); }
     };
 
     const handleUpdateFolder = async (e) => {
         e.preventDefault();
         try {
             await folderService.updateFolder(editingFolder.id, editingFolder.nombre);
-            setMessage('Folder updated.');
+            setMessage('Carpeta actualizada.');
             setEditingFolder(null);
             loadFolders(currentFolder ? currentFolder.id : null);
-        } catch (error) { setMessage('Error updating folder.'); }
+        } catch (error) { setMessage('Error al actualizar la carpeta.'); }
     };
 
     const handleDeleteFolder = async (folderId) => {
-        if (window.confirm('Are you sure you want to delete this folder and all its contents?')) {
+        if (window.confirm('¿Seguro que quieres eliminar esta carpeta y todo su contenido?')) {
             try {
                 await folderService.deleteFolder(folderId);
-                setMessage('Folder deleted.');
+                setMessage('Carpeta eliminada.');
                 loadFolders(currentFolder ? currentFolder.id : null);
-            } catch (error) { setMessage('Error deleting folder.'); }
+            } catch (error) { setMessage('Error al eliminar la carpeta.'); }
         }
     };
 
@@ -101,17 +101,20 @@ const DashboardPage = () => {
 
     const handleUploadFile = async (e) => {
         e.preventDefault();
-        if (!selectedFile || !currentFolder) return; 
+        if (!selectedFile || !currentFolder) {
+             setMessage('Por favor, selecciona un archivo y una carpeta primero.');
+             return;
+        }
         setUploading(true);
-        setMessage('Uploading file...');
+        setMessage('Subiendo archivo...');
         try {
             await fileService.uploadFile(currentFolder.id, selectedFile);
             setSelectedFile(null);
             document.getElementById('fileInput').value = "";
             loadFiles(currentFolder.id);
-            setMessage('File uploaded successfully!');
+            setMessage('¡Archivo subido con éxito!');
         } catch (error) {
-            setMessage(error.response?.data?.message || 'Error uploading file.');
+            setMessage(error.response?.data?.message || 'Error al subir el archivo.');
         } finally {
             setUploading(false);
         }
@@ -121,39 +124,40 @@ const DashboardPage = () => {
         e.preventDefault();
         try {
             await fileService.updateFile(editingFile.id, editingFile.nombre_original);
-            setMessage('File name updated.');
+            setMessage('Nombre del archivo actualizado.');
             setEditingFile(null);
             loadFiles(currentFolder.id);
-        } catch (error) { setMessage('Error updating file.'); }
+        } catch (error) { setMessage('Error al actualizar el archivo.'); }
     };
 
     const handleDeleteFile = async (fileId) => {
-        if (window.confirm('Are you sure you want to delete this file?')) {
+        if (window.confirm('¿Seguro que quieres eliminar este archivo?')) {
             try {
                 await fileService.deleteFile(fileId);
-                setMessage('File deleted.');
+                setMessage('Archivo eliminado.');
                 loadFiles(currentFolder.id);
-            } catch (error) { setMessage('Error deleting file.'); }
+            } catch (error) { setMessage('Error al eliminar el archivo.'); }
         }
     };
     
-    // --- RENDER ---
+    // --- RENDERIZADO ---
     return (
         <div className="dashboard-container">
+            {/* Columna 1: Sidebar de Carpetas */}
             <div className="sidebar">
-                <h2>{currentFolder ? currentFolder.nombre : 'Main Folders'}</h2>
+                <h2>{currentFolder ? currentFolder.nombre : 'Carpetas Principales'}</h2>
                 
-                {path.length > 0 && <button onClick={handleGoBack} className="back-button">← Back</button>}
+                {path.length > 0 && <button onClick={handleGoBack} className="back-button">← Volver</button>}
 
                 <form onSubmit={handleCreateFolder} className="folder-form">
-                    <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="New folder..."/>
+                    <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Nueva carpeta..."/>
                     <button type="submit">+</button>
                 </form>
                 
                 <ul className="folder-list">
                     {folders.map(folder => (
-                        <li key={folder.id}>
-                            <span onClick={() => handleFolderClick(folder)}>📁 {folder.nombre}</span>
+                        <li key={folder.id} className={currentFolder?.id === folder.id ? 'active' : ''}>
+                            <span onClick={() => handleFolderClick(folder)}> {folder.nombre}</span>
                             <div className="actions">
                                 <button onClick={() => setEditingFolder(folder)}>✏️</button>
                                 <button onClick={() => handleDeleteFolder(folder.id)}>❌</button>
@@ -163,18 +167,17 @@ const DashboardPage = () => {
                 </ul>
             </div>
             
+            {/* Columna 2: Contenido Principal (Archivos) */}
             <div className="main-content">
-                <ChatComponent /> {/* The AI Chat component */}
-                
                 <div className="files-section">
                     {currentFolder ? (
                         <>
-                            <h2>Files in: {currentFolder.nombre}</h2>
+                            <h2>Archivos en: {currentFolder.nombre}</h2>
                             
                             <form onSubmit={handleUploadFile} className="upload-form">
                                  <input type="file" id="fileInput" onChange={handleFileChange} />
-                                 <button type="submit" disabled={!selectedFile || uploading}>
-                                    {uploading ? 'Uploading...' : 'Upload File'}
+                                 <button typeS="submit" disabled={!selectedFile || uploading}>
+                                    {uploading ? 'Subiendo...' : 'Subir Archivo'}
                                 </button>
                             </form>
                             
@@ -204,10 +207,15 @@ const DashboardPage = () => {
                         </>
                     ) : (
                         <div className="welcome-message">
-                            <h2>Welcome</h2>
-                            <p>Select a folder to view its contents or create a new one.</p>
+                            <h2>Bienvenido a tu Gestor</h2>
+                            <p>Selecciona una carpeta para ver su contenido o crea una nueva.</p>
                         </div>
                     )}
+                </div>
+                
+                {/* Columna 3: Chat de IA */}
+                <div className="chat-sidebar">
+                    <ChatComponent />
                 </div>
             </div>
         </div>

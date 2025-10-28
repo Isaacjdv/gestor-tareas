@@ -33,6 +33,7 @@ exports.receiveMessage = async (req, res) => {
     const mediaUrl = numMedia > 0 ? req.body.MediaUrl0 : null;
     const mediaType = numMedia > 0 ? req.body.MediaContentType0 : null;
     
+    // Obtener la URL base del servicio de Render
     const RENDER_URL = process.env.RENDER_EXTERNAL_URL || "https://gestor-tareas-backend-11hi.onrender.com";
 
     try {
@@ -42,6 +43,7 @@ exports.receiveMessage = async (req, res) => {
         } else {
             // --- MANEJO DE AUDIOS ---
             if (numMedia > 0 && mediaType.startsWith('audio/')) {
+                console.log("Detectado mensaje de audio. Transcribiendo...");
                 const audioResponse = await axios({
                     method: 'get', url: mediaUrl, responseType: 'stream',
                     auth: { username: process.env.TWILIO_ACCOUNT_SID, password: process.env.TWILIO_AUTH_TOKEN }
@@ -245,11 +247,25 @@ exports.receiveMessage = async (req, res) => {
                         if (!fileToSend) {
                             twiml.message(`No encontré el archivo que pediste.`);
                         } else {
+                            twiml.message(`Un momento, estoy buscando tu archivo: *${fileToSend.nombre_original}*...`);
                             const fileUrl = `${RENDER_URL}/${fileToSend.path_archivo.replace(/\\/g, '/')}`;
-                            console.log("Intentando enviar archivo desde la URL:", fileUrl);
+                            console.log("Intentando enviar archivo asíncronamente desde:", fileUrl);
                             
-                            const message = twiml.message();
-                            message.media(fileUrl);
+                            const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+                            try {
+                                await client.messages.create({
+                                    from: process.env.TWILIO_WHATSAPP_NUMBER,
+                                    mediaUrl: [fileUrl],
+                                    to: `whatsapp:${from}`
+                                });
+                            } catch (e) {
+                                console.error("Error al enviar media con Twilio Client API:", e);
+                                await client.messages.create({
+                                    from: process.env.TWILIO_WHATSAPP_NUMBER,
+                                    body: `Lo siento, tuve un problema al enviar el archivo. Es posible que sea demasiado grande o que el servidor esté tardando en responder.`,
+                                    to: `whatsapp:${from}`
+                                });
+                            }
                         }
                         break;
                     
@@ -304,16 +320,16 @@ exports.receiveMessage = async (req, res) => {
                         
                         userSessions[from] = { pendingAction: 'save_generated_file', filePath: pdfPath, originalName: pdfName };
 
-                        const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+                        const clientPdf = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
                         
                         try {
-                            await client.messages.create({
+                            await clientPdf.messages.create({
                                 from: process.env.TWILIO_WHATSAPP_NUMBER,
                                 body: `¡Aquí tienes tu documento sobre "${query}"! 📄`,
                                 mediaUrl: [fileUrlPdf],
                                 to: `whatsapp:${from}`
                             });
-                            await client.messages.create({
+                            await clientPdf.messages.create({
                                 from: process.env.TWILIO_WHATSAPP_NUMBER,
                                 body: "¿Te gustaría guardar este archivo en alguna de tus carpetas?",
                                 to: `whatsapp:${from}`

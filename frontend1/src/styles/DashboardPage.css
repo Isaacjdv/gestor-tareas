@@ -1,43 +1,57 @@
-.dashboard-container {
-    display: flex;
-    font-family: 'Segoe UI', sans-serif;
-    height: 100vh;
-    width: 100vw;
-    box-sizing: border-box;
-    background-color: #f9fafb;
+/* --- Variables de Color --- */
+:root {
+    --primary-color: #4f46e5; /* Púrpura/Azul */
+    --primary-hover: #4338ca;
+    --text-dark: #1f2937;
+    --text-light: #6b7280;
+    --bg-light: #f9fafb;
+    --bg-white: #ffffff;
+    --border-color: #e5e7eb;
 }
 
+/* --- Estructura Principal --- */
+.dashboard-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+    font-family: 'Segoe UI', sans-serif;
+    overflow: hidden;
+    background-color: var(--bg-light);
+}
+
+/* --- Columna 1: Sidebar (Carpetas) --- */
 .sidebar {
-    width: 300px;
-    padding: 20px;
-    border-right: 1px solid #e5e7eb;
-    background-color: #ffffff;
+    width: 280px;
+    flex-shrink: 0;
+    background-color: var(--bg-white);
+    border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+    padding: 24px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 .sidebar h2 {
-    color: #1f2937;
+    color: var(--text-dark);
+    font-size: 1.4em;
     margin-top: 0;
     margin-bottom: 20px;
-    font-size: 1.5em;
 }
 
 .back-button {
-    background-color: #f3f4f6;
-    border: 1px solid #d1d5db;
+    background-color: var(--bg-light);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 8px 12px;
     cursor: pointer;
     margin-bottom: 15px;
     font-weight: 500;
     width: 100%;
+    text-align: left;
+    transition: background-color 0.2s ease;
 }
 
-.back-button:hover {
-    background-color: #e5e7eb;
-}
+.back-button:hover { background-color: #e5e7eb; }
 
 .folder-form {
     display: flex;
@@ -47,24 +61,19 @@
 .folder-form input {
     flex-grow: 1;
     padding: 10px;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--border-color);
     border-radius: 6px 0 0 6px;
     font-size: 1em;
 }
 
-.folder-form input:focus {
-    outline: none;
-    border-color: #4f46e5;
-    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
-}
-
 .folder-form button {
     width: 40px;
-    border: 1px solid #d1d5db;
-    border-left: none;
-    background-color: #f9fafb;
+    border: 1px solid var(--primary-color);
+    background-color: var(--primary-color);
+    color: white;
     cursor: pointer;
     border-radius: 0 6px 6px 0;
+    font-size: 1.2em;
 }
 
 .folder-list {
@@ -72,52 +81,143 @@
     padding: 0;
     margin: 0;
     overflow-y: auto;
+    flex-grow: 1;
 }
 
-.folder-list li, .file-list li {
+.folder-list li {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px;
-    border-radius: 6px;
-    margin-bottom: 5px;
-    cursor: pointer;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    transition: background-color 0.2s ease;
 }
 
-.folder-list li:hover {
-    background-color: #f3f4f6;
-}
-
+.folder-list li:hover { background-color: var(--bg-light); }
 .folder-list li.active {
-    background-color: #4f46e5;
+    background-color: var(--primary-color);
     color: white;
     font-weight: 600;
 }
-
-.folder-list li > span, .file-list li > a {
+.folder-list li > span {
+    cursor: pointer;
     flex-grow: 1;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
-    padding-right: 10px;
 }
+
+/* --- Columna 2: Contenido Principal (Archivos) --- */
+.main-content {
+    flex-grow: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.files-section {
+    flex-grow: 1;
+    padding: 30px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.files-section h2 {
+    color: var(--text-dark);
+    margin-top: 0;
+    font-size: 1.8em;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.upload-form {
+    margin: 20px 0;
+    padding: 20px;
+    border: 2px dashed var(--border-color);
+    border-radius: 12px;
+    background-color: var(--bg-white);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+}
+
+/* --- Lista de Archivos (Estilo Tarjetas) --- */
+.file-list {
+    list-style-type: none;
+    padding: 0;
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 20px;
+    flex-grow: 1;
+}
+
+.file-list li {
+    background-color: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    height: 150px;
+}
+
+.file-list li:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.file-list a {
+    text-decoration: none;
+    color: var(--primary-color);
+    font-weight: 600;
+    font-size: 1.1em;
+    word-break: break-all;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.file-list a::before {
+    content: "📄";
+    font-size: 1.5em;
+    color: var(--primary-color);
+}
+.file-list a:hover { text-decoration: underline; }
 
 .actions {
     display: flex;
     gap: 8px;
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+    justify-content: flex-end;
 }
-
 .actions button {
     background: none;
     border: none;
     cursor: pointer;
-    font-size: 16px;
-    padding: 2px;
-    color: #6b7280;
+    font-size: 1em;
+    padding: 5px;
+    color: var(--text-light);
+    transition: color 0.2s ease;
 }
+.actions button:hover { color: var(--primary-color); }
+.actions button.delete-btn { color: #e11d48; }
+.actions button.delete-btn:hover { color: #be123c; }
 
+.folder-list li .actions button {
+    color: var(--text-light);
+}
 .folder-list li.active .actions button {
     color: white;
+}
+.folder-list li.active .actions button:hover {
+    color: #ddd;
 }
 
 .edit-form {
@@ -126,77 +226,59 @@
     align-items: center;
     gap: 5px;
 }
-
 .edit-form input {
     width: 100%;
-    padding: 4px;
-    border: 1px solid #4f46e5;
-    border-radius: 4px;
-}
-
-.main-content {
-    flex-grow: 1;
-    padding: 20px 30px;
-    overflow-y: auto;
-}
-
-.main-content h2 {
-    color: #1f2937;
-    margin-top: 0;
-    border-bottom: 1px solid #e5e7eb;
-    padding-bottom: 15px;
-}
-
-.upload-form {
-    margin: 20px 0;
-    padding: 15px;
-    border: 2px dashed #d1d5db;
-    border-radius: 8px;
-    background-color: #ffffff;
-    display: flex;
-    gap: 10px;
-    align-items: center;
-}
-
-.upload-form button {
-    padding: 8px 15px;
-    border: none;
+    padding: 8px;
+    border: 1px solid var(--primary-color);
     border-radius: 6px;
-    background-color: #4f46e5;
+    font-size: 1em;
+}
+.edit-form button {
+    background-color: var(--primary-color);
     color: white;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 6px;
     cursor: pointer;
 }
-
-.upload-form button:disabled {
-    background-color: #9ca3af;
-    cursor: not-allowed;
-}
-
-.file-list a {
-    text-decoration: none;
-    color: #3b82f6;
-    font-weight: 500;
-}
-
-.file-list a:hover {
-    text-decoration: underline;
+.edit-form button[type="button"] {
+    background-color: var(--border-color);
+    color: var(--text-dark);
 }
 
 .welcome-message {
+    flex-grow: 1;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    height: 100%;
     text-align: center;
-    color: #9ca3af;
+    color: var(--text-light);
+}
+.welcome-message h2 {
+    color: var(--text-dark);
+    font-size: 2em;
 }
 
-.message {
-    padding: 10px;
-    margin-top: 15px;
-    border-radius: 6px;
-    background-color: #f3f4f6;
-    border: 1px solid #e5e7eb;
-    color: #374151;
+/* --- Columna 3: Chat de IA --- */
+.chat-sidebar {
+    width: 350px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--border-color);
+    background-color: var(--bg-white);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* --- Estilos Responsivos --- */
+@media (max-width: 900px) {
+    .dashboard-container { flex-direction: column; }
+    .sidebar, .chat-sidebar, .main-content {
+        width: 100%;
+        height: auto;
+        border: none;
+    }
+    .sidebar { border-bottom: 1px solid var(--border-color); }
+    .chat-sidebar { border-top: 1px solid var(--border-color); height: 50vh; }
 }
