@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const pool = require('./config/db');
-const schedulerService = require('./services/schedulerService');
 
 // --- FUNCIÓN PARA INICIALIZAR LA BASE DE DATOS ---
 async function initializeDatabase() {
@@ -37,19 +36,6 @@ async function initializeDatabase() {
                 usuario_id INT,
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 FOREIGN KEY (carpeta_id) REFERENCES carpetas(id) ON DELETE CASCADE,
-                FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
-            );
-
-            CREATE TABLE IF NOT EXISTS reminders (
-                id SERIAL PRIMARY KEY,
-                usuario_id INT NOT NULL,
-                recipient_whatsapp_number VARCHAR(25) NOT NULL,
-                message TEXT NOT NULL,
-                trigger_at TIMESTAMPTZ NOT NULL,
-                status VARCHAR(20) DEFAULT 'pending', -- pending, sent, error
-                task_type VARCHAR(50) DEFAULT 'simple', -- 'simple' o 'investigation'
-                user_name VARCHAR(100),
-                created_at TIMESTAMPTZ DEFAULT NOW(),
                 FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
             );
         `;
@@ -87,5 +73,5 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`🚀 Servidor backend corriendo en http://localhost:${PORT}`);
     initializeDatabase();
-    schedulerService.startScheduler();
+    // schedulerService.startScheduler(); // <-- ELIMINADO
 });
