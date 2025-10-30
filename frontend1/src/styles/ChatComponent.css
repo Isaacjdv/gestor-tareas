@@ -1,18 +1,30 @@
+/* --- Estilos del Chat Interno (Dashboard) - Tema Oscuro --- */
+:root {
+    --primary-color: #007AFF; /* Mantenemos el azul como acento principal */
+    --text-light: #E0E0E0;      /* Color de texto principal (claro) */
+    --text-secondary: #B0B0B0; /* Color de texto secundario (gris claro) */
+    --bg-dark: #121212;         /* Fondo más oscuro (para el contenedor) */
+    --bg-card-dark: #1E1E1E;    /* Fondo de "tarjeta" (para mensajes, inputs) */
+    --bg-input-dark: #2C2C2C;   /* Fondo de inputs y mensajes de bot */
+    --border-dark: #333333;     /* Color de borde sutil */
+}
+
 .chat-container {
     display: flex;
     flex-direction: column;
-    height: 100%; /* Ocupa el 100% de la columna chat-sidebar */
-    background-color: var(--bg-white);
+    height: 100%;
+    background-color: var(--bg-dark); /* Fondo oscuro principal */
+    color: var(--text-light); /* Texto claro por defecto */
     overflow: hidden;
 }
 
 .chat-container h3 {
     text-align: center;
-    color: var(--text-dark);
+    color: var(--text-light);
     margin: 20px 0;
-    font-size: 1.4em;
+    font-size: 1.3em;
     font-weight: 600;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-dark); /* Borde oscuro */
     padding-bottom: 20px;
 }
 
@@ -25,53 +37,107 @@
     gap: 12px;
 }
 
+/* --- Scrollbar Oscuro Personalizado --- */
+.messages-area::-webkit-scrollbar {
+    width: 6px;
+}
+.messages-area::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+    border-radius: 10px;
+}
+.messages-area::-webkit-scrollbar-thumb {
+    background-color: var(--bg-input-dark);
+    border-radius: 10px;
+}
+.messages-area::-webkit-scrollbar-thumb:hover {
+    background-color: #444;
+}
+
+
 .message {
-    padding: 12px 18px;
-    border-radius: 22px;
-    max-width: 85%;
+    padding: 10px 16px;
+    border-radius: 20px;
+    max-width: 80%;
     line-height: 1.5;
     word-wrap: break-word;
     font-size: 0.95em;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.03);
 }
 
 .message.user {
-    background-color: var(--primary-color);
+    background-color: var(--primary-color); /* El azul del usuario resalta */
     color: white;
     align-self: flex-end;
     margin-left: auto;
-    border-bottom-right-radius: 8px;
+    border-bottom-right-radius: 5px;
 }
 
 .message.bot {
-    background-color: var(--bg-light);
-    color: var(--text-dark);
+    background-color: var(--bg-input-dark); /* Fondo oscuro para el bot */
+    color: var(--text-light); /* Texto claro */
     align-self: flex-start;
-    border-bottom-left-radius: 8px;
-    border: 1px solid var(--border-color);
+    border-bottom-left-radius: 5px;
 }
+
+/* --- Animación de "Escribiendo..." --- */
+.message.bot.typing {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+}
+
+.message.bot.typing::after {
+    content: '...';
+    display: inline-block;
+    animation: typing-dots 1.5s infinite;
+    font-size: 1.5rem;
+    line-height: 0.5;
+    vertical-align: bottom;
+    color: var(--text-secondary); /* Color de puntos gris claro */
+}
+
+@keyframes typing-dots {
+    0% {
+        content: '.';
+    }
+    33% {
+        content: '..';
+    }
+    66% {
+        content: '...';
+    }
+    100% {
+        content: '.';
+    }
+}
+
 
 .chat-form {
     display: flex;
-    border-top: 1px solid var(--border-color);
-    padding: 15px;
-    background-color: var(--bg-light);
+    border-top: 1px solid var(--border-dark); /* Borde oscuro */
+    padding: 12px 15px;
+    background-color: var(--bg-card-dark); /* Fondo de "tarjeta" para la barra de input */
     gap: 10px;
+    align-items: center;
 }
 
 .chat-form input {
     flex-grow: 1;
-    border: 1px solid var(--border-color);
-    padding: 14px 18px;
+    border: 1px solid var(--border-dark);
+    padding: 12px 18px;
     font-size: 1em;
     outline: none;
-    border-radius: 25px;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    border-radius: 20px;
+    background-color: var(--bg-input-dark); /* Fondo de input oscuro */
+    color: var(--text-light); /* Texto de input claro */
+    transition: border-color 0.2s ease;
+}
+
+.chat-form input::placeholder {
+    color: var(--text-secondary);
 }
 
 .chat-form input:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+    border-color: var(--primary-color); /* Resalta en azul al hacer foco */
 }
 
 .chat-form button {
@@ -81,14 +147,15 @@
     color: white;
     cursor: pointer;
     border-radius: 50%;
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     display: flex;
     justify-content: center;
     align-items: center;
     transition: background-color 0.2s ease;
+    flex-shrink: 0;
 }
 
 .chat-form button:hover {
-    background-color: var(--primary-hover);
+    background-color: #0056b3; /* Un azul más oscuro al hacer hover */
 }

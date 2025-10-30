@@ -1,349 +1,821 @@
-/* --- Base para toda la página de autenticación --- */
-.login-page-container {
-    display: flex;
-    width: 100vw;
-    height: 100vh;
-    font-family: 'Segoe UI', sans-serif;
-    overflow: hidden;
-    background-color: #1f385c; /* Fondo de fallback para móviles o si la imagen no carga */
-}
-
-/* --- Estilo general para los paneles izquierdo y derecho --- */
-.login-panel {
-    flex: 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 30px; /* Reducido para pantallas más pequeñas */
-    height: 100%;
-    box-sizing: border-box;
-}
-
-/* --- Panel Izquierdo (Imagen y Texto) --- */
-.left-panel {
-    background-size: cover;
-    background-position: center;
-    color: white;
-    flex-direction: column;
-    align-items: flex-start;
-    position: relative;
-    z-index: 1;
-    animation: slideInLeft 1s ease-out forwards;
-}
-
-.left-panel::before {
-    content: '';
-    position: absolute;
+/* --- ESTILOS DEL NAVBAR DE LA LANDING (TEMA OSCURO Y ACCESIBLE) --- */
+.landing-navbar {
+    position: fixed;
     top: 0;
     left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(40, 20, 80, 0.4); /* Overlay semitransparente */
-    backdrop-filter: blur(8px); /* Efecto cristal */
-    -webkit-backdrop-filter: blur(8px);
-    z-index: -1;
-}
-
-.left-panel-content {
-    animation: fadeInContent 1.5s ease-out 0.5s forwards;
-    opacity: 0;
-    padding: 20px; /* Espaciado interno para el texto */
-}
-
-.left-panel h1 {
-    font-size: 3.5em; /* Más grande */
-    font-weight: 700;
-    margin-bottom: 25px;
-    text-shadow: 0 4px 10px rgba(0, 0, 0, 0.6); /* Sombra más fuerte */
-}
-
-.left-panel p {
-    font-size: 1.3em; /* Más grande */
-    max-width: 500px; /* Aumentar el ancho máximo para texto */
-    line-height: 1.8;
-    text-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
-}
-
-/* --- Panel Derecho (Formulario) --- */
-.right-panel {
-    background-color: #f9fafb; /* Fondo ligeramente gris para contraste */
-    animation: fadeInRight 1s ease-out 0.5s forwards;
-    opacity: 0;
-}
-
-.auth-form {
     width: 100%;
-    max-width: 400px; /* Ajuste el ancho para que se vea mejor */
-    padding: 50px; /* Aumentar el padding interno del formulario */
-    background-color: #ffffff;
-    border-radius: 15px; /* Bordes más redondeados */
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15); /* Sombra más pronunciada y suave */
-    border: none; /* Eliminar el borde explícito, la sombra es suficiente */
-    box-sizing: border-box;
-}
-
-.auth-form h2 {
-    text-align: center; /* Centrar el título */
-    color: #333; /* Color oscuro para el texto */
-    font-size: 2.5em; /* Más grande para el título "USER LOGIN" */
-    margin-bottom: 45px; /* Más espacio abajo */
-    font-weight: 700;
-    letter-spacing: 1px; /* Espaciado entre letras */
-    text-transform: uppercase; /* MAYÚSCULAS */
-}
-
-/* --- Contenedor de Input con Icono --- */
-.input-container {
-    position: relative;
-    margin-bottom: 25px; /* Espacio entre los inputs */
-}
-
-.input-container i {
-    position: absolute;
-    left: 20px; /* Posición del icono */
-    top: 50%;
-    transform: translateY(-50%);
-    color: #aaa; /* Color del icono */
-    font-size: 1.1em;
-}
-
-.auth-form input {
-    width: 100%;
-    padding: 16px 30px 16px 10px; /* Más padding a la izquierda para el icono */
-    border: none; /* Sin borde */
-    border-radius: 30px; /* Bordes más redondeados */
-    background-color: #f0f2f5; /* Fondo de input */
-    font-size: 17px;
-    box-sizing: border-box;
-    transition: box-shadow 0.3s ease, background-color 0.3s ease;
-    color: #333;
-    margin-bottom: 10px; /* <-- AQUÍ ESTÁ LA SEPARACIÓN */
-
-}
-
-.auth-form input::placeholder {
-    color: #888;
-}
-
-.auth-form input:focus {
-    outline: none;
-    background-color: #e8eaf0; /* Color de fondo al enfocar */
-    box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.2); /* Sombra suave púrpura */
-}
-
-/* --- Opciones (Remember, Forgot Password) --- */
-.form-options {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 10px; /* Ajustar margen superior */
-    margin-bottom: 20px; /* Más espacio para el botón */
-    font-size: 1em;
-    color: #666;
+    padding: 20px 40px;
+    z-index: 500;
+    box-sizing: border-box; 
+    
+    /* * Estado inicial: Semi-transparente oscuro.
+     * El blur (backdrop-filter) ayuda a que el texto sea legible
+     * sobre la imagen del 'hero' que está detrás.
+    */
+    background-color: rgba(18, 18, 18, 0.7); /* Fondo oscuro semi-transparente */
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid transparent; /* Para una transición suave del borde */
+    
+    /* Transición suave para todos los cambios */
+    transition: background-color 0.4s ease, border-color 0.4s ease, padding 0.4s ease;
 }
 
-.form-options label {
+/* * Estado al hacer scroll: Fondo sólido.
+ * Esto sigue la heurística de "Visibilidad del estado del sistema".
+ * El usuario sabe que ya no está en la parte superior.
+*/
+.landing-navbar.scrolled {
+    background-color: #121212; /* Un color de fondo oscuro estándar (casi negro) */
+    padding: 15px 40px;
+    /* Un borde sutil para separar el navbar del contenido */
+    border-bottom: 1px solid #333333; 
+}
+
+.navbar-logo {
+    flex-shrink: 0;
+}
+
+.navbar-logo a {
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-decoration: none;
+    
+    /* * Color de alto contraste (Blanco).
+     * Esto es fundamental para la accesibilidad y personas con daltonismo,
+     * ya que el contraste es > 15:1 sobre el fondo #121212.
+    */
+    color: #FFFFFF; 
+    transition: color 0.3s ease, opacity 0.3s ease;
+}
+
+.navbar-links {
+    list-style: none;
     display: flex;
-    align-items: center;
-    cursor: pointer;
+    margin: 0;
+    padding: 0;
 }
 
-.form-options input[type="checkbox"] {
-    appearance: none; /* Oculta el checkbox nativo */
-    -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
-    border: 2px solid #ccc;
-    border-radius: 40px;
-    margin-right: 8px;
+.navbar-links li {
+    margin-left: 30px;
+}
+
+.navbar-links li a {
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
     cursor: pointer;
-    position: relative;
+    
+    /* * Color de alto contraste (Blanco).
+     * Hereda el color blanco, pero con una ligera transparencia
+     * para diferenciarlo del logo. (Principio de diseño: Jerarquía).
+    */
+    color: #E0E0E0; /* Un blanco ligeramente menos intenso que el logo */
+    transition: color 0.3s ease, text-decoration 0.3s ease;
+}
+
+/* * Estado Hover/Focus (Interacción y Accesibilidad):
+ * No confiamos solo en el color.
+ * Cambiamos el color a uno de acento brillante (azul claro).
+*/
+.navbar-links li a:hover,
+.navbar-links li a:focus { /* :focus es vital para la accesibilidad (navegación con teclado) */
+    color: #64B5F6; /* Un azul claro y accesible como acento */
+}
+
+/* Logo hover (sutil) */
+.navbar-logo a:hover {
+    opacity: 0.85;
+}
+
+
+/* --- Ajustes de Navbar para Móviles --- */
+@media (max-width: 768px) {
+    .landing-navbar,
+    .landing-navbar.scrolled {
+        padding: 15px 20px;
+    }
+
+    .navbar-logo a {
+        font-size: 1.3rem;
+    }
+
+    .navbar-links li {
+        margin-left: 20px;
+    }
+
+    .navbar-links li a {
+        font-size: 0.9rem;
+    }
+}
+
+
+/* --- ESTILOS DE LA PÁGINA DE ATERRIZAJE (TEMA OSCURO) --- */
+.landing-container {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #E0E0E0; /* Color de texto claro por defecto */
+    background-color: #121212; /* Fondo oscuro por defecto */
+}
+
+.scroll-section {
+    height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: #f0f2f5;
-    transition: background-color 0.2s, border-color 0.2s;
+    position: relative;
+    overflow: hidden;
 }
 
-.form-options input[type="checkbox"]:checked {
-    background-color: #8A2BE2; /* Color cuando está marcado */
-    border-color: #8A2BE2;
-}
-
-.form-options input[type="checkbox"]:checked::after {
-    content: '✔'; /* Símbolo de verificación */
+/* --- Sección 1: Hero (Bienvenida) --- */
+.hero-section {
+    background-size: cover;
+    background-position: center;
+    text-align: center;
     color: white;
-    font-size: 12px;
-    line-height: 1; /* Para centrar el check */
 }
 
-.form-options a {
-    color: #8A2BE2; /* Púrpura */
-    text-decoration: none;
-    font-weight: 500;
-    transition: color 0.2s ease;
+.hero-section::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5); /* Oscurecido un poco más */
+    backdrop-filter: blur(5px);
 }
 
-.form-options a:hover {
-    color: #C71585; /* Rosa al pasar el ratón */
-    text-decoration: underline;
+.hero-content {
+    position: relative;
+    z-index: 2;
+    animation: fadeIn 1.5s ease-out;
+    max-width: 600px;
+    padding: 20px;
 }
 
-/* --- Botón LOGIN --- */
-.auth-form button {
-    width: 100%;
-    padding: 16px; /* Más padding para que sea más grande */
-    border: none;
-    border-radius: 50px; /* Bordes más redondeados */
-    background: linear-gradient(90deg, #8A2BE2, #C71585); /* Degradado original */
-    color: white;
-    font-size: 1.2em; /* Texto más grande */
-    font-weight: bold;
-    cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-}
-
-.auth-form button:hover {
-    box-shadow: 0 8px 20px rgba(138, 43, 226, 0.4); /* Sombra más pronunciada al pasar el ratón */
-    transform: translateY(-3px);
-    opacity: 0.9;
-}
-
-.auth-form button:active {
-    transform: translateY(0);
-    box-shadow: 0 4px 10px rgba(138, 43, 226, 0.3);
-    opacity: 1;
-}
-
-/* --- Mensajes y Enlaces Inferiores --- */
-.auth-form .message {
-    color: #e74c3c; /* Rojo para errores */
-    font-weight: 500;
-    margin-top: 15px;
-    text-align: center;
-    font-size: 0.95em;
-}
-
-.auth-form p {
-    text-align: center;
-    margin-top: 35px; /* Más espacio */
-    font-size: 0.95em;
-    color: #666;
-}
-
-.auth-form p a {
-    color: #8A2BE2;
-    text-decoration: none;
-    font-weight: 600;
-}
-
-.auth-form p a:hover {
-    text-decoration: underline;
-}
-
-.small-text {
-    display: block;
-    text-align: center;
-    margin-top: -10px;
-    margin-bottom: 20px; /* Más espacio */
-    color: #888;
-    font-size: 0.85em;
-}
-
-/* --- ANIMACIONES --- */
-@keyframes slideInLeft {
-    from { transform: translateX(-100%); }
-    to { transform: translateX(0); }
-}
-
-@keyframes fadeInRight {
+@keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
 }
 
-@keyframes fadeInContent {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* --- MEDIA QUERIES (RESPONSIVE) --- */
-@media (max-width: 992px) { /* Para tablets grandes y pequeños laptops */
-    .left-panel h1 {
-        font-size: 2.8em;
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2), 0 0 20px rgba(0, 122, 255, 0.3);
     }
-    .left-panel p {
-        font-size: 1.1em;
-        max-width: 400px;
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3), 0 0 30px rgba(0, 122, 255, 0.5);
     }
-    .auth-form {
-        padding: 40px 30px;
-        max-width: 350px;
-    }
-    .auth-form h2 {
-        font-size: 2.2em;
+    100% {
+        transform: scale(1);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2), 0 0 20px rgba(0, 122, 255, 0.3);
     }
 }
 
-@media (max-width: 768px) { /* Para tablets y teléfonos */
-    .login-page-container {
-        flex-direction: column; /* Apila los paneles verticalmente */
-    }
+/* --- ESTILOS DEL BOTÓN "EMPEZAR AHORA" (CORREGIDO) --- */
+.cta-button {
+    display: inline-block; /* Asegura que el padding y margen funcionen */
+    background-color: #007AFF;
+    color: white;
+    padding: 15px 30px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: 30px;
+    text-decoration: none;
+    transition: background-color 0.3s ease, transform 0.3s ease, opacity 0.3s ease;
+    margin-top: 20px; /* Espacio entre el texto y el botón */
+}
 
-    .left-panel {
-        display: none; /* Oculta el panel izquierdo en móviles */
-    }
+.cta-button:hover {
+    background-color: #0056b3;
+    transform: scale(1.05);
+}
 
-    .right-panel {
-        flex: 1; /* El panel derecho ocupa todo el espacio */
-        background-color: #f0f2f5;
-        padding: 30px 20px;
-    }
+/* Animación de clic añadida */
+.cta-button:active {
+    transform: scale(0.98);
+    opacity: 0.9;
+}
 
-    .auth-form {
+
+/* --- Sección 2: Historia con Scroll --- */
+.scroll-story-container {
+    display: flex;
+    height: 300vh; /* 3 secciones de 100vh cada una */
+    position: relative;
+}
+
+.story-text-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+    position: sticky; /* El panel de texto se queda fijo */
+    top: 0;
+    height: 100vh;
+    /* El fondo ya es oscuro por .landing-container */
+}
+
+.feature-text {
+    max-width: 400px;
+    text-align: center;
+    position: absolute;
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+    transform: translateY(20px);
+}
+
+.feature-text.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.story-icon {
+    font-size: 3rem;
+    color: #007AFF; /* El azul resalta bien en fondo oscuro */
+    margin-bottom: 20px;
+}
+
+.feature-text h2 {
+    font-size: 2rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+    /* Hereda el color claro de .landing-container */
+}
+
+.feature-text p {
+    font-size: 1.1rem;
+    color: #B0B0B0; /* Texto gris claro para párrafos */
+    line-height: 1.6;
+}
+
+.story-image-panel {
+    flex: 1;
+    position: relative;
+}
+
+.image-stack {
+    position: sticky; /* La pila de imágenes se queda fija */
+    top: 0;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.image-stack img {
+    position: absolute;
+    /* top: 0; <-- Removido para centrar con flexbox */
+    /* left: 0; <-- Removido para centrar con flexbox */
+    width: 60%;
+    height: 60%;
+    object-fit: contain;
+    border-radius: 20px;
+    /* La sombra es menos notoria en oscuro, pero se puede quedar */
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+    opacity: 0;
+    transform: scale(0.95);
+    
+    /* --- Mejoras --- */
+    border: 2px solid #333; /* Borde sutil */
+    transition: opacity 0.7s ease-in-out, 
+                transform 0.4s ease, 
+                box-shadow 0.4s ease, 
+                border-color 0.4s ease;
+}
+
+.image-stack img.visible {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* --- Efecto de zoom y glow al pasar el mouse (fluido intuitivo) --- */
+.image-stack img.visible:hover,
+.image-stack img.visible:focus {
+    transform: scale(1.03); /* Zoom fluido */
+    box-shadow: 0 15px 45px rgba(0, 0, 0, 0.3), /* Sombra más grande */
+                0 0 30px rgba(0, 122, 255, 0.5); /* Glow azul */
+    border-color: #007AFF; /* Borde se ilumina */
+    cursor: pointer;
+    outline: none; /* Quitar outline de foco, ya tenemos el borde/glow */
+}
+
+/* --- Efecto de clic --- */
+.image-stack img.visible:active {
+    transform: scale(1.01); /* Un "press" ligero */
+}
+
+.story-trigger {
+    height: 100vh;
+    width: 100%;
+    position: absolute;
+}
+#whatsapp { top: 0; }
+#files { top: 100vh; }
+#ai { top: 200vh; }
+
+
+/* --- Sección 3: Formulario de Login (TEMA OSCURO) --- */
+.login-form-section {
+    background-color: #121212; /* Fondo oscuro principal */
+    z-index: 5;
+    position: relative;
+}
+
+.auth-form-landing {
+    width: 100%;
+    max-width: 400px;
+    padding: 40px;
+    background-color: #1E1E1E; /* Fondo de "tarjeta" oscuro */
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2); /* Sombra sutil */
+    text-align: center;
+    border: 1px solid #333; /* Borde ligero */
+}
+
+.auth-form-landing h2 {
+    font-size: 2rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+    /* Hereda color claro */
+}
+
+.auth-form-landing p {
+    color: #B0B0B0; /* Texto gris claro */
+    margin-bottom: 30px;
+}
+
+.input-container {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.input-container i {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #aaa;
+}
+
+.input-container input {
+    width: 100%;
+    padding: 15px 20px 15px 50px;
+    border: 1px solid #444; /* Borde oscuro */
+    border-radius: 10px;
+    background-color: #2C2C2C; /* Fondo de input oscuro */
+    font-size: 1rem;
+    box-sizing: border-box;
+    color: #E0E0E0; /* Texto de input claro */
+}
+
+.input-container input::placeholder { /* Estilo para el placeholder */
+    color: #888;
+}
+
+.input-container input:focus {
+    outline: none;
+    border-color: #007AFF; /* Resaltar con azul al hacer foco */
+    background-color: #1E1E1E; /* Fondo igual a la tarjeta */
+}
+
+.form-options {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    font-size: 0.9rem;
+    color: #B0B0B0; /* Texto gris claro */
+}
+
+.form-options a {
+    color: #007AFF;
+    text-decoration: none;
+}
+
+.auth-form-landing button {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 10px;
+    background: #007AFF;
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease, opacity 0.2s ease; /* Transición añadida/mejorada */
+}
+
+.auth-form-landing button:hover {
+    background-color: #0056b3;
+}
+
+/* Animación de clic añadida */
+.auth-form-landing button:active {
+    transform: scale(0.98);
+    opacity: 0.9;
+}
+
+.message {
+    color: #FF3B30; /* El rojo de error resalta bien */
+    font-weight: 500;
+    margin-top: 15px;
+}
+
+.register-link {
+    margin-top: 30px !important;
+}
+
+/* --- ESTILOS DEL CHATBOT PÚBLICO (TEMA OSCURO) --- */
+.chat-bubble {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background-color: #007AFF;
+    color: white;
+    font-size: 2rem;
+    border-radius: 50%;
+    border: none;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2), 0 0 20px rgba(0, 122, 255, 0.3); /* Glow añadido */
+    cursor: pointer;
+    z-index: 999;
+    animation: fadeIn 1s 2s both, pulse 2.5s infinite 3s; /* Animación de pulso añadida */
+    transition: transform 0.2s ease;
+}
+.chat-bubble:hover {
+    transform: scale(1.1);
+}
+
+/* Animación de clic añadida */
+.chat-bubble:active {
+    transform: scale(0.95);
+}
+
+/* --- Texto animado para el botón de IA --- */
+@keyframes chat-bubble-text {
+    0%   { content: 'Habla conmigo'; opacity: 0; }
+    10%  { opacity: 1; } /* Fade in */
+    40%  { opacity: 1; } /* Hold */
+    50%  { opacity: 0; } /* Fade out */
+    50.01% { content: 'Contesto tus preguntas'; } /* Change text */
+    60%  { opacity: 1; } /* Fade in */
+    90%  { opacity: 1; } /* Hold */
+    100% { opacity: 0; } /* Fade out */
+}
+
+.chat-bubble::before {
+    content: 'Habla conmigo';
+    position: absolute;
+    right: 75px; /* 60px de burbuja + 15px de espacio */
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: #1E1E1E; /* Color de tarjeta oscuro */
+    color: #E0E0E0; /* Color de texto claro */
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: 1px solid #333;
+    font-size: 0.9rem;
+    font-weight: 500;
+    white-space: nowrap;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    
+    /* Animación: ciclo total de 8s, empieza 4s después de cargar */
+    opacity: 0; /* Empezar invisible */
+    animation: chat-bubble-text 8s infinite ease-in-out 4s;
+    z-index: -1; /* Ponerlo detrás de la burbuja por si acaso */
+}
+
+.chat-window {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 350px;
+    height: 500px;
+    background-color: #1E1E1E; /* Fondo de tarjeta oscuro */
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4); /* Sombra más oscura */
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease-out;
+    border: 1px solid #333;
+}
+
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background-color: #2C2C2C; /* Fondo de cabecera oscuro */
+    border-bottom: 1px solid #444; /* Borde oscuro */
+    border-top-left-radius: 15px;
+    border-top-right-radius: 15px;
+}
+
+.chat-header h3 {
+    margin: 0;
+    font-weight: 600;
+    color: #E0E0E0; /* Texto claro */
+}
+
+.chat-header button {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #B0B0B0; /* Icono gris claro */
+}
+
+/* --- Custom Scrollbar for Chat --- */
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+.chat-messages::-webkit-scrollbar-track {
+    background: #1E1E1E;
+    border-radius: 10px;
+}
+.chat-messages::-webkit-scrollbar-thumb {
+    background-color: #444;
+    border-radius: 10px;
+}
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background-color: #555;
+}
+
+
+.chat-messages {
+    flex-grow: 1;
+    padding: 15px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.message {
+    padding: 10px 15px;
+    border-radius: 18px;
+    max-width: 80%;
+    line-height: 1.5;
+}
+
+.message.user {
+    background-color: #007AFF; /* El azul del usuario se mantiene */
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 5px;
+}
+
+.message.bot {
+    background-color: #2C2C2C; /* Fondo de mensaje de bot oscuro */
+    color: #E0E0E0; /* Texto de bot claro */
+    align-self: flex-start;
+    border-bottom-left-radius: 5px;
+}
+
+.message.bot.typing {
+    /* font-style: italic; */ /* Reemplazado */
+    /* color: #888; */ /* Reemplazado */
+    display: flex;
+    align-items: center;
+    padding: 12px 15px; /* Ajuste para los puntos */
+}
+
+/* Three-dot typing animation */
+.message.bot.typing::after {
+    content: '...';
+    display: inline-block;
+    animation: typing-dots 1.5s infinite;
+    font-size: 1.5rem;
+    line-height: 0.5;
+    vertical-align: bottom;
+    color: #888;
+}
+
+@keyframes typing-dots {
+    0% {
+        content: '.';
+    }
+    33% {
+        content: '..';
+    }
+    66% {
+        content: '...';
+    }
+    100% {
+        content: '.';
+    }
+}
+
+
+.chat-input-form {
+    display: flex;
+    padding: 15px;
+    border-top: 1px solid #444; /* Borde oscuro */
+}
+
+.chat-input-form input {
+    flex-grow: 1;
+    border: 1px solid #444; /* Borde oscuro */
+    background-color: #2C2C2C; /* Fondo de input oscuro */
+    border-radius: 20px;
+    padding: 10px 15px;
+    font-size: 1rem;
+    outline: none;
+    color: #E0E0E0; /* Texto de input claro */
+}
+
+.chat-input-form input::placeholder {
+    color: #888;
+}
+
+.chat-input-form button {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: #007AFF; /* El botón de enviar azul se mantiene */
+    cursor: pointer;
+    margin-left: 10px;
+    transition: transform 0.2s ease, opacity 0.2s ease; /* Transición añadida */
+}
+
+/* Animación de clic añadida */
+.chat-input-form button:hover {
+    opacity: 0.8;
+}
+
+.chat-input-form button:active {
+    transform: scale(0.9);
+}
+
+/* Responsividad para móviles */
+@media (max-width: 768px) {
+    .scroll-story-container {
+        flex-direction: column;
+        height: auto;
+    }
+    .story-text-panel {
+        position: relative;
+        height: auto;
+        min-height: 60vh;
+    }
+    .story-image-panel {
+        position: relative;
+        height: 60vh;
+    }
+    .story-trigger {
+        position: relative;
+        height: 100%;
+        top: 0;
+    }
+    #files, #ai { top: 0; }
+    .hero-content h1 { font-size: 2.5rem; }
+    .hero-content p { font-size: 1.1rem; }
+    
+    .chat-window {
         width: 100%;
-        max-width: 350px; /* Ancho máximo en móvil */
-        margin: auto; /* Centrar el formulario */
-        padding: 30px;
-        box-shadow: none; /* Elimina la sombra en móviles */
+        height: 100%;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        border-radius: 0;
         border: none;
-        background-color: #ffffff; /* Asegura un fondo blanco si el padre es gris */
-    }
-
-    .auth-form h2 {
-        font-size: 2em;
-        margin-bottom: 30px;
-    }
-
-    .auth-form input {
-        padding: 14px 20px 14px 50px; /* Ajustar padding para icono */
-        font-size: 16px;
-    }
-
-    .input-container i {
-        left: 15px; /* Ajustar posición del icono */
-        font-size: 1em;
-    }
-
-    .form-options {
-        font-size: 0.9em;
-        margin-bottom: 30px;
-    }
-
-    .auth-form button {
-        padding: 14px;
-        font-size: 1.1em;
-    }
-
-    .auth-form p {
-        margin-top: 25px;
-        font-size: 0.9em;
-    }
-
-    .small-text {
-        font-size: 0.8em;
-        margin-top: -5px;
-        margin-bottom: 15px;
     }
 }
+
+/* --- (AÑADIR AL FINAL DE DashboardPage.css) --- */
+
+/* --- ESTILOS PARA EL BOTÓN DE IDIOMA --- */
+.btn-lang {
+  padding: 0.5rem 0.8rem; /* Más pequeño */
+  font-weight: 700;
+  min-width: 40px; /* Ancho fijo */
+  justify-content: center;
+}
+
+/* --- [NUEVO] ESTILOS PARA EL "HOME HUB" (Tarjetas) --- */
+.home-hub {
+  animation: itemFadeIn 0.5s ease-out;
+}
+
+.home-hub h2 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--font-color);
+  margin-bottom: 0.25rem;
+}
+
+.home-hub .home-subtitle {
+  font-size: 1.1rem;
+  color: var(--font-color-light);
+  margin-bottom: 2rem;
+}
+
+.home-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.home-card {
+  position: relative;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  cursor: pointer;
+  background-color: var(--bg-content);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: all var(--transition-speed) ease;
+  border: 1px solid var(--border-color);
+}
+
+.home-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+}
+
+.home-card img {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.home-card:hover img {
+  transform: scale(1.05);
+}
+
+.card-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1rem;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.home-card:hover .card-overlay {
+  opacity: 1;
+}
+
+.card-overlay h3 {
+  color: white;
+  font-size: 1.1rem;
+  transform: translateY(10px);
+  transition: transform 0.3s ease;
+}
+
+.home-card:hover .card-overlay h3 {
+  transform: translateY(0);
+}
+
+.card-footer {
+  padding: 1rem;
+  background-color: var(--bg-content);
+}
+
+.card-footer h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--font-color);
+  margin: 0;
+}
+
+/* --- [NUEVO] ESTILOS PARA LA VISTA DE "APARTADO" --- */
+.apartado-view {
+  animation: itemFadeIn 0.5s ease-out;
+}
+
+.apartado-breadcrumbs {
+  margin-bottom: 1.5rem; /* Más separación */
+  font-size: 1.1rem; /* Más grande */
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.apartado-content h2 {
+  font-size: 1.8rem;
+  color: var(--font-color);
+  margin-bottom: 1rem;
+}
+
+.apartado-content p {
+  color: var(--font-color-light);
+  font-size: 1.1rem;
+  line-height: 1.6;
+  max-width: 800px;
+}
+
+
+

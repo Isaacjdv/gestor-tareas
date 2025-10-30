@@ -27,3 +27,9 @@ router.put('/:id', authMiddleware, fileController.updateFile);
 router.delete('/:id', authMiddleware, fileController.deleteFile);
 
 module.exports = router;
+// ... (tus otras rutas .get, .post, .delete)
+
+
+router.put('/:id/details', authMiddleware, fileController.updateFileDetails);
+
+// ... (al final, module.exports = router;)

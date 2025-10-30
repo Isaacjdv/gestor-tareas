@@ -55,7 +55,22 @@ async function initializeDatabase() {
             );
         `;
         await pool.query(createTablesQuery);
+        console.log("✅ Tablas base verificadas/creadas con éxito.");
+
+        // --- [NUEVO] MIGRACIÓN AUTOMÁTICA DE LA TABLA 'archivos' ---
+        // Esto añade las columnas SÓLO SI NO EXISTEN, por lo que es seguro ejecutarlo siempre.
+        console.log("Verificando columnas 'status' y 'nota' en la tabla 'archivos'...");
+        
+        const alterArchivosQuery = `
+            ALTER TABLE archivos
+            ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending',
+            ADD COLUMN IF NOT EXISTS nota TEXT;
+        `;
+        
+        await pool.query(alterArchivosQuery);
+        console.log("✅ Tabla 'archivos' actualizada con 'status' y 'nota'.");
         console.log("✅ Estructura de la base de datos verificada/creada con éxito.");
+
     } catch (error) {
         console.error("❌ Error al inicializar la base de datos:", error);
     }
@@ -76,12 +91,14 @@ const folderRoutes = require('./routes/folderRoutes');
 const fileRoutes = require('./routes/fileRoutes');
 const whatsappRoutes = require('./routes/whatsappRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const publicChatRoutes = require('./routes/publicChatRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/public-chat', publicChatRoutes);
 
 // 4. Iniciar el servidor
 const PORT = process.env.PORT || 10000;

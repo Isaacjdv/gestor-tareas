@@ -6,39 +6,44 @@ import DashboardPage from './pages/DashboardPage';
 import PrivateRoute from './components/PrivateRoute';
 import authService from './services/authService';
 
-// 1. Crear el Contexto
 export const UserContext = createContext(null);
 
 function App() {
   const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true); // Añadido para evitar parpadeos
 
   useEffect(() => {
-    // Al cargar la app, intenta obtener los datos del usuario si hay un token
     const fetchUser = async () => {
       try {
         const response = await authService.getSelf();
         setUser(response.data);
       } catch (error) {
-        console.log("No hay usuario logueado.");
-        authService.logout(); // Limpia un token inválido
+        authService.logout(); // Limpia token inválido
       }
+      setIsLoading(false);
     };
+
     if (localStorage.getItem('user_token')) {
       fetchUser();
+    } else {
+      setIsLoading(false);
     }
   }, []);
 
-  // Usamos useMemo para evitar que el contexto se recalcule innecesariamente
   const value = useMemo(() => ({ user, setUser }), [user]);
+
+  if (isLoading) {
+    return <div>Cargando...</div>; // O un componente de spinner
+  }
 
   return (
     <Router>
-      {/* 2. Proveer el contexto a toda la aplicación */}
       <UserContext.Provider value={value}>
         <Routes>
+          {/* AHORA LA PÁGINA DE INICIO ES EL LOGIN/LANDING */}
+          <Route path="/" element={<LoginPage />} /> 
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/" element={<LoginPage />} />
           <Route 
             path="/dashboard" 
             element={

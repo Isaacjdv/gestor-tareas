@@ -80,3 +80,47 @@ exports.deleteFile = async (req, res) => {
         res.status(500).json({ message: 'Error en el servidor.' });
     }
 };
+
+
+// NUEVA FUNCIÓN para actualizar estado y nota
+exports.updateFileDetails = async (req, res) => {
+    const { id } = req.params;
+    const { status, nota } = req.body;
+    const usuario_id = req.user.id; // Asumiendo que authMiddleware te da esto
+
+    // Validar que el status sea uno de los valores permitidos
+    const allowedStatus = ['pending', 'in_process', 'done'];
+    if (status && !allowedStatus.includes(status)) {
+        return res.status(400).json({ message: 'Status no válido' });
+    }
+
+    try {
+        let query;
+        let queryParams;
+
+        // Construimos la query dinámicamente
+        if (status !== undefined && nota !== undefined) {
+            query = 'UPDATE archivos SET status = $1, nota = $2 WHERE id = $3 AND usuario_id = $4 RETURNING *';
+            queryParams = [status, nota, id, usuario_id];
+        } else if (status !== undefined) {
+            query = 'UPDATE archivos SET status = $1 WHERE id = $2 AND usuario_id = $3 RETURNING *';
+            queryParams = [status, id, usuario_id];
+        } else if (nota !== undefined) {
+            query = 'UPDATE archivos SET nota = $1 WHERE id = $2 AND usuario_id = $3 RETURNING *';
+            queryParams = [nota, id, usuario_id];
+        } else {
+            return res.status(400).json({ message: 'No se proporcionaron datos para actualizar' });
+        }
+
+        const { rows } = await pool.query(query, queryParams);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Archivo no encontrado o no autorizado' });
+        }
+
+        res.json(rows[0]);
+    } catch (error) {
+        console.error('Error al actualizar detalles del archivo:', error);
+        res.status(500).json({ message: 'Error del servidor' });
+    }
+};

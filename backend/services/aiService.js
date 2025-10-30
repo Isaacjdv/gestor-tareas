@@ -6,15 +6,27 @@ const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
 exports.interpretMessage = async (message) => {
     const prompt = `
         Tu trabajo es analizar un mensaje y clasificarlo en una intención. Responde SIEMPRE con un objeto JSON.
-        Las intenciones son: "greeting", "list_folders", "view_folder", "create_folder", "edit_folder", "delete_folder", "upload_file", "send_file", "send_latest_file", "get_summary", "generate_pdf", "confirm_save_yes", "confirm_save_no", "set_reminder", "schedule_file_send", "clarification_needed", "unknown".
-        
+
+        Las intenciones posibles son:
+        "greeting", "list_folders", "view_folder", "create_folder", "edit_folder", "delete_folder",
+        "upload_file", "send_file", "send_latest_file", "get_summary", "generate_pdf",
+        "confirm_save_yes", "confirm_save_no", "set_reminder", "schedule_file_send",
+        "clarification_needed", "unknown".
+
         REGLAS CRÍTICAS:
-        1. Sé EXTREMADAMENTE LITERAL al extraer nombres en "entity", "parent_entity" o "new_entity". No simplifiques "Base de datos II" a "Base de datos".
+        1. Al extraer nombres en "entity", "parent_entity" o "new_entity", sé EXTREMADAMENTE LITERAL. No simplifiques "Base de datos II" a "Base de datos".
         2. Para "upload_file", la "entity" es SIEMPRE el nombre de la carpeta destino.
         3. Para "generate_pdf", extrae el tema de la consulta en "entity".
         4. Para "confirm_save_yes", si se menciona una carpeta, extráela en "entity".
-        5. Para "set_reminder", extrae la descripción en "entity" y el tiempo en "time".
-        6. Si una acción necesita un nombre y no está claro, usa "clarification_needed".
+        5. Para "set_reminder":
+           - "entity": La descripción de la actividad.
+           - "time": La hora o período de tiempo (ej: "en 2 horas", "mañana a las 9 am").
+        6. Para "schedule_file_send":
+           - "entity": El nombre del archivo a enviar.
+           - "contact": El nombre o número del contacto.
+           - "time": La hora o período de tiempo.
+           - "message": Un mensaje adicional (opcional).
+        7. Si una acción necesita un nombre y no está claro, usa "clarification_needed".
 
         ### Ejemplos ###
         - Usuario: "hola" -> {"intent": "greeting"}
@@ -27,6 +39,7 @@ exports.interpretMessage = async (message) => {
         - Usuario: "pásame el archivo" -> {"intent": "clarification_needed"}
         - Usuario: "haz un resumen de la segunda guerra mundial en pdf" -> {"intent": "generate_pdf", "entity": "la segunda guerra mundial"}
         - Usuario: "recuérdame hacer la compra en 30 minutos" -> {"intent": "set_reminder", "entity": "hacer la compra", "time": "en 30 minutos"}
+        - Usuario: "envíale el reporte a Juan en 5 minutos con el mensaje 'Ahí te va'" -> {"intent": "schedule_file_send", "entity": "reporte", "contact": "Juan", "time": "en 5 minutos", "message": "Ahí te va"}
 
         Analiza: "${message}"
     `;
@@ -84,7 +97,10 @@ exports.generateConversationalResponse = async (message, userName, userData) => 
 
 // --- FUNCIÓN PARA BUSCAR IMÁGENES ---
 async function fetchRelevantImage(topic) {
-    if (!UNSPLASH_ACCESS_KEY) return null;
+    if (!UNSPLASH_ACCESS_KEY) {
+        console.log("No se ha configurado la API Key de Unsplash.");
+        return null;
+    }
     try {
         const response = await axios.get('https://api.unsplash.com/search/photos', {
             params: { query: topic, per_page: 1, orientation: 'landscape', lang: 'es' },
@@ -100,35 +116,110 @@ async function fetchRelevantImage(topic) {
 // FUNCIÓN 3: Generador de Contenido para PDF Extenso con Imagen
 exports.generatePdfContent = async (topic, userName) => {
     const today = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
-    const prompt = `
-        Genera un informe detallado y bien estructurado sobre "${topic}". El informe debe tener al menos 800 palabras y estar listo para un PDF.
 
-        Estructura obligatoria:
-        1.  CONTENIDO (mínimo 800 palabras):
-            - Introducción: Presenta el tema y su importancia.
-            - Secciones: Al menos 3-4 secciones con subtítulos en negrita. Desarrolla cada aspecto con ejemplos claros.
-            - Tono: Educativo, claro y sin tecnicismos excesivos.
-            - Conclusión: Resume los puntos clave.
-        2.  BIBLIOGRAFÍA:
-            - Al final, una sección "Fuentes Consultadas" con 3-5 referencias realistas.
+    // --- PROMPT 1: Generar la estructura del documento ---
+    const structurePrompt = `
+        Tu tarea es generar la estructura de un informe sobre "${topic}". Responde SIEMPRE y ÚNICAMENTE con un objeto JSON.
+        El JSON debe tener: "titulo", "introduccion", un array "secciones", y "conclusion".
+        Cada sección debe tener "subtitulo" (el tema de la sección) y "consulta_imagen" (una frase corta para buscar una imagen en Unsplash sobre ese subtitulo).
+        
+        Ejemplo de JSON:
+        {
+          "titulo": "La Revolución de la Inteligencia Artificial",
+          "introduccion": "La IA está transformando nuestro mundo...",
+          "secciones": [
+            { "subtitulo": "Redes Neuronales: El Cerebro de la IA", "consulta_imagen": "cerebro red neuronal abstracta" },
+            { "subtitulo": "IA en la Medicina: Salvando Vidas", "consulta_imagen": "doctor IA tecnología hospital" }
+          ],
+          "conclusion": "En conclusión, la IA promete..."
+        }
     `;
 
+    let structure;
+    try {
+        const structureResponse = await axios.post('https://api.ai21.com/studio/v1/chat/completions', {
+            model: 'jamba-large',
+            messages: [{ role: 'user', content: structurePrompt }],
+            max_tokens: 1500,
+            temperature: 0.5,
+        }, { headers: { 'Authorization': `Bearer ${AI21_API_KEY}`, 'Content-Type': 'application/json' } });
+
+        const jsonString = structureResponse.data?.choices?.[0]?.message?.content?.trim();
+        const jsonMatch = jsonString.match(/{[\s\S]*}/);
+        structure = JSON.parse(jsonMatch[0]);
+    } catch (e) {
+        console.error("Error al generar la ESTRUCTURA del PDF:", e);
+        return null;
+    }
+
+    // --- PROMPT 2: Generar el contenido de texto ---
+    const contentPrompt = `
+        Escribe un informe detallado (mínimo 800 palabras) sobre "${topic}". Usa un tono educativo y fácil de entender.
+        Debes seguir esta estructura (ignora las consultas de imagen):
+        - Título: ${structure.titulo}
+        - Introducción: ${structure.introduccion}
+        - Secciones:
+        ${structure.secciones.map(s => `  - ${s.subtitulo}\n`).join('')}
+        - Conclusión: ${structure.conclusion}
+        - Bibliografía: (Añade una sección de 3 a 5 fuentes realistas)
+    `;
+    
     try {
         const textResponse = await axios.post('https://api.ai21.com/studio/v1/chat/completions', {
             model: 'jamba-large',
-            messages: [{ role: 'user', content: prompt }],
+            messages: [{ role: 'user', content: contentPrompt }],
             max_tokens: 3500,
             temperature: 0.6,
-        }, {
-            headers: { 'Authorization': `Bearer ${AI21_API_KEY}`, 'Content-Type': 'application/json' }
-        });
-        const textContent = textResponse.data?.choices?.[0]?.message?.content?.trim();
+        }, { headers: { 'Authorization': `Bearer ${AI21_API_KEY}`, 'Content-Type': 'application/json' } });
         
-        const imageUrl = await fetchRelevantImage(topic);
+        const textContent = textResponse.data?.choices?.[0]?.message?.content?.trim();
 
-        return { textContent, imageUrl, userName, today, topic };
+        // --- Búsqueda de Imágenes en Paralelo ---
+        for (const section of structure.secciones) {
+            section.imageUrl = await fetchRelevantImage(section.consulta_imagen);
+        }
+
+        return { textContent, structure, userName, today, topic };
     } catch (error) {
         console.error("Error al generar contenido para PDF:", error);
         return null;
     }
 };
+
+// --- FUNCIÓN NUEVA PARA EL CHAT PÚBLICO ---
+exports.generatePublicResponse = async (message) => {
+    const prompt = `
+        Eres "Gestor IA", un asistente de IA en la página de inicio de una aplicación.
+        Tu trabajo es responder preguntas sobre qué hace la aplicación.
+        La aplicación es un gestor de archivos y tareas que se integra con WhatsApp.
+        Permite a los usuarios:
+        - Subir y organizar archivos (PDFs, imágenes, etc.) en carpetas y subcarpetas.
+        - Interactuar con un bot de WhatsApp para crear carpetas, subir archivos y pedir resúmenes.
+        - Generar PDFs sobre cualquier tema usando IA.
+        - Transcribir audios de WhatsApp a texto.
+
+        Sé amable, conciso y responde solo a preguntas sobre la aplicación. Si te preguntan algo no relacionado, di amablemente que solo puedes hablar sobre el Gestor de Tareas.
+
+        Usuario: "${message}"
+        Respuesta:
+    `;
+
+    try {
+        const response = await axios.post('https://api.ai21.com/studio/v1/chat/completions', {
+            model: 'jamba-large',
+            messages: [
+                { role: 'system', content: "Eres un asistente de IA en una página de inicio." },
+                { role: 'user', content: prompt }
+            ],
+            max_tokens: 150,
+            temperature: 0.5,
+        }, {
+            headers: { 'Authorization': `Bearer ${AI21_API_KEY}`, 'Content-Type': 'application/json' }
+        });
+        return response.data?.choices?.[0]?.message?.content?.trim() || "Lo siento, no entendí la pregunta.";
+    } catch (error) {
+        console.error("Error en el chat público de IA:", error);
+        return "Tuve un problema para conectarme con mi cerebro de IA.";
+    }
+};
+
