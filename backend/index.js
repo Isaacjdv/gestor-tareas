@@ -36,6 +36,12 @@ async function initializeDatabase() {
                 carpeta_id INT,
                 usuario_id INT,
                 created_at TIMESTAMPTZ DEFAULT NOW(),
+                
+                -- --- NUEVOS CAMPOS PARA SEMAFORIZACIÓN --- --
+                status VARCHAR(20) DEFAULT 'pending',
+                nota TEXT,
+                -- --- FIN DE NUEVOS CAMPOS --- --
+                
                 FOREIGN KEY (carpeta_id) REFERENCES carpetas(id) ON DELETE CASCADE,
                 FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
             );
@@ -53,22 +59,32 @@ async function initializeDatabase() {
                 FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
             );
         `;
+        
+        // Ejecuta la creación de tablas (CREATE TABLE IF NOT EXISTS)
         await pool.query(createTablesQuery);
-        console.log("✅ Tablas base verificadas/creadas con éxito.");
-
-        // --- MIGRACIÓN AUTOMÁTICA DE LA TABLA 'archivos' ---
-        // Añade las columnas 'status' y 'nota' SÓLO SI NO EXISTEN.
-        console.log("Verificando columnas 'status' y 'nota' en la tabla 'archivos'...");
         
-        const alterArchivosQuery = `
-            ALTER TABLE archivos
-            ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending',
-            ADD COLUMN IF NOT EXISTS nota TEXT;
-        `;
+        // --- Lógica para añadir columnas si 'archivos' ya existe sin ellas ---
+        // Esto evita errores si la tabla ya fue creada sin las nuevas columnas
+        try {
+            await pool.query("ALTER TABLE archivos ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending'");
+            console.log("Columna 'status' verificada/añadida a 'archivos'.");
+        } catch (e) {
+            // Ignorar el error si la columna ya existe (código '42701' en PostgreSQL)
+            if (e.code !== '42701') { 
+                console.error("Error al añadir columna 'status':", e.message);
+            }
+        }
         
-        await pool.query(alterArchivosQuery);
-        console.log("✅ Tabla 'archivos' actualizada con 'status' y 'nota'.");
-
+        try {
+            await pool.query("ALTER TABLE archivos ADD COLUMN IF NOT EXISTS nota TEXT");
+            console.log("Columna 'nota' verificada/añadida a 'archivos'.");
+        } catch (e) {
+            if (e.code !== '42701') {
+                console.error("Error al añadir columna 'nota':", e.message);
+            }
+        }
+        
+        console.log("✅ Estructura de la base de datos verificada/creada con éxito.");
     } catch (error) {
         console.error("❌ Error al inicializar la base de datos:", error);
     }
