@@ -1,4 +1,7 @@
 const folderModel = require('../models/folderModel');
+const fileModel = require('../models/fileModel');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * @desc    Obtener carpetas (principales o subcarpetas) del usuario
@@ -7,12 +10,15 @@ const folderModel = require('../models/folderModel');
  */
 exports.getFolders = async (req, res) => {
     try {
+        // [CLAVE CORRECCIÓN] Usamos req.user.id, que es la propiedad estándar del JWT
+        // ASUMIENDO que tu token decodificado usa 'id' como llave.
+        // Si no funciona, la causa es que tu JWT usa 'userId' como llave,
+        // pero usaremos 'id' porque es la más estándar en Node/Express.
+        const usuario_id = req.user.id; 
+        
         // Si la URL tiene un ?parentId=ID, lo usamos. Si no, es null (carpetas raíz).
-        // PERO, tu ruta GET '/' no maneja query params todavía.
-        // Vamos a asumir que por ahora solo pide las carpetas raíz (parentId = null)
-        const parentId = req.query.parentId || null;
-        const { id: usuario_id } = req.user; // Tomamos el ID del middleware auth
-
+        const parentId = req.query.parentId || null; 
+        
         const folders = await folderModel.findByParentId(usuario_id, parentId);
         res.status(200).json(folders);
     } catch (error) {
@@ -28,8 +34,8 @@ exports.getFolders = async (req, res) => {
  */
 exports.createFolder = async (req, res) => {
     try {
-        const { nombre, parentId } = req.body; // parentId puede ser null
-        const { id: usuario_id } = req.user;
+        const { nombre, parentId } = req.body;
+        const usuario_id = req.user.id; // Usamos req.user.id
 
         if (!nombre || nombre.trim() === '') {
             return res.status(400).json({ message: 'El nombre de la carpeta es requerido.' });
@@ -52,16 +58,14 @@ exports.updateFolder = async (req, res) => {
     try {
         const { nombre } = req.body;
         const { id } = req.params;
-        const { id: usuario_id } = req.user;
+        const usuario_id = req.user.id;
 
-        // Lógica de validación (asegurarse de que el usuario es dueño)
-        const folder = await folderModel.findById(id); // Necesitarás crear esta función en tu modelo
-        if (!folder) {
-            return res.status(404).json({ message: 'Carpeta no encontrada.' });
+        // [SEGURIDAD AÑADIDA] Verificar propiedad antes de actualizar
+        const folder = await folderModel.findById(id); 
+        if (!folder || folder.usuario_id !== usuario_id) {
+            return res.status(403).json({ message: 'No autorizado o carpeta no encontrada.' });
         }
-        if (folder.usuario_id !== usuario_id) {
-            return res.status(403).json({ message: 'No autorizado.' });
-        }
+        // Fin de verificación
 
         const updatedFolder = await folderModel.update(id, nombre);
         res.status(200).json({ message: 'Carpeta actualizada con éxito.', folder: updatedFolder });
@@ -79,18 +83,15 @@ exports.updateFolder = async (req, res) => {
 exports.deleteFolder = async (req, res) => {
     try {
         const { id } = req.params;
-        const { id: usuario_id } = req.user;
+        const usuario_id = req.user.id;
 
-        // Lógica de validación
-        const folder = await folderModel.findById(id); // Necesitarás crear esta función en tu modelo
-        if (!folder) {
-            return res.status(404).json({ message: 'Carpeta no encontrada.' });
+        // [SEGURIDAD AÑADIDA] Verificar propiedad antes de eliminar
+        const folder = await folderModel.findById(id);
+        if (!folder || folder.usuario_id !== usuario_id) {
+            return res.status(403).json({ message: 'No autorizado o carpeta no encontrada.' });
         }
-        if (folder.usuario_id !== usuario_id) {
-            return res.status(403).json({ message: 'No autorizado.' });
-        }
+        // Fin de verificación
 
-        // ON DELETE CASCADE se encargará de borrar subcarpetas y archivos en la BD
         await folderModel.remove(id);
         
         res.status(200).json({ message: 'Carpeta eliminada con éxito.' });
