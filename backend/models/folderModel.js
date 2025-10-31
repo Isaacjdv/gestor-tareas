@@ -3,13 +3,14 @@ const db = require('../config/db');
 // Crear una nueva carpeta (versión para PostgreSQL)
 exports.create = async (nombre, usuario_id, parent_id = null) => {
     const { rows } = await db.query(
-        'INSERT INTO carpetas (nombre, usuario_id, parent_id) VALUES ($1, $2, $3) RETURNING id',
+        'INSERT INTO carpetas (nombre, usuario_id, parent_id) VALUES ($1, $2, $3) RETURNING *',
         [nombre, usuario_id, parent_id]
     );
-    return { id: rows[0].id, nombre, usuario_id, parent_id };
+    // Devuelve el objeto completo
+    return rows[0];
 };
 
-// Encontrar todas las carpetas de un usuario
+// Encontrar todas las carpetas de un usuario (no se usa actualmente, pero es útil)
 exports.findByUserId = async (usuario_id) => {
     const { rows } = await db.query('SELECT * FROM carpetas WHERE usuario_id = $1 ORDER BY created_at DESC', [usuario_id]);
     return rows;
@@ -28,10 +29,20 @@ exports.findByParentId = async (usuario_id, parent_id) => {
     }
 };
 
+// [NUEVA FUNCIÓN AÑADIDA]
+// Encontrar una carpeta específica por su ID
+exports.findById = async (id) => {
+    const { rows } = await db.query('SELECT * FROM carpetas WHERE id = $1', [id]);
+    return rows[0]; // Devuelve la carpeta (o undefined si no se encuentra)
+};
+
 // Actualizar el nombre de una carpeta
 exports.update = async (id, nombre) => {
-    const { rowCount } = await db.query('UPDATE carpetas SET nombre = $1 WHERE id = $2', [nombre, id]);
-    return rowCount > 0;
+    const { rows } = await db.query(
+        'UPDATE carpetas SET nombre = $1 WHERE id = $2 RETURNING *', 
+        [nombre, id]
+    );
+    return rows[0]; // Devuelve la carpeta actualizada
 };
 
 // Eliminar una carpeta por su ID

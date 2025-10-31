@@ -20,6 +20,9 @@
   --success-color: #38A169;
   --info-color: #3182CE;
   --danger-color: #E53E3E;
+  --warning-color: #D69E2E; /* Amarillo/Dorado */
+  --warning-color-dark: #B7791F; /* Amarillo más oscuro */
+
 
   --header-height: 60px;
   --border-radius: 8px;
@@ -276,19 +279,20 @@ a { text-decoration: none; color: var(--primary-color); }
   font-weight: 600;
 }
 
+/* [CORREGIDO] Botones de Renombrar/Eliminar en carpetas ahora VISIBLES */
 .actions { 
   display: flex; 
   gap: 0.25rem; 
-  opacity: 1; 
+  opacity: 1; /* <-- VISIBLE */
   transition: opacity var(--transition-speed) ease; 
 }
 .actions button {
-  background: var(--bg-input); /* <-- MÁS VISIBLE */
+  background: var(--bg-input);
   cursor: pointer;
   padding: 0.4rem 0.6rem; /* <-- MÁS GRANDE */
   border-radius: 4px;
   color: var(--font-color-light);
-  border: 1px solid var(--border-color); /* <-- MÁS VISIBLE */
+  border: 1px solid var(--border-color);
 }
 .actions button:hover {
   background-color: var(--border-color);
@@ -432,11 +436,12 @@ a { text-decoration: none; color: var(--primary-color); }
 .file-item .item-name i.fa-file-image { color: #38A169; }
 .file-item .item-name i.fa-file-word { color: #3182CE; }
 .file-item .item-name i.fa-file-excel { color: #2F855A; }
-.file-item .item-name i.fa-file-archive { color: #D69E2E; }
+.file-item .item-name i.fa-file-archive { color: var(--warning-color); }
 .file-item .item-name i.fa-file-audio { color: #805AD5; }
 .file-item .item-name i.fa-file-video { color: #D53F8C; }
 
 
+/* [CORREGIDO] Botones de Renombrar/Eliminar en archivos ahora VISIBLES */
 .file-item .actions {
   position: absolute;
   top: 0.5rem;
@@ -444,7 +449,7 @@ a { text-decoration: none; color: var(--primary-color); }
   background: var(--bg-content);
   border-radius: var(--border-radius);
   padding: 0.25rem;
-  opacity: 1; 
+  opacity: 1; /* <-- VISIBLE */
   transition: opacity var(--transition-speed) ease;
 }
 
@@ -784,10 +789,10 @@ a { text-decoration: none; color: var(--primary-color); }
 }
 
 .file-item.status-in_process {
-  border-color: #D69E2E;
+  border-color: var(--warning-color);
 }
 .file-item.status-in_process:hover {
-  border-color: #B7791F;
+  border-color: var(--warning-color-dark);
 }
 
 .file-item.status-done {
@@ -821,8 +826,8 @@ a { text-decoration: none; color: var(--primary-color); }
 .status-btn.pending { color: var(--error-color); }
 .status-btn.pending:hover { background-color: var(--error-color); color: white; }
 
-.status-btn.in-process { color: #D69E2E; }
-.status-btn.in-process:hover { background-color: #D69E2E; color: white; }
+.status-btn.in-process { color: var(--warning-color); }
+.status-btn.in-process:hover { background-color: var(--warning-color); color: white; }
 
 .status-btn.done { color: var(--success-color); }
 .status-btn.done:hover { background-color: var(--success-color); color: white; }
@@ -842,7 +847,7 @@ a { text-decoration: none; color: var(--primary-color); }
   top: 8px;
   left: 8px;
   font-size: 0.9rem;
-  color: #D69E2E;
+  color: var(--warning-color);
   cursor: help;
 }
 

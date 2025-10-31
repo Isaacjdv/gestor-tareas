@@ -298,9 +298,9 @@ const FileListGroup = ({
   onStatusChange, 
   onNoteClick,
   editingFile,
-  onUpdateFile,       // <--- Restaurado
-  onSetEditingFile,   // <--- Restaurado
-  onDeleteFile,       // <--- Restaurado
+  onUpdateFile,
+  onSetEditingFile,
+  onDeleteFile,
   t 
 }) => {
   if (files.length === 0) return null;
