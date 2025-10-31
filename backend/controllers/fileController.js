@@ -1,6 +1,7 @@
 const fileModel = require('../models/fileModel');
 const fs = require('fs');
 const path = require('path');
+const pool = require('../config/db'); // Necesario para la versión de updateFileDetails
 
 // Lógica para subir un archivo
 exports.uploadFile = async (req, res) => {
@@ -11,7 +12,7 @@ exports.uploadFile = async (req, res) => {
 
         const { originalname, path, mimetype } = req.file;
         const { folderId } = req.params;
-        const { userId } = req.user;
+        const { id: userId } = req.user; // Tomamos 'id' de req.user y lo renombramos a userId
 
         const fileData = {
             nombre_original: originalname,
@@ -42,10 +43,19 @@ exports.getFilesByFolder = async (req, res) => {
     }
 };
 
+// [NUEVO] Lógica para obtener TODOS los archivos de un usuario
+exports.getAllUserFiles = async (req, res) => {
+    try {
+        const { id: usuario_id } = req.user; // Obtenemos el ID del usuario logueado
+        const files = await fileModel.findAllByUserId(usuario_id);
+        res.status(200).json(files);
+    } catch (error) {
+        console.error("Error en getAllUserFiles:", error);
+        res.status(500).json({ message: 'Error en el servidor al obtener todos los archivos.' });
+    }
+};
 
-
-
-// Actualizar un archivo
+// Actualizar el nombre de un archivo
 exports.updateFile = async (req, res) => {
     try {
         const { nombre_original } = req.body;
@@ -53,6 +63,7 @@ exports.updateFile = async (req, res) => {
         await fileModel.update(id, nombre_original);
         res.status(200).json({ message: 'Nombre del archivo actualizado con éxito.' });
     } catch (error) {
+        console.error("Error en updateFile:", error);
         res.status(500).json({ message: 'Error en el servidor.' });
     }
 };
@@ -66,6 +77,7 @@ exports.deleteFile = async (req, res) => {
         const file = await fileModel.findById(id);
         if (file) {
             // 2. Borrar el archivo físico
+            // __dirname es 'controllers', subimos un nivel '..' y luego a 'uploads'
             const filePath = path.join(__dirname, '..', file.path_archivo);
             if (fs.existsSync(filePath)) {
                 fs.unlinkSync(filePath);
@@ -77,48 +89,39 @@ exports.deleteFile = async (req, res) => {
 
         res.status(200).json({ message: 'Archivo eliminado con éxito.' });
     } catch (error) {
+        console.error("Error en deleteFile:", error);
         res.status(500).json({ message: 'Error en el servidor.' });
     }
 };
 
 
-// NUEVA FUNCIÓN para actualizar estado y nota
+// [NUEVO] Lógica para actualizar estado y nota
 exports.updateFileDetails = async (req, res) => {
     const { id } = req.params;
     const { status, nota } = req.body;
-    const usuario_id = req.user.id; // Asumiendo que authMiddleware te da esto
+    const { id: usuario_id } = req.user; // Asumiendo que authMiddleware te da esto
 
-    // Validar que el status sea uno de los valores permitidos
+    // 1. Validar inputs
     const allowedStatus = ['pending', 'in_process', 'done'];
     if (status && !allowedStatus.includes(status)) {
         return res.status(400).json({ message: 'Status no válido' });
     }
 
+    if (status === undefined && nota === undefined) {
+         return res.status(400).json({ message: 'No se proporcionaron datos para actualizar' });
+    }
+
     try {
-        let query;
-        let queryParams;
+        // 2. Llamar al modelo
+        const updatedFile = await fileModel.updateDetails(id, usuario_id, { status, nota });
 
-        // Construimos la query dinámicamente
-        if (status !== undefined && nota !== undefined) {
-            query = 'UPDATE archivos SET status = $1, nota = $2 WHERE id = $3 AND usuario_id = $4 RETURNING *';
-            queryParams = [status, nota, id, usuario_id];
-        } else if (status !== undefined) {
-            query = 'UPDATE archivos SET status = $1 WHERE id = $2 AND usuario_id = $3 RETURNING *';
-            queryParams = [status, id, usuario_id];
-        } else if (nota !== undefined) {
-            query = 'UPDATE archivos SET nota = $1 WHERE id = $2 AND usuario_id = $3 RETURNING *';
-            queryParams = [nota, id, usuario_id];
-        } else {
-            return res.status(400).json({ message: 'No se proporcionaron datos para actualizar' });
-        }
-
-        const { rows } = await pool.query(query, queryParams);
-
-        if (rows.length === 0) {
+        if (!updatedFile) {
             return res.status(404).json({ message: 'Archivo no encontrado o no autorizado' });
         }
 
-        res.json(rows[0]);
+        // 3. Enviar respuesta
+        res.json(updatedFile);
+
     } catch (error) {
         console.error('Error al actualizar detalles del archivo:', error);
         res.status(500).json({ message: 'Error del servidor' });

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import folderService from '../services/folderService';
-import fileService from '../services/fileService'; // Asegúrate que importe `updateFileDetails`
+import fileService from '../services/fileService';
 import { UserContext } from '../App';
 import '../styles/DashboardPage.css';
 import ChatComponent from '../components/ChatComponent';
@@ -13,7 +13,7 @@ const RENDER_BACKEND_URL = 'https://gestor-tareas-backend-11hi.onrender.com';
 // --- Objeto de Traducciones ---
 const translations = {
   es: {
-    searchPlaceholder: 'Buscar en la carpeta actual...',
+    searchPlaceholder: 'Buscar en todos los archivos...',
     hello: 'Hola',
     logout: 'Cerrar Sesión',
     myFolders: 'Mis Carpetas',
@@ -70,9 +70,68 @@ const translations = {
     noteModalTitle: 'Nota para',
     saveNote: 'Guardar Nota',
     notePlaceholder: 'Escribe tu nota aquí...',
+    myArea: 'Mi Área de Trabajo',
   },
   en: {
-    // ... (traducciones en inglés)
+    // (Aquí irían tus traducciones al inglés)
+    searchPlaceholder: 'Search all files...',
+    hello: 'Hello',
+    logout: 'Logout',
+    myFolders: 'My Folders',
+    goBackTo: 'Go back to',
+    root: 'Root',
+    newFolderPlaceholder: 'New folder...',
+    rename: 'Rename',
+    delete: 'Delete',
+    filesIn: 'Files in',
+    selectFile: 'Select file...',
+    uploadFile: 'Upload File',
+    uploading: 'Uploading...',
+    confirmDeleteFolder: 'This action is irreversible. Are you sure you want to delete this folder and all its contents?',
+    confirmDeleteFile: 'Are you sure you want to delete this file?',
+    deleteFolderTitle: 'Delete Folder',
+    deleteFileTitle: 'Delete File',
+    confirm: 'Confirm',
+    cancel: 'Cancel',
+    folderCreated: 'Folder created.',
+    folderUpdated: 'Folder updated.',
+    folderDeleted: 'Folder deleted.',
+    fileUploaded: 'File uploaded successfully!',
+    fileUpdated: 'File name updated.',
+    fileDeleted: 'File deleted.',
+    errorLoadFolders: 'Error loading folders.',
+    errorLoadFiles: 'Error loading files.',
+    errorCreateFolder: 'Error creating folder.',
+    errorUpdateFolder: 'Error updating folder.',
+    errorDeleteFolder: 'Error deleting folder.',
+    errorUploadFile: 'Error uploading file.',
+    errorUpdateFile: 'Error updating file.',
+    errorDeleteFile: 'Error deleting file.',
+    welcomeTitle: 'Welcome to your AI Manager',
+    welcomeMessage: 'Select a folder or explore your tools.',
+    emptyFolderTitle: 'Empty Folder',
+    emptyFolderMessage: 'Upload a file to get started.',
+    selectFileAndFolder: 'Please select a file and a folder first.',
+    noResultsTitle: 'No results',
+    noResultsMessage: 'No files or folders found matching "{searchTerm}".',
+    noFoldersFound: 'No folders found.',
+    homeCardAnalyticsTitle: 'Analytics',
+    homeCardAnalyticsDesc: 'Review your file usage.',
+    homeCardReportsTitle: 'Reports',
+    homeCardReportsDesc: 'Generate automatic reports.',
+    homeCardSettingsTitle: 'Settings',
+    homeCardSettingsDesc: 'Adjust your profile and account.',
+    pending: 'Pending',
+    in_process: 'In Process',
+    done: 'Done',
+    advantagesTitle: 'Power-up Your Workflow',
+    advantagesDesc: 'Organize, prioritize, and execute. Your manager now helps you track the progress of every task, from start to finish.',
+    addNote: 'Add Note',
+    editNote: 'Edit Note',
+    noteModalTitle: 'Note for',
+    saveNote: 'Save Note',
+    notePlaceholder: 'Write your note here...',
+    myArea: 'My Workspace',
   }
 };
 // --- (Fin de Traducciones) ---
@@ -98,14 +157,11 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onClose, t }) => {
 // --- Componente Modal para Notas ---
 const NoteModal = ({ file, onClose, onSave, t }) => {
   const [noteText, setNoteText] = useState(file.nota || '');
-
   const handleSave = () => {
     onSave(file, noteText);
     onClose();
   };
-
   if (!file) return null;
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -179,7 +235,7 @@ const DashboardNavbar = ({ user, language, setLanguage, t, searchTerm, setSearch
 };
 
 // --- Componente para las Tarjetas del Home ---
-const HomePageCards = ({ onNavigate, t }) => {
+const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers }) => {
   return (
     <div className="home-hub">
       <h2>{t('welcomeTitle')}</h2>
@@ -203,7 +259,6 @@ const HomePageCards = ({ onNavigate, t }) => {
         </div>
       </div>
 
-      {/* Sección de Ventajas */}
       <div className="advantages-section">
         <div className="advantages-text">
           <h3>{t('advantagesTitle')}</h3>
@@ -214,6 +269,32 @@ const HomePageCards = ({ onNavigate, t }) => {
         </div>
       </div>
 
+      {/* --- Sección "Mi Área" --- */}
+      <div className="mi-area-section">
+        <h3 className="file-group-header">{t('myArea')}</h3>
+        <FileListGroup
+          title={t('pending')}
+          files={groupedFiles.pending}
+          {...fileListHandlers}
+        />
+        <FileListGroup
+          title={t('in_process')}
+          files={groupedFiles.in_process}
+          {...fileListHandlers}
+        />
+        <FileListGroup
+          title={t('done')}
+          files={groupedFiles.done}
+          {...fileListHandlers}
+        />
+        {groupedFiles.pending.length === 0 &&
+        groupedFiles.in_process.length === 0 &&
+        groupedFiles.done.length === 0 && (
+          <div className="empty-state-small">
+            <p>{t('emptyFolderMessage')}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -243,9 +324,9 @@ const ApartadoView = ({ viewName, onGoHome, t }) => {
   );
 };
 
-// --- [CORREGIDO] Función de Iconos (movida fuera del componente) ---
+// --- Función de Iconos (movida fuera del componente) ---
 const getFileIcon = (fileName) => {
-  if (!fileName) return 'fas fa-file'; // Fallback
+  if (!fileName) return 'fas fa-file';
   const extension = fileName.split('.').pop().toLowerCase();
   switch (extension) {
     case 'pdf': return 'fas fa-file-pdf';
@@ -261,19 +342,19 @@ const getFileIcon = (fileName) => {
   }
 };
 
-// --- [CORREGIDO] Componente FileListGroup (movido fuera de DashboardPage) ---
+// --- Componente FileListGroup (movido fuera de DashboardPage) ---
 const FileListGroup = ({ 
   title, 
   files, 
   onStatusChange, 
   onNoteClick,
-  editingFile,        // <-- Prop necesaria
-  onUpdateFile,       // <-- Prop necesaria
-  onSetEditingFile,   // <-- Prop necesaria
-  onDeleteFile,       // <-- Prop necesaria
-  t                   // <-- Prop necesaria
+  editingFile,
+  onUpdateFile,
+  onSetEditingFile,
+  onDeleteFile,
+  t 
 }) => {
-  if (files.length === 0) return null; // No renderizar nada si no hay archivos
+  if (files.length === 0) return null;
   
   return (
     <div className="file-group-container">
@@ -303,7 +384,6 @@ const FileListGroup = ({
                   <span>{file.nombre_original}</span>
                 </a>
                 
-                {/* Tooltip de Nota */}
                 {file.status === 'in_process' && file.nota && (
                   <div className="note-tooltip">
                     <i className="fas fa-info-circle"></i>
@@ -316,7 +396,6 @@ const FileListGroup = ({
                   <button onClick={() => onDeleteFile(file.id)} title={t('delete')}><i className="fas fa-trash-alt"></i></button>
                 </div>
                 
-                {/* Acciones de Estado */}
                 <div className="file-status-actions">
                   <button className="status-btn pending" title="Poner Pendiente" onClick={() => onStatusChange(file, { status: 'pending', nota: '' })}>
                     <i className="fas fa-exclamation-circle"></i>
@@ -342,7 +421,8 @@ const FileListGroup = ({
 const DashboardPage = () => {
   // --- ESTADOS ---
   const [folders, setFolders] = useState([]);
-  const [files, setFiles] = useState([]);
+  const [files, setFiles] = useState([]); // Archivos de la carpeta actual
+  const [allFiles, setAllFiles] = useState([]); // Todos los archivos del usuario
   const [message, setMessage] = useState(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
@@ -363,6 +443,7 @@ const DashboardPage = () => {
   // --- Traducción ---
   const t = (key, params = {}) => {
     let text = translations[language][key] || key;
+    if (!text) text = translations['es'][key] || key;
     Object.keys(params).forEach(paramKey => {
       text = text.replace(`{${paramKey}}`, params[paramKey]);
     });
@@ -373,11 +454,14 @@ const DashboardPage = () => {
   useEffect(() => {
     if (user) {
       const folderId = currentFolder ? currentFolder.id : null;
-      loadFolders(folderId);
+      loadFolders(folderId); // Cargar carpetas (siempre se ven)
+      
       if (folderId) {
-        loadFiles(folderId);
+        setAllFiles([]); // Limpiar todos los archivos si estamos en una carpeta
+        loadFiles(folderId); // Cargar archivos de UNA carpeta
       } else {
-        setFiles([]);
+        setFiles([]); // Limpiar archivos de carpeta
+        loadAllUserFiles(); // Cargar TODOS los archivos para el Home
       }
     }
   }, [currentFolder, user]);
@@ -395,6 +479,15 @@ const DashboardPage = () => {
       const response = await fileService.getFilesByFolder(folderId);
       setFiles(response.data);
     } catch (error) { showMessage(t('errorLoadFiles'), 'error'); }
+  };
+  
+  const loadAllUserFiles = async () => {
+    try {
+      const response = await fileService.getAllFiles();
+      setAllFiles(response.data);
+    } catch (error) {
+      showMessage(t('errorLoadFiles'), 'error');
+    }
   };
   
   const showMessage = (text, type = 'success') => {
@@ -481,7 +574,7 @@ const DashboardPage = () => {
       await fileService.uploadFile(currentFolder.id, selectedFile);
       setSelectedFile(null);
       document.getElementById('fileInput').value = "";
-      loadFiles(currentFolder.id); // Recarga los archivos
+      loadFiles(currentFolder.id);
       showMessage(t('fileUploaded'));
     } catch (error) {
       showMessage(error.response?.data?.message || t('errorUploadFile'), 'error');
@@ -492,11 +585,17 @@ const DashboardPage = () => {
 
   const handleUpdateFile = async (e) => {
     e.preventDefault();
+    if (!editingFile) return;
     try {
       await fileService.updateFile(editingFile.id, editingFile.nombre_original);
       showMessage(t('fileUpdated'));
       setEditingFile(null);
-      loadFiles(currentFolder.id);
+      
+      if (currentFolder) {
+        loadFiles(currentFolder.id);
+      } else {
+        loadAllUserFiles();
+      }
     } catch (error) { showMessage(t('errorUpdateFile'), 'error'); }
   };
 
@@ -508,7 +607,12 @@ const DashboardPage = () => {
     try {
       await fileService.deleteFile(fileId);
       showMessage(t('fileDeleted'));
-      loadFiles(currentFolder.id);
+      
+      if (currentFolder) {
+        loadFiles(currentFolder.id);
+      } else {
+        loadAllUserFiles();
+      }
     } catch (error) { showMessage(t('errorDeleteFile'), 'error'); }
     closeModal();
   };
@@ -517,14 +621,15 @@ const DashboardPage = () => {
 
 
   // --- MANEJADORES DE ESTADO Y NOTAS ---
-
   const handleUpdateFileDetails = async (file, details) => {
     try {
       const { data: updatedFile } = await fileService.updateFileDetails(file.id, details);
+      // Actualizar AMBAS listas (la de carpeta y la global)
       setFiles(currentFiles =>
-        currentFiles.map(f =>
-          f.id === updatedFile.id ? updatedFile : f
-        )
+        currentFiles.map(f => f.id === updatedFile.id ? updatedFile : f)
+      );
+      setAllFiles(currentFiles =>
+        currentFiles.map(f => f.id === updatedFile.id ? updatedFile : f)
       );
     } catch (error) {
       showMessage(t('errorUpdateFile'), 'error');
@@ -550,26 +655,47 @@ const DashboardPage = () => {
     );
   }, [folders, searchTerm]);
 
-  // --- Agrupación de archivos por estado ---
+  // Agrupación para la VISTA DE CARPETA
   const groupedFiles = useMemo(() => {
-    const pending = [];
-    const in_process = [];
-    const done = [];
-
+    const pending = [], in_process = [], done = [];
     filteredFiles.forEach(f => {
-      if (f.status === 'done') {
-        done.push(f);
-      } else if (f.status === 'in_process') {
-        in_process.push(f);
-      } else {
-        // 'pending' o cualquier valor nulo/default
-        pending.push(f);
-      }
+      if (f.status === 'done') done.push(f);
+      else if (f.status === 'in_process') in_process.push(f);
+      else pending.push(f);
     });
-    
     return { pending, in_process, done };
   }, [filteredFiles]);
+  
+  // Agrupación para la VISTA DE INICIO (Home)
+  const globalGroupedFiles = useMemo(() => {
+    const pending = [], in_process = [], done = [];
+    
+    // Si hay un término de búsqueda, filtra 'allFiles'. Si no, usa 'allFiles'.
+    const filesToGroup = searchTerm 
+      ? allFiles.filter(file =>
+          file.nombre_original.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      : allFiles;
+    
+    filesToGroup.forEach(f => {
+      if (f.status === 'done') done.push(f);
+      else if (f.status === 'in_process') in_process.push(f);
+      else pending.push(f);
+    });
+    return { pending, in_process, done };
+  }, [allFiles, searchTerm]);
 
+
+  // Objeto de handlers para pasar a FileListGroup
+  const fileListHandlers = {
+    onStatusChange: handleUpdateFileDetails,
+    onNoteClick: setNoteModalFile,
+    editingFile: editingFile,
+    onUpdateFile: handleUpdateFile,
+    onSetEditingFile: setEditingFile,
+    onDeleteFile: handleDeleteFile,
+    t: t,
+  };
 
   // --- RENDERIZADO ---
   return (
@@ -654,7 +780,7 @@ const DashboardPage = () => {
         <div className="main-content">
           
           {currentFolder ? (
-            // --- A. VISTA DE CARPETA (MODIFICADA) ---
+            // --- A. VISTA DE CARPETA ---
             <>
               <div className="main-content-header">
                 <h2><i className="fas fa-folder-open"></i> {currentFolder.nombre}</h2>
@@ -672,41 +798,23 @@ const DashboardPage = () => {
                 </button>
               </form>
             
-              {/* [CORREGIDO] Pasar todas las props necesarias a FileListGroup */}
+              {/* Renderizado por grupos de estado (de la carpeta) */}
               <FileListGroup
                 title={t('pending')}
                 files={groupedFiles.pending}
-                onStatusChange={handleUpdateFileDetails}
-                onNoteClick={setNoteModalFile}
-                editingFile={editingFile}
-                onUpdateFile={handleUpdateFile}
-                onSetEditingFile={setEditingFile}
-                onDeleteFile={handleDeleteFile}
-                t={t}
+                {...fileListHandlers}
               />
               
               <FileListGroup
                 title={t('in_process')}
                 files={groupedFiles.in_process}
-                onStatusChange={handleUpdateFileDetails}
-                onNoteClick={setNoteModalFile}
-                editingFile={editingFile}
-                onUpdateFile={handleUpdateFile}
-                onSetEditingFile={setEditingFile}
-                onDeleteFile={handleDeleteFile}
-                t={t}
+                {...fileListHandlers}
               />
               
               <FileListGroup
                 title={t('done')}
                 files={groupedFiles.done}
-                onStatusChange={handleUpdateFileDetails}
-                onNoteClick={setNoteModalFile}
-                editingFile={editingFile}
-                onUpdateFile={handleUpdateFile}
-                onSetEditingFile={setEditingFile}
-                onDeleteFile={handleDeleteFile}
-                t={t}
+                {...fileListHandlers}
               />
               
               {/* Estados vacíos */}
@@ -729,7 +837,12 @@ const DashboardPage = () => {
             // --- B. VISTA DE INICIO (Home Hub) ---
             <>
               {mainView === 'home' ? (
-                <HomePageCards onNavigate={setMainView} t={t} />
+                <HomePageCards 
+                  onNavigate={setMainView} 
+                  t={t}
+                  groupedFiles={globalGroupedFiles} // Pasa los archivos globales
+                  fileListHandlers={fileListHandlers} // Pasa los handlers
+                />
               ) : (
                 <ApartadoView 
                   viewName={mainView} 
@@ -752,3 +865,4 @@ const DashboardPage = () => {
 };
 
 export default DashboardPage;
+

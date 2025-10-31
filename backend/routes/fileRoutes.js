@@ -4,7 +4,11 @@ const fileController = require('../controllers/fileController');
 const authMiddleware = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
 
-// GET /api/files/:folderId -> Obtiene los archivos de una carpeta
+// [NUEVO] GET /api/files/user/all -> Obtiene TODOS los archivos del usuario
+// (Debe ir ANTES de /:folderId para que no confunda "user" con un ID)
+router.get('/user/all', authMiddleware, fileController.getAllUserFiles);
+
+// GET /api/files/:folderId -> Obtiene los archivos de UNA carpeta
 router.get('/:folderId', authMiddleware, fileController.getFilesByFolder);
 
 // POST /api/files/:folderId/upload -> Sube un archivo a una carpeta
@@ -15,21 +19,15 @@ router.post(
     fileController.uploadFile
 );
 
-// ... (rutas GET y POST existentes)
-router.get('/:folderId', authMiddleware, fileController.getFilesByFolder);
-router.post('/:folderId/upload', authMiddleware, upload.single('file'), fileController.uploadFile);
-
-// --- NUEVAS RUTAS ---
-// PUT /api/files/:id -> Actualizar un archivo
+// PUT /api/files/:id -> Actualizar el nombre de un archivo
 router.put('/:id', authMiddleware, fileController.updateFile);
 
 // DELETE /api/files/:id -> Eliminar un archivo
 router.delete('/:id', authMiddleware, fileController.deleteFile);
 
-module.exports = router;
-// ... (tus otras rutas .get, .post, .delete)
-
-
+// [NUEVO] PUT /api/files/:id/details -> Actualizar el estado (status) y/o la nota
 router.put('/:id/details', authMiddleware, fileController.updateFileDetails);
 
-// ... (al final, module.exports = router;)
+
+// ¡IMPORTANTE! module.exports SIEMPRE debe ir al final del archivo
+module.exports = router;

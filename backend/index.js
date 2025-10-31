@@ -40,7 +40,6 @@ async function initializeDatabase() {
                 FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
             );
 
-            -- TABLA DE RECORDATORIOS FINAL (Unificada) --
             CREATE TABLE IF NOT EXISTS reminders (
                 id SERIAL PRIMARY KEY,
                 usuario_id INT NOT NULL,
@@ -57,8 +56,7 @@ async function initializeDatabase() {
         await pool.query(createTablesQuery);
         console.log("✅ Tablas base verificadas/creadas con éxito.");
 
-        // --- [NUEVO] MIGRACIÓN AUTOMÁTICA DE LA TABLA 'archivos' ---
-        // Esto añade las columnas SÓLO SI NO EXISTEN, por lo que es seguro ejecutarlo siempre.
+        // --- [MODIFICACIÓN] MIGRACIÓN AUTOMÁTICA DE LA TABLA 'archivos' ---
         console.log("Verificando columnas 'status' y 'nota' en la tabla 'archivos'...");
         
         const alterArchivosQuery = `
@@ -69,7 +67,6 @@ async function initializeDatabase() {
         
         await pool.query(alterArchivosQuery);
         console.log("✅ Tabla 'archivos' actualizada con 'status' y 'nota'.");
-        console.log("✅ Estructura de la base de datos verificada/creada con éxito.");
 
     } catch (error) {
         console.error("❌ Error al inicializar la base de datos:", error);
