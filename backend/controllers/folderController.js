@@ -4,19 +4,15 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * @desc    Obtener carpetas (principales o subcarpetas) del usuario
- * @route   GET /api/folders?parentId=...
- * @access  Private
+ * @desc    Obtener carpetas (principales o subcarpetas) del usuario
+ * @route   GET /api/folders?parentId=...
+ * @access  Private
  */
 exports.getFolders = async (req, res) => {
     try {
-        // [CLAVE CORRECCIÓN] Usamos req.user.id, que es la propiedad estándar del JWT
-        // ASUMIENDO que tu token decodificado usa 'id' como llave.
-        // Si no funciona, la causa es que tu JWT usa 'userId' como llave,
-        // pero usaremos 'id' porque es la más estándar en Node/Express.
-        const usuario_id = req.user.id; 
+        // [CORRECCIÓN CLAVE] Usamos req.user.userId, que es lo que inyecta authController.js
+        const usuario_id = req.user.userId; 
         
-        // Si la URL tiene un ?parentId=ID, lo usamos. Si no, es null (carpetas raíz).
         const parentId = req.query.parentId || null; 
         
         const folders = await folderModel.findByParentId(usuario_id, parentId);
@@ -28,14 +24,15 @@ exports.getFolders = async (req, res) => {
 };
 
 /**
- * @desc    Crear una nueva carpeta (principal o subcarpeta)
- * @route   POST /api/folders
- * @access  Private
+ * @desc    Crear una nueva carpeta (principal o subcarpeta)
+ * @route   POST /api/folders
+ * @access  Private
  */
 exports.createFolder = async (req, res) => {
     try {
         const { nombre, parentId } = req.body;
-        const usuario_id = req.user.id; // Usamos req.user.id
+        // [CORRECCIÓN CLAVE] Usamos req.user.userId
+        const usuario_id = req.user.userId; 
 
         if (!nombre || nombre.trim() === '') {
             return res.status(400).json({ message: 'El nombre de la carpeta es requerido.' });
@@ -50,15 +47,16 @@ exports.createFolder = async (req, res) => {
 };
 
 /**
- * @desc    Actualizar el nombre de una carpeta
- * @route   PUT /api/folders/:id
- * @access  Private
+ * @desc    Actualizar el nombre de una carpeta
+ * @route   PUT /api/folders/:id
+ * @access  Private
  */
 exports.updateFolder = async (req, res) => {
     try {
         const { nombre } = req.body;
         const { id } = req.params;
-        const usuario_id = req.user.id;
+        // [CORRECCIÓN CLAVE] Usamos req.user.userId
+        const usuario_id = req.user.userId;
 
         // [SEGURIDAD AÑADIDA] Verificar propiedad antes de actualizar
         const folder = await folderModel.findById(id); 
@@ -76,14 +74,15 @@ exports.updateFolder = async (req, res) => {
 };
 
 /**
- * @desc    Eliminar una carpeta y todo su contenido en cascada
- * @route   DELETE /api/folders/:id
- * @access  Private
+ * @desc    Eliminar una carpeta y todo su contenido en cascada
+ * @route   DELETE /api/folders/:id
+ * @access  Private
  */
 exports.deleteFolder = async (req, res) => {
     try {
         const { id } = req.params;
-        const usuario_id = req.user.id;
+        // [CORRECCIÓN CLAVE] Usamos req.user.userId
+        const usuario_id = req.user.userId;
 
         // [SEGURIDAD AÑADIDA] Verificar propiedad antes de eliminar
         const folder = await folderModel.findById(id);
