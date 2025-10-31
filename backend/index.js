@@ -19,64 +19,64 @@ const whatsappRoutes = require('./routes/whatsappRoutes');
 
 // --- FUNCIÓN PARA INICIALIZAR LA BASE DE DATOS (PostgreSQL) ---
 async function initializeDatabase() {
-    console.log("Verificando la estructura de la base de datos (PostgreSQL)...");
-    try {
-        // Utilizamos una sola consulta para crear todas las tablas si no existen
-        const createTablesQuery = `
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id SERIAL PRIMARY KEY,
-                nombre VARCHAR(100) NOT NULL,
-                email VARCHAR(100) NOT NULL UNIQUE,
-                password VARCHAR(255) NOT NULL,
-                whatsapp_number VARCHAR(25) UNIQUE,
-                created_at TIMESTAMPTZ DEFAULT NOW()
-            );
+    console.log("Verificando la estructura de la base de datos (PostgreSQL)...");
+    try {
+        // Consulta limpiada de caracteres invisibles ('\u00A0')
+        const createTablesQuery = `
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id SERIAL PRIMARY KEY,
+                nombre VARCHAR(100) NOT NULL,
+                email VARCHAR(100) NOT NULL UNIQUE,
+                password VARCHAR(255) NOT NULL,
+                whatsapp_number VARCHAR(25) UNIQUE,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
 
-            CREATE TABLE IF NOT EXISTS carpetas (
-                id SERIAL PRIMARY KEY,
-                nombre VARCHAR(100) NOT NULL,
-                usuario_id INT,
-                parent_id INT NULL DEFAULT NULL,
-                created_at TIMESTAMPTZ DEFAULT NOW(),
-                FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
-                FOREIGN KEY (parent_id) REFERENCES carpetas(id) ON DELETE CASCADE
-            );
+            CREATE TABLE IF NOT EXISTS carpetas (
+                id SERIAL PRIMARY KEY,
+                nombre VARCHAR(100) NOT NULL,
+                usuario_id INT,
+                parent_id INT NULL DEFAULT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+                FOREIGN KEY (parent_id) REFERENCES carpetas(id) ON DELETE CASCADE
+            );
 
-            CREATE TABLE IF NOT EXISTS archivos (
-                id SERIAL PRIMARY KEY,
-                nombre_original VARCHAR(255) NOT NULL,
-                path_archivo VARCHAR(255) NOT NULL,
-                tipo_mime VARCHAR(100),
-                carpeta_id INT,
-                usuario_id INT,
-                created_at TIMESTAMPTZ DEFAULT NOW(),
-                status VARCHAR(20) DEFAULT 'pending',
-                nota TEXT,
-                FOREIGN KEY (carpeta_id) REFERENCES carpetas(id) ON DELETE CASCADE,
-                FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
-            );
+            CREATE TABLE IF NOT EXISTS archivos (
+                id SERIAL PRIMARY KEY,
+                nombre_original VARCHAR(255) NOT NULL,
+                path_archivo VARCHAR(255) NOT NULL,
+                tipo_mime VARCHAR(100),
+                carpeta_id INT,
+                usuario_id INT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                status VARCHAR(20) DEFAULT 'pending',
+                nota TEXT,
+                FOREIGN KEY (carpeta_id) REFERENCES carpetas(id) ON DELETE CASCADE,
+                FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+            );
 
-            CREATE TABLE IF NOT EXISTS reminders (
-                id SERIAL PRIMARY KEY,
-                usuario_id INT NOT NULL,
-                recipient_whatsapp_number VARCHAR(25) NOT NULL,
-                message TEXT NOT NULL,
-                trigger_at TIMESTAMPTZ NOT NULL,
-                status VARCHAR(20) DEFAULT 'pending',
-                task_type VARCHAR(50) DEFAULT 'simple',
-                user_name VARCHAR(100),
-                created_at TIMESTAMPTZ DEFAULT NOW(),
-                FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
-            );
-        `;
-        
-        await pool.query(createTablesQuery);
-        console.log("✅ Estructura de la base de datos verificada/creada con éxito.");
-    } catch (error) {
-        console.error("❌ Error al inicializar la base de datos (PostgreSQL):", error);
+            CREATE TABLE IF NOT EXISTS reminders (
+                id SERIAL PRIMARY KEY,
+                usuario_id INT NOT NULL,
+                recipient_whatsapp_number VARCHAR(25) NOT NULL,
+                message TEXT NOT NULL,
+                trigger_at TIMESTAMPTZ NOT NULL,
+                status VARCHAR(20) DEFAULT 'pending',
+                task_type VARCHAR(50) DEFAULT 'simple',
+                user_name VARCHAR(100),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+            );
+        `;
+        
+        await pool.query(createTablesQuery);
+        console.log("✅ Estructura de la base de datos verificada/creada con éxito.");
+    } catch (error) {
+        console.error("❌ Error al inicializar la base de datos (PostgreSQL):", error);
         // Si la conexión falla aquí, la aplicación no podrá continuar
-        process.exit(1);
-    }
+        process.exit(1);
+    }
 }
 
 
