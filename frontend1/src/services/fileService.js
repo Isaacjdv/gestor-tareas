@@ -1,12 +1,16 @@
 import axios from 'axios';
 
+// La URL base para la API de archivos
 const API_URL = 'https://gestor-tareas-backend-11hi.onrender.com/api/files/';
 
+// Función centralizada para obtener el header de autenticación
 const getAuthHeader = () => {
-    // Asegúrate de que 'user_token' sea la llave correcta que usas en localStorage
-    const token = localStorage.getItem('user_token'); 
+    // Usamos 'user_token' como (asumimos) lo tienes en tu localStorage
+    const token = localStorage.getItem('user_token');
     return token ? { Authorization: 'Bearer ' + token } : {};
 };
+
+// --- Definición de todas las funciones del servicio ---
 
 // Obtener archivos de una carpeta
 const getFilesByFolder = (folderId) => {
@@ -15,7 +19,6 @@ const getFilesByFolder = (folderId) => {
 
 // [NUEVO] Obtener TODOS los archivos del usuario
 const getAllFiles = () => {
-    // Llama a la nueva ruta /api/files/user/all
     return axios.get(API_URL + 'user/all', { headers: getAuthHeader() });
 };
 
@@ -44,22 +47,25 @@ const deleteFile = (id) => {
 
 // [NUEVO] Actualizar estado y nota de un archivo
 const updateFileDetails = (fileId, details) => {
-    // Llama a la nueva ruta /api/files/:id/details
+    // API_URL + fileId + '/details' -> .../api/files/:id/details
     return axios.put(API_URL + fileId + '/details', details, {
         headers: getAuthHeader()
     });
 };
 
 
+// --- Creación del objeto de servicio ---
+
 // Creamos UN SOLO objeto con TODAS las funciones
 const fileService = {
     getFilesByFolder,
-    getAllFiles, // <--- NUEVO
+    getAllFiles, // <-- NUEVO
     uploadFile,
     updateFile,
     deleteFile,
-    updateFileDetails // <--- NUEVO
+    updateFileDetails // <-- NUEVO
 };
 
-// Exportamos ese único objeto
+// Exportamos ESE ÚNICO objeto
 export default fileService;
+

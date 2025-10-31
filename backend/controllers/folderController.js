@@ -1,83 +1,146 @@
-const folderModel = require('../models/folderModel');
 const fileModel = require('../models/fileModel');
 const fs = require('fs');
 const path = require('path');
+const pool = require('../config/db'); // Necesario para la lógica de 'updateFileDetails' si no se mueve al modelo
 
-/**
- * @desc    Obtener carpetas (principales o subcarpetas) del usuario
- * @route   GET /api/folders?parentId=...
- * @access  Private
- */
-exports.getFolders = async (req, res) => {
+// Lógica para subir un archivo
+exports.uploadFile = async (req, res) => {
     try {
-        // Si la URL tiene un ?parentId=ID, lo usamos. Si no, es null (carpetas raíz).
-        const parentId = req.query.parentId || null;
-        const folders = await folderModel.findByParentId(req.user.userId, parentId);
-        res.status(200).json(folders);
-    } catch (error) {
-        console.error('Error al obtener carpetas:', error);
-        res.status(500).json({ message: 'Error en el servidor al obtener las carpetas.' });
-    }
-};
-
-/**
- * @desc    Crear una nueva carpeta (principal o subcarpeta)
- * @route   POST /api/folders
- * @access  Private
- */
-exports.createFolder = async (req, res) => {
-    try {
-        // El frontend ahora puede enviar 'nombre' y opcionalmente 'parentId'
-        const { nombre, parentId } = req.body;
-
-        if (!nombre || nombre.trim() === '') {
-            return res.status(400).json({ message: 'El nombre de la carpeta es requerido.' });
+        if (!req.file) {
+            return res.status(400).json({ message: 'Por favor, selecciona un archivo.' });
         }
-        
-        const newFolder = await folderModel.create(nombre.trim(), req.user.userId, parentId);
-        res.status(201).json(newFolder);
+
+        const { originalname, path, mimetype } = req.file;
+        const { folderId } = req.params;
+        const { id: userId } = req.user; // Corregido para tomar 'id' de req.user
+
+        const fileData = {
+            nombre_original: originalname,
+            path_archivo: path,
+            tipo_mime: mimetype,
+            carpeta_id: folderId,
+            usuario_id: userId
+        };
+
+        const newFile = await fileModel.create(fileData);
+        res.status(201).json({ message: 'Archivo subido con éxito.', file: newFile });
+
     } catch (error) {
-        console.error('Error al crear carpeta:', error);
-        res.status(500).json({ message: 'Error en el servidor al crear la carpeta.' });
+        console.error("Error en uploadFile:", error);
+        res.status(500).json({ message: 'Error en el servidor al subir el archivo.' });
     }
 };
 
-/**
- * @desc    Actualizar el nombre de una carpeta
- * @route   PUT /api/folders/:id
- * @access  Private
- */
-exports.updateFolder = async (req, res) => {
+// Lógica para obtener los archivos de una carpeta
+exports.getFilesByFolder = async (req, res) => {
     try {
-        const { nombre } = req.body;
-        const { id } = req.params;
-        await folderModel.update(id, nombre);
-        res.status(200).json({ message: 'Carpeta actualizada con éxito.' });
+        const { folderId } = req.params;
+        // También validamos que el usuario sea el dueño de los archivos de esa carpeta (implícito si el folderId está atado al usuario)
+        const files = await fileModel.findByFolderId(folderId);
+        res.status(200).json(files);
     } catch (error) {
-        console.error('Error al actualizar carpeta:', error);
+        console.error("Error en getFilesByFolder:", error);
+        res.status(500).json({ message: 'Error en el servidor al obtener archivos.' });
+    }
+};
+
+// [NUEVO] Lógica para obtener TODOS los archivos de un usuario
+exports.getAllUserFiles = async (req, res) => {
+    try {
+        const { id: usuario_id } = req.user; // Obtenemos el ID del usuario logueado
+        const files = await fileModel.findAllByUserId(usuario_id);
+        res.status(200).json(files);
+    } catch (error) {
+        console.error("Error en getAllUserFiles:", error);
+        res.status(500).json({ message: 'Error en el servidor al obtener todos los archivos.' });
+    }
+};
+
+// Actualizar el nombre de un archivo
+exports.updateFile = async (req, res) => {
+    try {
+        const { nombre_original } = req.body;
+        const { id } = req.params;
+        const { id: usuario_id } = req.user; // Asegurarse que el usuario es dueño
+
+        // Opcional: Verificar propiedad antes de actualizar
+        const file = await fileModel.findById(id);
+        if (file.usuario_id !== usuario_id) {
+             return res.status(403).json({ message: 'No autorizado para modificar este archivo' });
+        }
+
+        const updatedFile = await fileModel.update(id, nombre_original);
+        res.status(200).json({ message: 'Nombre del archivo actualizado con éxito.', file: updatedFile });
+    } catch (error) {
+        console.error("Error en updateFile:", error);
         res.status(500).json({ message: 'Error en el servidor.' });
     }
 };
 
-/**
- * @desc    Eliminar una carpeta y todo su contenido en cascada
- * @route   DELETE /api/folders/:id
- * @access  Private
- */
-exports.deleteFolder = async (req, res) => {
+// Eliminar un archivo
+exports.deleteFile = async (req, res) => {
     try {
         const { id } = req.params;
+        const { id: usuario_id } = req.user;
 
-        // NOTA: La base de datos se encarga de borrar en cascada gracias al 'ON DELETE CASCADE'.
-        // Sin embargo, aún debemos borrar los archivos físicos si es necesario.
-        // Esta lógica puede volverse más compleja con subcarpetas y requerir recursividad.
-        // Por simplicidad, por ahora solo borramos la carpeta de la base de datos.
-        
-        await folderModel.remove(id);
-        
-        res.status(200).json({ message: 'Carpeta eliminada con éxito.' });
+        // 1. Encontrar la ruta del archivo en la BD y verificar propiedad
+        const file = await fileModel.findById(id);
+        if (!file) {
+            return res.status(404).json({ message: 'Archivo no encontrado.' });
+        }
+        if (file.usuario_id !== usuario_id) {
+            return res.status(403).json({ message: 'No autorizado para eliminar este archivo' });
+        }
+
+        // 2. Borrar el archivo físico
+        if (file.path_archivo) {
+            const filePath = path.join(__dirname, '..', file.path_archivo);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+        }
+
+        // 3. Borrar el registro de la base de datos
+        await fileModel.remove(id);
+
+        res.status(200).json({ message: 'Archivo eliminado con éxito.' });
     } catch (error) {
-        console.error('Error al eliminar carpeta:', error);
+        console.error("Error en deleteFile:", error);
         res.status(500).json({ message: 'Error en el servidor.' });
     }
 };
+
+
+// [NUEVO] Lógica para actualizar estado y nota
+exports.updateFileDetails = async (req, res) => {
+    const { id } = req.params;
+    const { status, nota } = req.body;
+    const { id: usuario_id } = req.user;
+
+    // 1. Validar inputs
+    const allowedStatus = ['pending', 'in_process', 'done'];
+    if (status && !allowedStatus.includes(status)) {
+        return res.status(400).json({ message: 'Status no válido' });
+    }
+
+    if (status === undefined && nota === undefined) {
+         return res.status(400).json({ message: 'No se proporcionaron datos para actualizar' });
+    }
+
+    try {
+        // 2. Llamar al modelo
+        const updatedFile = await fileModel.updateDetails(id, usuario_id, { status, nota });
+
+        if (!updatedFile) {
+            return res.status(404).json({ message: 'Archivo no encontrado o no autorizado' });
+        }
+
+        // 3. Enviar respuesta
+        res.json(updatedFile);
+
+    } catch (error) {
+        console.error('Error al actualizar detalles del archivo:', error);
+        res.status(500).json({ message: 'Error del servidor' });
+    }
+};
+

@@ -46,9 +46,9 @@ async function initializeDatabase() {
                 recipient_whatsapp_number VARCHAR(25) NOT NULL,
                 message TEXT NOT NULL,
                 trigger_at TIMESTAMPTZ NOT NULL,
-                status VARCHAR(20) DEFAULT 'pending', -- pending, sent, error
-                task_type VARCHAR(50) DEFAULT 'simple', -- 'simple' o 'investigation'
-                user_name VARCHAR(100), -- Para el encabezado del PDF
+                status VARCHAR(20) DEFAULT 'pending',
+                task_type VARCHAR(50) DEFAULT 'simple',
+                user_name VARCHAR(100),
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
             );
@@ -56,7 +56,8 @@ async function initializeDatabase() {
         await pool.query(createTablesQuery);
         console.log("✅ Tablas base verificadas/creadas con éxito.");
 
-        // --- [MODIFICACIÓN] MIGRACIÓN AUTOMÁTICA DE LA TABLA 'archivos' ---
+        // --- MIGRACIÓN AUTOMÁTICA DE LA TABLA 'archivos' ---
+        // Añade las columnas 'status' y 'nota' SÓLO SI NO EXISTEN.
         console.log("Verificando columnas 'status' y 'nota' en la tabla 'archivos'...");
         
         const alterArchivosQuery = `
@@ -104,3 +105,4 @@ app.listen(PORT, () => {
     initializeDatabase();
     schedulerService.startScheduler();
 });
+

@@ -34,12 +34,12 @@
   padding: 0;
 }
 
+/* Aplicamos estilos base al body, pero SIN overflow:hidden */
 body {
   font-family: var(--font-family);
   background-color: var(--bg-main);
   color: var(--font-color);
   line-height: 1.5;
-  /* overflow: hidden; <-- ELIMINADO PARA NO AFECTAR AL LOGIN */
 }
 
 button, input {
@@ -86,7 +86,7 @@ a { text-decoration: none; color: var(--primary-color); }
   display: flex;
   flex-direction: column;
   height: 100vh;
-  overflow: hidden;
+  overflow: hidden; /* Esto SÍ aplica a la app, pero no al body */
 }
 
 .dashboard-body {
@@ -276,20 +276,25 @@ a { text-decoration: none; color: var(--primary-color); }
   font-weight: 600;
 }
 
-.actions { display: flex; gap: 0.25rem; opacity: 0; transition: opacity var(--transition-speed) ease; }
-.folder-list li:hover .actions { opacity: 1; }
+.actions { 
+  display: flex; 
+  gap: 0.25rem; 
+  opacity: 1; 
+  transition: opacity var(--transition-speed) ease; 
+}
 .actions button {
-  background: transparent;
+  background: var(--bg-input); /* <-- MÁS VISIBLE */
   cursor: pointer;
-  padding: 0.25rem 0.4rem;
+  padding: 0.4rem 0.6rem; /* <-- MÁS GRANDE */
   border-radius: 4px;
   color: var(--font-color-light);
+  border: 1px solid var(--border-color); /* <-- MÁS VISIBLE */
 }
 .actions button:hover {
   background-color: var(--border-color);
   color: var(--font-color);
 }
-.actions button i { color: inherit; font-size: 0.9rem; }
+.actions button i { color: inherit; font-size: 1rem; } /* <-- MÁS GRANDE */
 
 /* --- 3. MAIN CONTENT (ARCHIVOS) --- */
 .main-content-header {
@@ -422,6 +427,7 @@ a { text-decoration: none; color: var(--primary-color); }
   font-size: 2.5rem;
   color: var(--font-color-light);
 }
+/* Colores de Iconos */
 .file-item .item-name i.fa-file-pdf { color: #E53E3E; }
 .file-item .item-name i.fa-file-image { color: #38A169; }
 .file-item .item-name i.fa-file-word { color: #3182CE; }
@@ -438,10 +444,9 @@ a { text-decoration: none; color: var(--primary-color); }
   background: var(--bg-content);
   border-radius: var(--border-radius);
   padding: 0.25rem;
-  opacity: 0;
+  opacity: 1; 
   transition: opacity var(--transition-speed) ease;
 }
-.file-item:hover .actions { opacity: 1; }
 
 /* Formulario de edición (inline) */
 .edit-form { display: flex; width: 100%; gap: 0.25rem; }
@@ -589,6 +594,134 @@ a { text-decoration: none; color: var(--primary-color); }
   border-radius: 0 0 var(--border-radius) var(--border-radius);
 }
 
+/* --- ESTILOS PARA EL BOTÓN DE IDIOMA --- */
+.btn-lang {
+  padding: 0.5rem 0.8rem;
+  font-weight: 700;
+  min-width: 40px;
+  justify-content: center;
+}
+
+/* --- ESTILOS PARA EL "HOME HUB" (Tarjetas) --- */
+.home-hub {
+  animation: itemFadeIn 0.5s ease-out;
+}
+
+.home-hub h2 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--font-color);
+  margin-bottom: 0.25rem;
+}
+
+.home-hub .home-subtitle {
+  font-size: 1.1rem;
+  color: var(--font-color-light);
+  margin-bottom: 2rem;
+}
+
+.home-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.home-card {
+  position: relative;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  cursor: pointer;
+  background-color: var(--bg-content);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: all var(--transition-speed) ease;
+  border: 1px solid var(--border-color);
+}
+
+.home-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+}
+
+.home-card img {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.home-card:hover img {
+  transform: scale(1.05);
+}
+
+.card-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1rem;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.home-card:hover .card-overlay {
+  opacity: 1;
+}
+
+.card-overlay h3 {
+  color: white;
+  font-size: 1.1rem;
+  transform: translateY(10px);
+  transition: transform 0.3s ease;
+}
+
+.home-card:hover .card-overlay h3 {
+  transform: translateY(0);
+}
+
+.card-footer {
+  padding: 1rem;
+  background-color: var(--bg-content);
+}
+
+.card-footer h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--font-color);
+  margin: 0;
+}
+
+/* --- ESTILOS PARA LA VISTA DE "APARTADO" --- */
+.apartado-view {
+  animation: itemFadeIn 0.5s ease-out;
+}
+
+.apartado-breadcrumbs {
+  margin-bottom: 1.5rem;
+  font-size: 1.1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.apartado-content h2 {
+  font-size: 1.8rem;
+  color: var(--font-color);
+  margin-bottom: 1rem;
+}
+
+.apartado-content p {
+  color: var(--font-color-light);
+  font-size: 1.1rem;
+  line-height: 1.6;
+  max-width: 800px;
+}
+
 /* --- Sección de Ventajas (Home) --- */
 .advantages-section {
   display: grid;
@@ -679,8 +812,8 @@ a { text-decoration: none; color: var(--primary-color); }
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 1.1rem;
-  padding: 0.25rem 0.5rem;
+  font-size: 1.2rem; /* <-- MÁS GRANDE */
+  padding: 0.4rem 0.7rem; /* <-- MÁS GRANDE */
   border-radius: 4px;
   transition: all 0.2s ease;
 }
@@ -694,11 +827,14 @@ a { text-decoration: none; color: var(--primary-color); }
 .status-btn.done { color: var(--success-color); }
 .status-btn.done:hover { background-color: var(--success-color); color: white; }
 
+/* [CORREGIDO] Ya no se ocultan los botones de estado */
+/*
 .file-item.status-pending .status-btn.pending,
 .file-item.status-in_process .status-btn.in-process,
 .file-item.status-done .status-btn.done {
   display: none;
 }
+*/
 
 /* --- Tooltip de Nota --- */
 .note-tooltip {
@@ -787,3 +923,19 @@ a { text-decoration: none; color: var(--primary-color); }
 .chat-sidebar::-webkit-scrollbar-thumb:hover { 
   background-color: var(--border-color); 
 }
+
+/* --- Estilos para "Mi Área" en el Home --- */
+.mi-area-section {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.mi-area-section > .file-group-header {
+  font-size: 1.5rem;
+  color: var(--font-color);
+  margin-bottom: 1.5rem;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
