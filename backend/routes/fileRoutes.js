@@ -2,16 +2,16 @@ const express = require('express');
 const router = express.Router();
 const fileController = require('../controllers/fileController');
 const authMiddleware = require('../middleware/authMiddleware');
-const upload = require('../middleware/uploadMiddleware'); // Asumo que este middleware existe
+const upload = require('../middleware/uploadMiddleware');
 
-// [NUEVO] GET /api/files/user/all -> Obtiene todos los archivos del usuario
-// (Debe ir ANTES de /:folderId para que no confunda "user" con un folderId)
-router.get('/user/all', authMiddleware, fileController.getAllUserFiles);
+// --- RUTA NUEVA: Obtener TODOS los archivos del usuario (para la vista "Home")
+// IMPORTANTE: Esta debe ir PRIMERO para que no se confunda con el ID de una carpeta
+router.get('/', authMiddleware, fileController.getAllFiles);
 
-// GET /api/files/:folderId -> Obtiene los archivos de una carpeta específica
+// Ruta para obtener archivos de una carpeta específica
 router.get('/:folderId', authMiddleware, fileController.getFilesByFolder);
 
-// POST /api/files/:folderId/upload -> Sube un archivo a una carpeta
+// Ruta para subir un archivo a una carpeta específica
 router.post(
     '/:folderId/upload', 
     authMiddleware, 
@@ -19,15 +19,13 @@ router.post(
     fileController.uploadFile
 );
 
-// PUT /api/files/:id -> Actualizar el nombre de un archivo
+// Ruta para actualizar el nombre de un archivo
 router.put('/:id', authMiddleware, fileController.updateFile);
 
-// DELETE /api/files/:id -> Eliminar un archivo
+// Ruta para eliminar un archivo
 router.delete('/:id', authMiddleware, fileController.deleteFile);
 
-// [NUEVO] PUT /api/files/:id/details -> Actualizar el estado (status) y/o la nota de un archivo
-router.put('/:id/details', authMiddleware, fileController.updateFileDetails);
+// --- RUTA NUEVA: Actualizar status y nota de un archivo (PATCH) ---
+router.patch('/:id/details', authMiddleware, fileController.updateFileDetails);
 
-
-// ¡IMPORTANTE! module.exports SIEMPRE debe ir al final del archivo
 module.exports = router;

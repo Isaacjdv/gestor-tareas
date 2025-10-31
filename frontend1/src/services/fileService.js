@@ -14,9 +14,9 @@ const getFilesByFolder = (folderId) => {
     return axios.get(API_BASE_URL + folderId, { headers: getAuthHeader() });
 };
 
-// --- NUEVA FUNCIÓN: Obtener TODOS los archivos del usuario
+// --- NUEVA FUNCIÓN: Obtener TODOS los archivos del usuario (para el Home)
+// Ruta: GET /api/files/
 const getAllFiles = () => {
-    // La ruta es GET /api/files/
     return axios.get(API_BASE_URL, { headers: getAuthHeader() });
 };
 
@@ -39,8 +39,9 @@ const updateFile = (id, nombre_original) => {
 };
 
 // --- NUEVA FUNCIÓN: Actualizar Status y Nota de un archivo (PATCH)
+// Ruta: PATCH /api/files/:id/details
 const updateFileDetails = (id, details) => {
-    // La ruta es PATCH /api/files/:id/details
+    // details es un objeto como { status: 'in_process', nota: 'nueva nota' }
     return axios.patch(`${API_BASE_URL}${id}/details`, details, { headers: getAuthHeader() });
 };
 
@@ -51,10 +52,10 @@ const deleteFile = (id) => {
 
 const fileService = {
     getFilesByFolder,
-    getAllFiles, // <-- AÑADIDO
+    getAllFiles, 
     uploadFile,
     updateFile,
-    updateFileDetails, // <-- AÑADIDO
+    updateFileDetails, 
     deleteFile
 };
 
