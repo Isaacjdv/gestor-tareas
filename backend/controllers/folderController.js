@@ -10,7 +10,7 @@ const path = require('path');
  */
 exports.getFolders = async (req, res) => {
     try {
-        // [CORRECCIÓN CLAVE] Usamos req.user.userId, que es lo que inyecta authController.js
+        // [CORRECCIÓN CLAVE] Usamos req.user.userId, según tu authController.js
         const usuario_id = req.user.userId; 
         
         const parentId = req.query.parentId || null; 

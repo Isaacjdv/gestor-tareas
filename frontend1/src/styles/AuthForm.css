@@ -817,34 +817,3 @@
   max-width: 800px;
 }
 
-/* ... [MANTENER TODO EL CÓDIGO ANTERIOR] ... */
-
-/* --- Estilos para la Edición de Carpetas en el Sidebar (NUEVO) --- */
-.edit-form-folder { 
-    display: flex; 
-    flex-grow: 1;
-    gap: 0.25rem; 
-    align-items: center;
-}
-.edit-form-folder input {
-    flex-grow: 1;
-    padding: 0.4rem 0.6rem;
-    border: 1px solid var(--primary-color);
-    border-radius: 4px;
-    background-color: var(--bg-input);
-}
-.edit-form-folder button {
-    background: var(--bg-input);
-    border: none;
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 4px;
-    color: var(--font-color-light);
-}
-.edit-form-folder button:hover { 
-    background-color: var(--border-color); 
-    color: var(--font-color);
-}
-.edit-form-folder button i { font-size: 0.9rem; }
-
-/*... [MANTENER TODO EL CÓDIGO RESTANTE] ... */

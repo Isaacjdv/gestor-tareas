@@ -272,7 +272,7 @@ const LoginPage = () => {
                         <a href="/forgot-password">¿Olvidaste tu contraseña?</a>
                     </div>
                     
-                    <button type="submit">LOGIN</button>
+                    <button  type="submit">LOGIN</button>
                     
                     {message && <p className="message">{message}</p>}
                     
