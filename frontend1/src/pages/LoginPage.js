@@ -215,17 +215,17 @@ const LoginPage = () => {
                 <div className="story-image-panel">
                     <div className="image-stack">
                         <img 
-                            src="https://store-images.s-microsoft.com/image/apps.8453.13655054093851568.4a371b72-2ce8-4bdb-9d83-be49894d3fa0.7f3687b9-847d-4f86-bb5c-c73259e2b38e?h=115" 
+                            src="https://i.ibb.co/KzSCMsZS/unnamed.jpg  " 
                             alt="Chat de WhatsApp" 
                             className={visibleSection === 'whatsapp' ? 'visible' : ''}
                         />
                         <img 
-                            src="https://e7.pngegg.com/pngimages/546/607/png-clipart-computer-icons-file-explorer-internet-explorer-internet-explorer-blue-angle.png" 
+                            src="https://i.ibb.co/B5XPpc4v/Gemini-Generated-Image-6ihfa6ihfa6ihfa6.png" 
                             alt="Gestor de archivos" 
                             className={visibleSection === 'files' ? 'visible' : ''}
                         />
                         <img 
-                            src="https://res.cloudinary.com/dsmr5n3a4/image/upload/v1709772074/ai-brain_v6t5o3.png" 
+                            src="https://i.ibb.co/4wSLZnbB/Gemini-Generated-Image-e1vynee1vynee1vy.png" 
                             alt="Cerebro de IA" 
                             className={visibleSection === 'ai' ? 'visible' : ''}
                         />
