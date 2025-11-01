@@ -1,127 +1,133 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { io } from 'socket.io-client';
-import chatService from '../services/chatService';
-import { UserContext } from '../App';
-import '../styles/UserChatWindow.css';
+import chatService from '../services/chatService'; // El servicio que creamos antes
+import { UserContext } from '../App'; // Para saber quién eres (currentUser)
+import '../styles/UserChatWindow.css'; // Crearemos este archivo CSS después
 
+// URL del backend donde corre Socket.io
 const RENDER_BACKEND_URL = 'https://gestor-tareas-backend-11hi.onrender.com';
 const socket = io(RENDER_BACKEND_URL);
 
 /**
- * Ventana de chat individual con un amigo.
- * @param {object} friend - { id, nombre, foto_perfil_url }
- * @param {function} onClose - Cierra esta ventana
+ * Componente de la ventana de chat individual para chatear con un amigo.
+ * @param {object} friend - El objeto del usuario amigo (ej: {id, nombre, foto_perfil_url})
+ * @param {function} onClose - Función para cerrar esta ventana de chat
  */
 const UserChatWindow = ({ friend, onClose }) => {
-  const { user: currentUser } = useContext(UserContext);
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const messagesEndRef = useRef(null);
+    const { user: currentUser } = useContext(UserContext); // Obtenemos el usuario logueado (tú)
+    const [messages, setMessages] = useState([]);
+    const [input, setInput] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
+    const messagesEndRef = useRef(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+    // Función para hacer scroll al final
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
 
-  // Unirse a sala personal y cargar historial
-  useEffect(() => {
-    if (!currentUser || !friend) return;
+    // 1. Cargar historial y unirse a la sala de Socket.io
+    useEffect(() => {
+        if (!currentUser || !friend) return;
 
-    socket.emit('join_room', currentUser.id);
+        // A. Unirse a la sala personal de Socket.io
+        // (El backend nos enviará mensajes a esta "sala" cuando alguien nos escriba)
+        socket.emit('join_room', currentUser.id);
 
-    const fetchHistory = async () => {
-      setIsLoading(true);
-      try {
-        const response = await chatService.getHistory(friend.id);
-        setMessages(response.data);
-      } catch (error) {
-        console.error('Error cargando historial de chat:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+        // B. Cargar el historial de chat
+        const fetchHistory = async () => {
+            setIsLoading(true);
+            try {
+                // Usamos el servicio que creamos en el paso anterior
+                const response = await chatService.getHistory(friend.id);
+                setMessages(response.data);
+            } catch (error) {
+                console.error("Error cargando historial de chat:", error);
+                // (Podríamos mostrar un mensaje de error en el chat)
+            } finally {
+                setIsLoading(false);
+            }
+        };
 
-    fetchHistory();
-  }, [currentUser, friend]);
+        fetchHistory();
 
-  // Escuchar mensajes entrantes
-  useEffect(() => {
-    const handleReceiveMessage = (data) => {
-      if (data.sender_id === friend.id) {
-        setMessages((prev) => [...prev, data]);
-      }
-    };
+    }, [currentUser, friend]); // Se ejecuta si el amigo o el usuario cambian
 
-    socket.on('receive_private_message', handleReceiveMessage);
-    return () => {
-      socket.off('receive_private_message', handleReceiveMessage);
-    };
-  }, [friend.id]);
+    // 2. Escuchar mensajes nuevos en tiempo real
+    useEffect(() => {
+        // Función para manejar el mensaje entrante
+        const handleReceiveMessage = (data) => {
+            // Solo añadir el mensaje si es de la persona con la que estamos chateando
+            if (data.sender_id === friend.id) {
+                setMessages(prev => [...prev, data]);
+            }
+        };
 
-  // Scroll al final cuando cambian mensajes
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+        socket.on('receive_private_message', handleReceiveMessage);
 
-  // Enviar mensaje
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!input.trim() || !currentUser || !friend) return;
+        // Limpieza: dejar de escuchar cuando el componente se desmonte
+        return () => {
+            socket.off('receive_private_message', handleReceiveMessage);
+        };
+    }, [friend.id]); // Volver a escuchar solo si el amigo (ID) cambia
 
-    const messageData = {
-      sender_id: currentUser.id,
-      receiver_id: friend.id,
-      contenido: input,
-    };
+    // 3. Hacer scroll al final cuando los mensajes cambian
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
 
-    socket.emit('send_private_message', messageData);
-    setMessages((prev) => [...prev, { ...messageData, created_at: new Date().toISOString() }]);
-    setInput('');
-  };
+    // 4. Enviar un mensaje
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!input.trim() || !currentUser || !friend) return;
 
-  return (
-    <div className="user-chat-window">
-      <div className="user-chat-header" onClick={onClose}>
-        <img src={friend.foto_perfil_url} alt={friend.nombre} />
-        <span>{friend.nombre}</span>
-        <button
-          className="close-chat-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-        >
-          &times;
-        </button>
-      </div>
+        const messageData = {
+            sender_id: currentUser.id,
+            receiver_id: friend.id,
+            contenido: input
+        };
 
-      <div className="user-chat-messages">
-        {isLoading && <div className="chat-loading">Cargando historial...</div>}
-        {!isLoading &&
-          messages.map((msg, index) => (
-            <div
-              key={index}
-              className={`msg ${msg.sender_id === currentUser.id ? 'sent' : 'received'}`}
-            >
-              {msg.contenido}
-            </div>
-          ))}
-        <div ref={messagesEndRef} />
-      </div>
+        // A. Enviar el mensaje al servidor (que lo guarda en BD y lo reenvía)
+        socket.emit('send_private_message', messageData);
 
-      <form className="user-chat-form" onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Escribe un mensaje..."
-        />
-        <button type="submit" aria-label="Enviar">
-          <i className="fas fa-paper-plane"></i>
-        </button>
-      </form>
-    </div>
-  );
+        // B. Añadir nuestro propio mensaje a la UI inmediatamente (Optimistic Update)
+        setMessages(prev => [...prev, { ...messageData, created_at: new Date().toISOString() }]);
+        setInput('');
+    };
+
+    // --- Renderizado ---
+    return (
+        <div className="user-chat-window">
+            <div className="user-chat-header" onClick={onClose}>
+                <img src={friend.foto_perfil_url} alt={friend.nombre} />
+                <span>{friend.nombre}</span>
+                <button className="close-chat-btn" onClick={onClose}>&times;</button>
+            </div>
+            <div className="user-chat-messages">
+                {isLoading && <div className="chat-loading">Cargando historial...</div>}
+                {!isLoading && messages.map((msg, index) => (
+                    <div 
+                        key={index} 
+                        // Determina si el mensaje es 'sent' (nuestro) o 'received' (del amigo)
+                        className={`msg ${msg.sender_id === currentUser.id ? 'sent' : 'received'}`}
+                    >
+                        {msg.contenido}
+                    </div>
+                ))}
+                <div ref={messagesEndRef} />
+            </div>
+            <form className="user-chat-form" onSubmit={handleSubmit}>
+G               <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Escribe un mensaje..."
+                />
+                <button type="submit">
+                    <i className="fas fa-paper-plane"></i>
+              € </button>
+            </form>
+        </div>
+    );
 };
 
 export default UserChatWindow;
