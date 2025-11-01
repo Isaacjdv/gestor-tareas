@@ -167,8 +167,10 @@ io.on('connection', (socket) => {
         
         // 1. [NUEVO] Guardar en la BD (en la tabla 'mensajes')
         try {
+            // [CONSULTA SQL LIMPIADA]
+            const insertQuery = "INSERT INTO mensajes (sender_id, receiver_id, contenido) VALUES ($1, $2, $3)";
             await pool.query(
-                "INSERT INTO mensajes (sender_id, receiver_id, contenido) VALUES ($1, $2, $3)",
+                insertQuery,
                 [data.sender_id, data.receiver_id, data.contenido]
             );
             
