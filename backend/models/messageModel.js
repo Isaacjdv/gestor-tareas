@@ -7,6 +7,7 @@ const db = require('../config/db');
  * @returns {Promise<Array>} - Un array de mensajes
  */
 exports.getHistory = async (userId1, userId2) => {
+    // Consulta SQL limpiada de caracteres invisibles
     const query = `
         SELECT * FROM mensajes
         WHERE 
