@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import '../styles/ChatComponent.css';
 
-const ChatComponent = () => {
+// El componente ahora acepta onReloadFolders y onReloadFiles como props
+const ChatComponent = ({ onReloadFolders, onReloadFiles }) => {
     // Referencia para manejar el scroll automático
     const messagesEndRef = useRef(null);
     
@@ -36,7 +37,7 @@ const ChatComponent = () => {
             // 2. Preparar el historial para el backend (solo sender y text)
             const historyForBackend = newMessages.map(msg => ({
                 sender: msg.sender,
-                text: msg.text // CRUCIAL: Usar 'text'
+                text: msg.text 
             }));
             
             // 3. Enviar el historial completo para retención de memoria
@@ -49,9 +50,17 @@ const ChatComponent = () => {
             const botMessage = { 
                 sender: 'bot', 
                 text: response.data.reply,
-                // Si el backend envía un campo 'type' (success/error), lo usamos para estilos
-                type: response.data.type 
+                type: response.data.type // Puede ser 'success', 'error', o undefined
             };
+            
+            // 5. [LÓGICA CLAVE DE RECARGA SIN REFRESCAR]
+            // Si el backend devuelve type: 'success' (indicando que se creó/editó/eliminó algo)
+            if (response.data.type === 'success') {
+                if (onReloadFolders) onReloadFolders();
+                if (onReloadFiles) onReloadFiles();
+            }
+
+            // 6. Actualizar la conversación
             setMessages(prev => [...prev, botMessage]);
 
         } catch (error) {

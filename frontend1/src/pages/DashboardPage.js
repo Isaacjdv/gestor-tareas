@@ -3,17 +3,19 @@ import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import folderService from '../services/folderService';
 import fileService from '../services/fileService';
+import authService from '../services/authService';
+import userService from '../services/userService';
 import { UserContext } from '../App';
 import '../styles/DashboardPage.css';
 import ChatComponent from '../components/ChatComponent';
+import UserChatWindow from '../components/UserChatWindow';
 
-// URL de tu backend en Render
 const RENDER_BACKEND_URL = 'https://gestor-tareas-backend-11hi.onrender.com';
 
-// --- Objeto de Traducciones ---
+/* Traducciones */
 const translations = {
   es: {
-    searchPlaceholder: 'Buscar en la carpeta actual...',
+    searchPlaceholder: 'Buscar...',
     hello: 'Hola',
     logout: 'Cerrar Sesión',
     myFolders: 'Mis Carpetas',
@@ -73,20 +75,20 @@ const translations = {
     myArea: 'Mi Área de Trabajo',
   },
   en: {
-    // ... (traducciones en inglés)
     myArea: 'My Workspace',
   }
 };
-// --- (Fin de Traducciones) ---
 
-
-// --- Componente Modal de Confirmación ---
+/* Modal confirmación */
 const ConfirmModal = ({ isOpen, title, message, onConfirm, onClose, t }) => {
   if (!isOpen) return null;
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header"><h3>{title}</h3><button onClick={onClose} className="modal-close-btn" title={t('cancel')}>&times;</button></div>
+        <div className="modal-header">
+          <h3>{title}</h3>
+          <button onClick={onClose} className="modal-close-btn" title={t('cancel')}>&times;</button>
+        </div>
         <div className="modal-body"><p>{message}</p></div>
         <div className="modal-footer">
           <button onClick={onClose} className="btn btn-secondary">{t('cancel')}</button>
@@ -97,17 +99,11 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onClose, t }) => {
   );
 };
 
-// --- Componente Modal para Notas ---
+/* Modal notas */
 const NoteModal = ({ file, onClose, onSave, t }) => {
   const [noteText, setNoteText] = useState(file.nota || '');
-
-  const handleSave = () => {
-    onSave(file, noteText);
-    onClose();
-  };
-
+  const handleSave = () => { onSave(file, noteText); onClose(); };
   if (!file) return null;
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -132,7 +128,7 @@ const NoteModal = ({ file, onClose, onSave, t }) => {
   );
 };
 
-// --- Componente Selector de Idioma ---
+/* Selector de idioma */
 const LanguageSwitcher = ({ language, setLanguage }) => {
   const toggleLanguage = () => setLanguage(lang => lang === 'es' ? 'en' : 'es');
   return (
@@ -144,12 +140,12 @@ const LanguageSwitcher = ({ language, setLanguage }) => {
   );
 };
 
-// --- Componente Migas de Pan ---
+/* Breadcrumbs */
 const Breadcrumbs = ({ path, currentFolder, onCrumbClick, t }) => {
   const crumbs = [...path.filter(p => p), currentFolder].filter(p => p);
   return (
     <nav className="breadcrumbs">
-      <span className="crumb" onClick={() => onCrumbClick(null)}>{t('root')}</span>
+      <span className="crumb" onClick={() => onCrumbClick(null)}><i className="fas fa-home"></i> {t('root')}</span>
       {crumbs.map((crumb, index) => (
         <React.Fragment key={crumb.id}>
           <span className="separator">&gt;</span>
@@ -160,16 +156,30 @@ const Breadcrumbs = ({ path, currentFolder, onCrumbClick, t }) => {
   );
 };
 
-// --- Componente Navbar ---
-const DashboardNavbar = ({ user, language, setLanguage, t, searchTerm, setSearchTerm }) => {
+/* Navbar */
+const DashboardNavbar = ({ user, language, setLanguage, t, searchTerm, setSearchTerm, searchFilter, setSearchFilter }) => {
   const navigate = useNavigate();
-  const handleLogout = () => navigate('/');
+  const handleLogout = () => { authService.logout(); navigate('/'); };
   return (
     <nav className="dashboard-navbar">
       <div className="navbar-logo"><a href="/dashboard">Gestor IA</a></div>
       <div className="navbar-search">
+        <select className="search-filter" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)}>
+          <option value="files">Archivos</option>
+          <option value="folders">Carpetas</option>
+          <option value="users">Amigos</option>
+        </select>
         <i className="fas fa-search"></i>
-        <input type="text" placeholder={t('searchPlaceholder')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        <input
+          type="text"
+          placeholder={
+            searchFilter === 'files' ? 'Buscar en archivos...' :
+            searchFilter === 'folders' ? 'Buscar en carpetas...' :
+            'Buscar amigos...'
+          }
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
       </div>
       <div className="navbar-user">
         <LanguageSwitcher language={language} setLanguage={setLanguage} />
@@ -180,32 +190,39 @@ const DashboardNavbar = ({ user, language, setLanguage, t, searchTerm, setSearch
   );
 };
 
-// --- Componente para las Tarjetas del Home ---
+/* Tarjetas del Home (AZUL/VERDE/BLANCO en una fila horizontal) */
 const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers }) => {
+  const totalFiles = (groupedFiles.pending || []).length + (groupedFiles.in_process || []).length + (groupedFiles.done || []).length;
+  const totalPending = (groupedFiles.pending || []).length;
+  const totalDone = (groupedFiles.done || []).length;
+
   return (
     <div className="home-hub">
       <h2>{t('welcomeTitle')}</h2>
       <p className="home-subtitle">{t('welcomeMessage')}</p>
-      
-      <div className="home-card-grid">
-        <div className="home-card" onClick={() => onNavigate('analytics')}>
-          <img src="https://placehold.co/600x400/3182CE/E0E0E0?text=Analytics" alt="Analytics" />
-          <div className="card-overlay"><h3>{t('homeCardAnalyticsDesc')}</h3></div>
+
+      {/* Fila horizontal de tarjetas */}
+      <div className="home-card-row">
+        <div className="home-card home-card--blue" onClick={() => onNavigate('analytics')}>
+          <i className="fas fa-chart-line card-icon"></i>
+          <div className="card-overlay"><h3>{totalFiles} Archivos Totales</h3></div>
           <div className="card-footer"><h4>{t('homeCardAnalyticsTitle')}</h4></div>
         </div>
-        <div className="home-card" onClick={() => onNavigate('reports')}>
-          <img src="https://placehold.co/600x400/38A169/E0E0E0?text=Reports" alt="Reports" />
-          <div className="card-overlay"><h3>{t('homeCardReportsDesc')}</h3></div>
+
+        <div className="home-card home-card--green" onClick={() => onNavigate('reports')}>
+          <i className="fas fa-file-alt card-icon"></i>
+          <div className="card-overlay"><h3>{totalPending} Tareas Pendientes</h3></div>
           <div className="card-footer"><h4>{t('homeCardReportsTitle')}</h4></div>
         </div>
-        <div className="home-card" onClick={() => onNavigate('settings')}>
-          <img src="https://placehold.co/600x400/B0B0B0/121212?text=Settings" alt="Settings" />
-          <div className="card-overlay"><h3>{t('homeCardSettingsDesc')}</h3></div>
+
+        <div className="home-card home-card--white" onClick={() => onNavigate('settings')}>
+          <i className="fas fa-cog card-icon"></i>
+          <div className="card-overlay"><h3>{totalDone} Tareas Terminadas</h3></div>
           <div className="card-footer"><h4>{t('homeCardSettingsTitle')}</h4></div>
         </div>
       </div>
 
-      {/* Sección de Ventajas */}
+      {/* Ventajas */}
       <div className="advantages-section">
         <div className="advantages-text">
           <h3>{t('advantagesTitle')}</h3>
@@ -216,30 +233,15 @@ const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers }) => {
         </div>
       </div>
 
-      {/* Sección "Mi Área" */}
+      {/* Mi Área */}
       <div className="mi-area-section">
         <h3 className="file-group-header">{t('myArea')}</h3>
-        <FileListGroup
-          title={t('pending')}
-          files={groupedFiles.pending}
-          {...fileListHandlers}
-        />
-        <FileListGroup
-          title={t('in_process')}
-          files={groupedFiles.in_process}
-          {...fileListHandlers}
-        />
-        <FileListGroup
-          title={t('done')}
-          files={groupedFiles.done}
-          {...fileListHandlers}
-        />
-        {/* Mensaje si no hay archivos en absoluto */}
-        {groupedFiles.pending.length === 0 &&
-        groupedFiles.in_process.length === 0 &&
-        groupedFiles.done.length === 0 && (
+        <FileListGroup title={t('pending')} files={groupedFiles.pending} {...fileListHandlers} />
+        <FileListGroup title={t('in_process')} files={groupedFiles.in_process} {...fileListHandlers} />
+        <FileListGroup title={t('done')} files={groupedFiles.done} {...fileListHandlers} />
+        {totalFiles === 0 && (
           <div className="empty-state-small">
-            <i className="fas fa-box-open" style={{fontSize: '2rem', marginBottom: '1rem'}}></i>
+            <i className="fas fa-box-open" style={{ fontSize: '2rem', marginBottom: '1rem' }}></i>
             <p>{t('emptyFolderMessage')}</p>
           </div>
         )}
@@ -248,19 +250,19 @@ const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers }) => {
   );
 };
 
-// --- Componente para la Vista de "Apartado" ---
+/* Vista apartado */
 const ApartadoView = ({ viewName, onGoHome, t }) => {
   const getTitle = (name) => ({
-    'analytics': t('homeCardAnalyticsTitle'),
-    'reports': t('homeCardReportsTitle'),
-    'settings': t('homeCardSettingsTitle'),
+    analytics: t('homeCardAnalyticsTitle'),
+    reports: t('homeCardReportsTitle'),
+    settings: t('homeCardSettingsTitle'),
   })[name] || name;
   const title = getTitle(viewName);
 
   return (
     <div className="apartado-view">
       <nav className="breadcrumbs apartado-breadcrumbs">
-        <span className="crumb" onClick={onGoHome}>{t('root')}</span>
+        <span className="crumb" onClick={onGoHome}><i className="fas fa-home"></i> {t('root')}</span>
         <span className="separator">&gt;</span>
         <span className="crumb">{title}</span>
       </nav>
@@ -273,9 +275,9 @@ const ApartadoView = ({ viewName, onGoHome, t }) => {
   );
 };
 
-// --- Función de Iconos (fuera del componente) ---
+/* Icono por extensión */
 const getFileIcon = (fileName) => {
-  if (!fileName) return 'fas fa-file'; // Fallback
+  if (!fileName) return 'fas fa-file';
   const extension = fileName.split('.').pop().toLowerCase();
   switch (extension) {
     case 'pdf': return 'fas fa-file-pdf';
@@ -291,51 +293,52 @@ const getFileIcon = (fileName) => {
   }
 };
 
-// --- Componente FileListGroup (fuera del componente) ---
-const FileListGroup = ({ 
-  title, 
-  files, 
-  onStatusChange, 
+/* Lista de archivos por grupo */
+const FileListGroup = ({
+  title,
+  files,
+  onStatusChange,
   onNoteClick,
   editingFile,
   onUpdateFile,
   onSetEditingFile,
   onDeleteFile,
-  t 
+  t
 }) => {
-  if (files.length === 0) return null;
-  
+  if (!files || files.length === 0) return null;
   return (
     <div className="file-group-container">
       <h3 className="file-group-header">{title} ({files.length})</h3>
       <ul className="file-list">
         {files.map((file, index) => (
-          <li 
-            key={file.id} 
-            className={`file-item status-${file.status || 'pending'}`} 
+          <li
+            key={file.id}
+            className={`file-item status-${file.status || 'pending'}`}
             style={{ animationDelay: `${index * 30}ms` }}
           >
             {editingFile?.id === file.id ? (
-              // Formulario para renombrar
               <form onSubmit={onUpdateFile} className="edit-form">
-                <input 
-                  type="text" 
-                  value={editingFile.nombre_original} 
-                  onChange={(e) => onSetEditingFile({ ...editingFile, nombre_original: e.target.value })} 
+                <input
+                  type="text"
+                  value={editingFile.nombre_original}
+                  onChange={(e) => onSetEditingFile({ ...editingFile, nombre_original: e.target.value })}
                   autoFocus
                 />
                 <button type="submit" title="Guardar"><i className="fas fa-check"></i></button>
                 <button type="button" onClick={() => onSetEditingFile(null)} title="Cancelar"><i className="fas fa-times"></i></button>
               </form>
             ) : (
-              // Vista normal del archivo
               <>
-                <a href={`${RENDER_BACKEND_URL}/${file.path_archivo.replace(/\\/g, '/')}`} target="_blank" rel="noopener noreferrer" className="item-name">
+                <a
+                  href={`${RENDER_BACKEND_URL}/${file.path_archivo.replace(/\\/g, '/')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="item-name"
+                >
                   <i className={getFileIcon(file.nombre_original)}></i>
                   <span>{file.nombre_original}</span>
                 </a>
-                
-                {/* Tooltip de Nota */}
+
                 {file.status === 'in_process' && file.nota && (
                   <div className="note-tooltip">
                     <i className="fas fa-info-circle"></i>
@@ -343,13 +346,11 @@ const FileListGroup = ({
                   </div>
                 )}
 
-                {/* Acciones de Renombrar y Eliminar */}
                 <div className="actions">
                   <button onClick={() => onSetEditingFile(file)} title={t('rename')}><i className="fas fa-pen"></i></button>
                   <button onClick={() => onDeleteFile(file.id)} title={t('delete')}><i className="fas fa-trash-alt"></i></button>
                 </div>
-                
-                {/* Acciones de Estado (Semaforización) */}
+
                 <div className="file-status-actions">
                   <button className="status-btn pending" title="Poner Pendiente" onClick={() => onStatusChange(file, { status: 'pending', nota: '' })}>
                     <i className="fas fa-exclamation-circle"></i>
@@ -370,35 +371,65 @@ const FileListGroup = ({
   );
 };
 
+/* Resultados de amigos */
+const UserSearchResults = ({ query, results, onOpenChat }) => {
+  return (
+    <div className="user-search-results">
+      <div className="main-content-header">
+        <h2>Resultados de Amigos para: "{query}"</h2>
+      </div>
+      <ul className="user-result-list">
+        {results.length > 0 ? results.map(user => (
+          <li className="user-result-item" key={user.id}>
+            <img src={user.foto_perfil_url} alt={user.nombre} />
+            <div className="user-info">
+              <span className="user-name">{user.nombre}</span>
+              <span className="user-email">{user.email}</span>
+            </div>
+            <button className="btn btn-primary" onClick={() => onOpenChat(user)}>
+              <i className="fas fa-paper-plane"></i> Enviar Mensaje
+            </button>
+          </li>
+        )) : (
+          <div className="empty-state-small">
+            <p>No se encontraron usuarios con ese nombre o correo.</p>
+          </div>
+        )}
+      </ul>
+    </div>
+  );
+};
 
-// --- Componente Principal del Dashboard ---
+/* Página principal */
 const DashboardPage = () => {
-  // --- ESTADOS ---
+  const navigate = useNavigate();
   const [folders, setFolders] = useState([]);
-  const [files, setFiles] = useState([]); // Archivos de la carpeta actual
-  const [allFiles, setAllFiles] = useState([]); // Todos los archivos del usuario
+  const [files, setFiles] = useState([]);
+  const [allFiles, setAllFiles] = useState([]);
   const [message, setMessage] = useState(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [editingFolder, setEditingFolder] = useState(null);
-  const [editingFile, setEditingFile] = useState(null); // Estado para renombrar archivo
+  const [newFolderRename, setNewFolderRename] = useState('');
+  const [editingFile, setEditingFile] = useState(null);
   const [currentFolder, setCurrentFolder] = useState(null);
   const [path, setPath] = useState([]);
   const [language, setLanguage] = useState('es');
   const [searchTerm, setSearchTerm] = useState('');
-  const [modalState, setModalState] = useState({ isOpen: false }); // Modal de confirmación
+  const [searchFilter, setSearchFilter] = useState('files');
+  const [userSearchResults, setUserSearchResults] = useState([]);
+  const [openChats, setOpenChats] = useState([]);
+  const [modalState, setModalState] = useState({ isOpen: false });
   const [mainView, setMainView] = useState('home');
-  const [noteModalFile, setNoteModalFile] = useState(null); // Modal de notas
+  const [noteModalFile, setNoteModalFile] = useState(null);
 
-  // --- CONTEXTO ---
   const { user } = useContext(UserContext);
 
-  // --- Traducción ---
   const t = (key, params = {}) => {
     let text = translations[language][key] || key;
-    if (!text) text = translations['es'][key] || key; // Fallback a español
-    if (text) { // Asegurarse de que text no sea undefined
+    if (!text) text = translations['es'][key] || key;
+    if (text) {
       Object.keys(params).forEach(paramKey => {
         text = text.replace(`{${paramKey}}`, params[paramKey]);
       });
@@ -406,30 +437,13 @@ const DashboardPage = () => {
     return text;
   };
 
-  // --- EFECTOS ---
-  useEffect(() => {
-    if (user) {
-      const folderId = currentFolder ? currentFolder.id : null;
-      loadFolders(folderId); // Cargar carpetas (siempre se ven)
-      
-      if (folderId) {
-        setAllFiles([]); // Limpiar archivos globales
-        loadFiles(folderId); // Cargar archivos de UNA carpeta
-      } else {
-        setFiles([]); // Limpiar archivos de carpeta
-        loadAllUserFiles(); // Cargar TODOS los archivos para el Home
-      }
-    }
-  }, [currentFolder, user]); // Se ejecuta cuando el usuario o la carpeta cambian
-
-  // --- LÓGICA DE CARGA ---
   const loadFolders = async (parentId) => {
     try {
       const response = await folderService.getFolders(parentId);
       setFolders(response.data);
-    } catch (error) { 
-      console.error("Error en loadFolders:", error);
-      showMessage(t('errorLoadFolders'), 'error'); 
+    } catch (error) {
+      console.error('Error en loadFolders:', error);
+      showMessage(t('errorLoadFolders'), 'error');
     }
   };
 
@@ -437,34 +451,65 @@ const DashboardPage = () => {
     try {
       const response = await fileService.getFilesByFolder(folderId);
       setFiles(response.data);
-    } catch (error) { 
-      console.error("Error en loadFiles:", error);
-      showMessage(t('errorLoadFiles'), 'error'); 
+    } catch (error) {
+      console.error('Error en loadFiles:', error);
+      showMessage(t('errorLoadFiles'), 'error');
     }
   };
-  
+
   const loadAllUserFiles = async () => {
     try {
       const response = await fileService.getAllFiles();
       setAllFiles(response.data);
     } catch (error) {
-      console.error("Error en loadAllUserFiles:", error);
+      console.error('Error en loadAllUserFiles:', error);
       showMessage(t('errorLoadFiles'), 'error');
     }
   };
-  
+
+  useEffect(() => {
+    if (user) {
+      const folderId = currentFolder ? currentFolder.id : null;
+      loadFolders(folderId);
+      if (folderId) {
+        setAllFiles([]);
+        loadFiles(folderId);
+      } else {
+        setFiles([]);
+        loadAllUserFiles();
+      }
+    }
+  }, [currentFolder, user]);
+
+  useEffect(() => {
+    if (searchFilter === 'users' && searchTerm.trim() !== '') {
+      const searchUsers = async () => {
+        try {
+          const response = await userService.search(searchTerm);
+          setUserSearchResults(response.data);
+        } catch (error) {
+          console.error('Error buscando usuarios:', error);
+          setUserSearchResults([]);
+        }
+      };
+      const timer = setTimeout(() => { searchUsers(); }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      setUserSearchResults([]);
+    }
+  }, [searchTerm, searchFilter]);
+
   const showMessage = (text, type = 'success') => {
-      setMessage({ text, type });
-      setTimeout(() => setMessage(null), 3000);
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 3000);
   };
 
-  // --- LÓGICA DE NAVEGACIÓN ---
   const handleFolderClick = (folder) => {
     setPath(prevPath => [...prevPath.filter(p => p), currentFolder].filter(Boolean));
     setCurrentFolder(folder);
     setSearchTerm('');
   };
-  
+
   const handleGoBack = () => {
     const newPath = [...path];
     const parent = newPath.pop();
@@ -486,8 +531,13 @@ const DashboardPage = () => {
       setCurrentFolder(folder);
     }
   };
-  
-  // --- MANEJADORES DE ACCIONES (CRUD) ---
+
+  const handleOpenChat = (userToChat) => {
+    if (!openChats.find(chat => chat.id === userToChat.id)) {
+      setOpenChats(prevChats => [userToChat, ...prevChats.slice(0, 2)]);
+    }
+  };
+
   const handleCreateFolder = async (e) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
@@ -497,21 +547,43 @@ const DashboardPage = () => {
       setNewFolderName('');
       showMessage(t('folderCreated'));
       loadFolders(parentId);
-    } catch (error) { showMessage(t('errorCreateFolder'), 'error'); }
+    } catch {
+      showMessage(t('errorCreateFolder'), 'error');
+    }
+  };
+
+  const handleStartFolderRename = (folder) => {
+    setEditingFolder(folder);
+    setNewFolderRename(folder.nombre);
   };
 
   const handleUpdateFolder = async (e) => {
     e.preventDefault();
+    if (!newFolderRename.trim() || !editingFolder || newFolderRename.trim() === editingFolder.nombre) {
+      setEditingFolder(null);
+      return;
+    }
     try {
-      await folderService.updateFolder(editingFolder.id, editingFolder.nombre);
+      await folderService.updateFolder(editingFolder.id, newFolderRename);
       showMessage(t('folderUpdated'));
       setEditingFolder(null);
+      setNewFolderRename('');
       loadFolders(currentFolder ? currentFolder.id : null);
-    } catch (error) { showMessage(t('errorUpdateFolder'), 'error'); }
+      if (currentFolder && currentFolder.id === editingFolder.id) {
+        setCurrentFolder({ ...currentFolder, nombre: newFolderRename });
+      }
+    } catch {
+      showMessage(t('errorUpdateFolder'), 'error');
+    }
   };
 
   const handleDeleteFolder = (folderId) => {
-    setModalState({ isOpen: true, title: t('deleteFolderTitle'), message: t('confirmDeleteFolder'), onConfirm: () => confirmDeleteFolder(folderId) });
+    setModalState({
+      isOpen: true,
+      title: t('deleteFolderTitle'),
+      message: t('confirmDeleteFolder'),
+      onConfirm: () => confirmDeleteFolder(folderId)
+    });
   };
 
   const confirmDeleteFolder = async (folderId) => {
@@ -519,7 +591,9 @@ const DashboardPage = () => {
       await folderService.deleteFolder(folderId);
       showMessage(t('folderDeleted'));
       loadFolders(currentFolder ? currentFolder.id : null);
-    } catch (error) { showMessage(t('errorDeleteFolder'), 'error'); }
+    } catch {
+      showMessage(t('errorDeleteFolder'), 'error');
+    }
     closeModal();
   };
 
@@ -528,16 +602,16 @@ const DashboardPage = () => {
   const handleUploadFile = async (e) => {
     e.preventDefault();
     if (!selectedFile || !currentFolder) {
-        showMessage(t('selectFileAndFolder'), 'error');
-        return;
+      showMessage(t('selectFileAndFolder'), 'error');
+      return;
     }
     setUploading(true);
     showMessage(t('uploading'), 'info');
     try {
       await fileService.uploadFile(currentFolder.id, selectedFile);
       setSelectedFile(null);
-      document.getElementById('fileInput').value = "";
-      loadFiles(currentFolder.id); // Recarga los archivos de la carpeta
+      document.getElementById('fileInput').value = '';
+      loadFiles(currentFolder.id);
       showMessage(t('fileUploaded'));
     } catch (error) {
       showMessage(error.response?.data?.message || t('errorUploadFile'), 'error');
@@ -546,7 +620,6 @@ const DashboardPage = () => {
     }
   };
 
-  // Esta función es para el botón de "Renombrar"
   const handleUpdateFile = async (e) => {
     e.preventDefault();
     if (!editingFile) return;
@@ -554,80 +627,75 @@ const DashboardPage = () => {
       await fileService.updateFile(editingFile.id, editingFile.nombre_original);
       showMessage(t('fileUpdated'));
       setEditingFile(null);
-      // Recargar la lista de archivos correcta (carpeta actual o todos)
       if (currentFolder) {
         loadFiles(currentFolder.id);
       } else {
         loadAllUserFiles();
       }
-    } catch (error) { 
-      console.error("Error en handleUpdateFile:", error);
-      showMessage(t('errorUpdateFile'), 'error'); 
+    } catch (error) {
+      console.error('Error en handleUpdateFile:', error);
+      showMessage(t('errorUpdateFile'), 'error');
     }
   };
 
-  // Esta función es para el botón "Eliminar"
   const handleDeleteFile = (fileId) => {
-    setModalState({ isOpen: true, title: t('deleteFileTitle'), message: t('confirmDeleteFile'), onConfirm: () => confirmDeleteFile(fileId) });
+    setModalState({
+      isOpen: true,
+      title: t('deleteFileTitle'),
+      message: t('confirmDeleteFile'),
+      onConfirm: () => confirmDeleteFile(fileId)
+    });
   };
 
   const confirmDeleteFile = async (fileId) => {
     try {
       await fileService.deleteFile(fileId);
       showMessage(t('fileDeleted'));
-      // Recargar la lista de archivos correcta (carpeta actual o todos)
       if (currentFolder) {
         loadFiles(currentFolder.id);
       } else {
         loadAllUserFiles();
       }
-    } catch (error) { showMessage(t('errorDeleteFile'), 'error'); }
+    } catch {
+      showMessage(t('errorDeleteFile'), 'error');
+    }
     closeModal();
   };
-  
+
   const closeModal = () => setModalState({ isOpen: false });
 
-
-  // --- MANEJADORES DE ESTADO Y NOTAS ---
-
-  // Esta función es para los botones de "Semaforización"
   const handleUpdateFileDetails = async (file, details) => {
     try {
       const { data: updatedFile } = await fileService.updateFileDetails(file.id, details);
-      // Actualizar AMBAS listas (la de carpeta y la global)
-      setFiles(currentFiles =>
-        currentFiles.map(f => f.id === updatedFile.id ? updatedFile : f)
-      );
-      setAllFiles(currentFiles =>
-        currentFiles.map(f => f.id === updatedFile.id ? updatedFile : f)
-      );
+      setFiles(currentFiles => currentFiles.map(f => f.id === updatedFile.id ? updatedFile : f));
+      setAllFiles(currentFiles => currentFiles.map(f => f.id === updatedFile.id ? updatedFile : f));
     } catch (error) {
-      console.error("Error en handleUpdateFileDetails:", error);
+      console.error('Error en handleUpdateFileDetails:', error);
       showMessage(t('errorUpdateFile'), 'error');
     }
   };
 
-  // Esta función se llama al guardar desde el Modal de Notas
   const handleSaveNote = (file, noteText) => {
     handleUpdateFileDetails(file, { status: 'in_process', nota: noteText });
   };
 
-  // --- Lógica de Filtrado (Búsqueda) ---
   const filteredFiles = useMemo(() => {
-    if (!searchTerm) return files;
-    return files.filter(file =>
-      file.nombre_original.toLowerCase().includes(searchTerm.toLowerCase())
+    const sourceFiles = currentFolder ? files : allFiles;
+    if (searchFilter === 'users') return [];
+    if (!searchTerm) return sourceFiles;
+    return sourceFiles.filter(file =>
+      file.nombre_original?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [files, searchTerm]);
-  
+  }, [files, allFiles, searchTerm, currentFolder, searchFilter]);
+
   const filteredFolders = useMemo(() => {
+    if (searchFilter === 'users') return [];
     if (!searchTerm) return folders;
     return folders.filter(folder =>
-      folder.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+      folder.nombre?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [folders, searchTerm]);
+  }, [folders, searchTerm, searchFilter]);
 
-  // Agrupación para la VISTA DE CARPETA
   const groupedFiles = useMemo(() => {
     const pending = [], in_process = [], done = [];
     filteredFiles.forEach(f => {
@@ -637,25 +705,22 @@ const DashboardPage = () => {
     });
     return { pending, in_process, done };
   }, [filteredFiles]);
-  
-  // Agrupación para la VISTA DE INICIO (Home)
+
   const globalGroupedFiles = useMemo(() => {
     const pending = [], in_process = [], done = [];
-    // Filtra 'allFiles' por el 'searchTerm'
-    const filesToGroup = allFiles.filter(file =>
-      file.nombre_original.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    
+    const filesToGroup = (searchFilter === 'users' || !searchTerm)
+      ? allFiles
+      : allFiles.filter(file =>
+          file.nombre_original?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
     filesToGroup.forEach(f => {
       if (f.status === 'done') done.push(f);
       else if (f.status === 'in_process') in_process.push(f);
       else pending.push(f);
     });
     return { pending, in_process, done };
-  }, [allFiles, searchTerm]);
+  }, [allFiles, searchTerm, searchFilter]);
 
-
-  // Objeto de handlers para pasar a FileListGroup
   const fileListHandlers = {
     onStatusChange: handleUpdateFileDetails,
     onNoteClick: setNoteModalFile,
@@ -666,20 +731,19 @@ const DashboardPage = () => {
     t: t,
   };
 
-  // --- RENDERIZADO ---
   return (
     <div className="dashboard-layout">
       {message && (
-          <div className={`toast-message ${message.type || 'info'}`}>
-              <i className={
-                message.type === 'success' ? 'fas fa-check-circle' :
-                message.type === 'error' ? 'fas fa-exclamation-circle' :
-                'fas fa-info-circle'
-              }></i>
-              {message.text}
-          </div>
+        <div className={`toast-message ${message.type || 'info'}`}>
+          <i className={
+            message.type === 'success' ? 'fas fa-check-circle' :
+            message.type === 'error' ? 'fas fa-exclamation-circle' :
+            'fas fa-info-circle'
+          }></i>
+          {message.text}
+        </div>
       )}
-      
+
       <ConfirmModal
         isOpen={modalState.isOpen}
         title={modalState.title}
@@ -698,41 +762,65 @@ const DashboardPage = () => {
         />
       )}
 
-      <DashboardNavbar 
-        user={user} 
-        language={language} 
-        setLanguage={setLanguage} 
+      <DashboardNavbar
+        user={user}
+        language={language}
+        setLanguage={setLanguage}
         t={t}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
+        searchFilter={searchFilter}
+        setSearchFilter={setSearchFilter}
       />
-      
+
       <div className="dashboard-body">
-      
-        {/* Columna 1: Sidebar de Carpetas */}
+        {/* Sidebar */}
         <div className="sidebar">
-           <h3>{t('myFolders')}</h3>
-        
-          {path.length > 0 && <button onClick={handleGoBack} className="back-button"><i className="fas fa-arrow-left"></i> {t('goBackTo')} {path[path.length - 1]?.nombre || t('root')}</button>}
+          <h3>{t('myFolders')}</h3>
+
+          {path.length > 0 && (
+            <button onClick={handleGoBack} className="back-button">
+              <i className="fas fa-arrow-left"></i> {t('goBackTo')} {path[path.length - 1]?.nombre || t('root')}
+            </button>
+          )}
 
           <form onSubmit={handleCreateFolder} className="folder-form">
-            <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder={t('newFolderPlaceholder')}/>
+            <input
+              type="text"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder={t('newFolderPlaceholder')}
+            />
             <button type="submit" disabled={!newFolderName.trim()}>
               <i className="fas fa-plus"></i>
             </button>
           </form>
-        
+
           <ul className="folder-list">
             {filteredFolders.map((folder, index) => (
-              <li key={folder.id} 
-                  className={currentFolder?.id === folder.id ? 'active' : ''}
-                  style={{ animationDelay: `${index * 30}ms` }}
+              <li
+                key={folder.id}
+                className={currentFolder?.id === folder.id ? 'active' : ''}
+                style={{ animationDelay: `${index * 30}ms` }}
               >
-                <span className="item-name" onClick={() => handleFolderClick(folder)}>
-                  <i className="fas fa-folder"></i> {folder.nombre}
-                </span>
+                {editingFolder?.id === folder.id ? (
+                  <form onSubmit={handleUpdateFolder} className="edit-form-folder">
+                    <input
+                      type="text"
+                      value={newFolderRename}
+                      onChange={(e) => setNewFolderRename(e.target.value)}
+                      autoFocus
+                    />
+                    <button type="submit" title={t('rename')}><i className="fas fa-check"></i></button>
+                    <button type="button" onClick={() => setEditingFolder(null)} title={t('cancel')}><i className="fas fa-times"></i></button>
+                  </form>
+                ) : (
+                  <span className="item-name" onClick={() => handleFolderClick(folder)}>
+                    <i className="fas fa-folder"></i> {folder.nombre}
+                  </span>
+                )}
                 <div className="actions">
-                  <button onClick={() => setEditingFolder(folder)} title={t('rename')}><i className="fas fa-pen"></i></button>
+                  <button onClick={() => handleStartFolderRename(folder)} title={t('rename')}><i className="fas fa-pen"></i></button>
                   <button onClick={() => handleDeleteFolder(folder.id)} title={t('delete')}><i className="fas fa-trash-alt"></i></button>
                 </div>
               </li>
@@ -744,94 +832,103 @@ const DashboardPage = () => {
             )}
           </ul>
         </div>
-      
-        {/* Columna 2: Contenido Principal (Archivos) */}
-        <div className="main-content">
-          
-          {currentFolder ? (
-            // --- A. VISTA DE CARPETA ---
-            <>
-              <div className="main-content-header">
-                <h2><i className="fas fa-folder-open"></i> {currentFolder.nombre}</h2>
-                <Breadcrumbs path={path} currentFolder={currentFolder} onCrumbClick={handleCrumbClick} t={t} />
-              </div>
 
-              <form onSubmit={handleUploadFile} className="upload-form">
-                <label htmlFor="fileInput" className="custom-file-upload">
-                  <i className="fas fa-cloud-upload-alt"></i>
-                  {selectedFile ? selectedFile.name : t('selectFile')}
-                </label>
-                <input type="file" id="fileInput" onChange={handleFileChange} />
-                <button type="submit" disabled={!selectedFile || uploading} className="btn btn-success">
-                  {uploading ? t('uploading') : t('uploadFile')}
-                </button>
-              </form>
-            
-              {/* Renderizado por grupos de estado (de la carpeta) */}
-              <FileListGroup
-                title={t('pending')}
-                files={groupedFiles.pending}
-                {...fileListHandlers}
-              />
-              
-              <FileListGroup
-                title={t('in_process')}
-                files={groupedFiles.in_process}
-                {...fileListHandlers}
-              />
-              
-              <FileListGroup
-                title={t('done')}
-                files={groupedFiles.done}
-                {...fileListHandlers}
-              />
-              
-              {/* Estados vacíos */}
-              {files.length === 0 && !uploading && !searchTerm && (
-                  <div className="empty-state">
+        {/* Main content */}
+        <div className="main-content">
+          {(searchFilter === 'users' && searchTerm) ? (
+            <UserSearchResults
+              query={searchTerm}
+              results={userSearchResults}
+              onOpenChat={handleOpenChat}
+            />
+          ) : (
+            <>
+              {currentFolder ? (
+                <>
+                  <div className="main-content-header">
+                    <h2><i className="fas fa-folder-open"></i> {currentFolder.nombre}</h2>
+                    <Breadcrumbs path={path} currentFolder={currentFolder} onCrumbClick={handleCrumbClick} t={t} />
+                  </div>
+
+                  <form onSubmit={handleUploadFile} className="upload-form">
+                    <label htmlFor="fileInput" className="custom-file-upload">
+                      <i className="fas fa-cloud-upload-alt"></i>
+                      {selectedFile ? selectedFile.name : t('selectFile')}
+                    </label>
+                    <input type="file" id="fileInput" onChange={handleFileChange} />
+                    <button type="submit" disabled={!selectedFile || uploading} className="btn btn-success">
+                      {uploading ? t('uploading') : t('uploadFile')}
+                    </button>
+                  </form>
+
+                  <FileListGroup title={t('pending')} files={groupedFiles.pending} {...fileListHandlers} />
+                  <FileListGroup title={t('in_process')} files={groupedFiles.in_process} {...fileListHandlers} />
+                  <FileListGroup title={t('done')} files={groupedFiles.done} {...fileListHandlers} />
+
+                  {files.length === 0 && !uploading && !searchTerm && (
+                    <div className="empty-state">
                       <i className="fas fa-box-open"></i>
                       <h3>{t('emptyFolderTitle')}</h3>
                       <p>{t('emptyFolderMessage')}</p>
-                  </div>
-              )}
-              {files.length > 0 && filteredFiles.length === 0 && searchTerm && (
-                  <div className="empty-state">
+                    </div>
+                  )}
+                  {files.length > 0 && filteredFiles.length === 0 && searchTerm && (
+                    <div className="empty-state">
                       <i className="fas fa-search-minus"></i>
                       <h3>{t('noResultsTitle')}</h3>
                       <p>{t('noResultsMessage', { searchTerm: searchTerm })}</p>
-                  </div>
-              )}
-            </>
-          ) : (
-            // --- B. VISTA DE INICIO (Home Hub) ---
-            <>
-              {mainView === 'home' ? (
-                <HomePageCards 
-                  onNavigate={setMainView} 
-                  t={t}
-                  groupedFiles={globalGroupedFiles} // <-- Pasa los archivos globales
-                  fileListHandlers={fileListHandlers} // <-- Pasa los handlers
-                />
+                    </div>
+                  )}
+                </>
               ) : (
-                <ApartadoView 
-                  viewName={mainView} 
-                  onGoHome={() => setMainView('home')} 
-                  t={t} 
-                />
+                <>
+                  {mainView === 'home' ? (
+                    <HomePageCards
+                      onNavigate={setMainView}
+                      t={t}
+                      groupedFiles={globalGroupedFiles}
+                      fileListHandlers={fileListHandlers}
+                    />
+                  ) : (
+                    <ApartadoView
+                      viewName={mainView}
+                      onGoHome={() => setMainView('home')}
+                      t={t}
+                    />
+                  )}
+                </>
               )}
             </>
           )}
         </div>
-          
-        {/* Columna 3: Chat de IA */}
-        <div className="chat-sidebar">
-          <ChatComponent />
-        </div>
 
+        {/* Chat IA */}
+        <div className="chat-sidebar">
+          <ChatComponent
+            onReloadFolders={() => loadFolders(currentFolder ? currentFolder.id : null)}
+            onReloadFiles={() => {
+              if (currentFolder) {
+                loadFiles(currentFolder.id);
+              } else {
+                loadAllUserFiles();
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Dock de chats de amigos */}
+      <div className="chat-dock-container">
+        {openChats.map(chatUser => (
+          <UserChatWindow
+            key={chatUser.id}
+            friend={chatUser}
+            onClose={() => setOpenChats(chats => chats.filter(c => c.id !== chatUser.id))}
+          />
+        ))}
       </div>
     </div>
   );
 };
 
 export default DashboardPage;
-
