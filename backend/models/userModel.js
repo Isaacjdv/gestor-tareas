@@ -20,7 +20,7 @@ exports.findByEmail = async (email) => {
 
 // Encontrar un usuario por su número de WhatsApp
 exports.findByWhatsapp = async (whatsapp_number) => {
-    const { rows } = await db.query('SELECT * FROM usuarios WHERE whatsapp_number = $1', [whatsapp_number]);
+    const { rows } = await db.query('SELECT * FROM usuarios WHERE whatsapp_number = $1', [email]);
     return rows[0];
 };
 
@@ -34,19 +34,20 @@ exports.findByName = async (name) => {
 };
 
 /**
- * [NUEVA FUNCIÓN AÑADIDA]
+ * [FUNCIÓN CORREGIDA]
  * Buscar usuarios por nombre o email (excluyendo al usuario actual)
  * Usamos ILIKE para búsquedas 'case-insensitive' en PostgreSQL.
  * Seleccionamos solo los datos públicos.
  */
 exports.search = async (searchTerm, currentUserId) => {
-    const query = `
-        SELECT id, nombre, email, foto_perfil_url 
-        FROM usuarios
-        WHERE (nombre ILIKE $1 OR email ILIKE $1) 
-          AND id != $2
-        LIMIT 10; 
-    `;
+    // Consulta SQL limpiada de caracteres invisibles
+    const query = `
+        SELECT id, nombre, email, foto_perfil_url 
+        FROM usuarios
+        WHERE (nombre ILIKE $1 OR email ILIKE $1) 
+          AND id != $2
+        LIMIT 10;
+    `;
     // Añadimos '%' para que busque coincidencias parciales (ej: 'pep' encuentra 'pepito')
     const values = [`%${searchTerm}%`, currentUserId];
     const { rows } = await db.query(query, values);
