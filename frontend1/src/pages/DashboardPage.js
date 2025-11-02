@@ -1,23 +1,26 @@
-  /* eslint-disable react/prop-types */
+/* eslint-disable react/prop-types */
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import folderService from '../services/folderService';
 import fileService from '../services/fileService';
-import authService from '../services/authService';
-import userService from '../services/userService';
+import authService from '../services/authService'; // Importado authService
+import userService from '../services/userService'; // Servicio de búsqueda de usuarios
 import { UserContext } from '../App';
 import '../styles/DashboardPage.css';
 import ChatComponent from '../components/ChatComponent';
-import UserChatWindow from '../components/UserChatWindow';
-import { io } from 'socket.io-client';
+import UserChatWindow from '../components/UserChatWindow'; // El nuevo componente de chat
+import { io } from 'socket.io-client'; // Importar Socket.io
 
 // URL de tu backend en Render
 const RENDER_BACKEND_URL = 'https://gestor-tareas-backend-11hi.onrender.com';
 
+// Conectar al socket (fuera del componente para una única conexión)
+const socket = io(RENDER_BACKEND_URL);
+
 // --- Objeto de Traducciones ---
 const translations = {
   es: {
-    searchPlaceholder: 'Buscar...',
+    searchPlaceholder: 'Buscar...', // Placeholder genérico
     hello: 'Hola',
     logout: 'Cerrar Sesión',
     myFolders: 'Mis Carpetas',
@@ -77,10 +80,12 @@ const translations = {
     myArea: 'Mi Área de Trabajo',
   },
   en: {
+    // ... (traducciones en inglés)
     myArea: 'My Workspace',
   }
 };
 // --- (Fin de Traducciones) ---
+
 
 // --- Componente Modal de Confirmación ---
 const ConfirmModal = ({ isOpen, title, message, onConfirm, onClose, t }) => {
@@ -172,7 +177,8 @@ const DashboardNavbar = ({ user, language, setLanguage, t, searchTerm, setSearch
   return (
     <nav className="dashboard-navbar">
       <div className="navbar-logo"><a href="/dashboard">Gestor IA</a></div>
-
+      
+      {/* Dropdown de búsqueda */}
       <div className="navbar-search">
         <select className="search-filter" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)}>
             <option value="files">Archivos</option>
@@ -181,16 +187,17 @@ const DashboardNavbar = ({ user, language, setLanguage, t, searchTerm, setSearch
         </select>
         <i className="fas fa-search"></i>
         <input 
-          type="text" 
-          placeholder={
-            searchFilter === 'files' ? 'Buscar archivos...' :
-            searchFilter === 'folders' ? 'Buscar carpetas...' :
-            'Buscar amigos...'
-          } 
-          value={searchTerm} 
-          onChange={(e) => setSearchTerm(e.target.value)} 
+            type="text" 
+            placeholder={
+                searchFilter === 'files' ? 'Buscar en archivos...' :
+                searchFilter === 'folders' ? 'Buscar carpetas...' :
+                'Buscar amigos...'
+            } 
+            value={searchTerm} 
+            onChange={(e) => setSearchTerm(e.target.value)} 
         />
       </div>
+      {/* Fin de modificación */}
 
       <div className="navbar-user">
         <LanguageSwitcher language={language} setLanguage={setLanguage} />
@@ -203,6 +210,7 @@ const DashboardNavbar = ({ user, language, setLanguage, t, searchTerm, setSearch
 
 // --- Componente para las Tarjetas del Home ---
 const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers }) => {
+  // Lógica de contadores
   const totalFiles = (groupedFiles.pending || []).length + (groupedFiles.in_process || []).length + (groupedFiles.done || []).length;
   const totalPending = (groupedFiles.pending || []).length;
   const totalDone = (groupedFiles.done || []).length;
@@ -212,26 +220,32 @@ const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers }) => {
       <h2>{t('welcomeTitle')}</h2>
       <p className="home-subtitle">{t('welcomeMessage')}</p>
       
-     
-  
-  {/* Fila horizontal de tarjetas */}
-      <div className="home-card-row">
-        <div className="home-card home-card--blue" onClick={() => onNavigate('analytics')}>
+      <div className="home-card-grid">
+        <div className="home-card" onClick={() => onNavigate('analytics')}>
           <i className="fas fa-chart-line card-icon"></i>
           <div className="card-overlay"><h3>{totalFiles} Archivos Totales</h3></div>
           <div className="card-footer"><h4>{t('homeCardAnalyticsTitle')}</h4></div>
         </div>
-
-        <div className="home-card home-card--green" onClick={() => onNavigate('reports')}>
+        <div className="home-card" onClick={() => onNavigate('reports')}>
           <i className="fas fa-file-alt card-icon"></i>
           <div className="card-overlay"><h3>{totalPending} Tareas Pendientes</h3></div>
           <div className="card-footer"><h4>{t('homeCardReportsTitle')}</h4></div>
         </div>
-
-        <div className="home-card home-card--white" onClick={() => onNavigate('settings')}>
+        <div className="home-card" onClick={() => onNavigate('settings')}>
           <i className="fas fa-cog card-icon"></i>
           <div className="card-overlay"><h3>{totalDone} Tareas Terminadas</h3></div>
           <div className="card-footer"><h4>{t('homeCardSettingsTitle')}</h4></div>
+        </div>
+      </div>
+
+      {/* Sección de Ventajas */}
+      <div className="advantages-section">
+        <div className="advantages-text">
+          <h3>{t('advantagesTitle')}</h3>
+          <p>{t('advantagesDesc')}</p>
+        </div>
+        <div className="advantages-image">
+          <img src="https://placehold.co/600x400/2C2C2C/E0E0E0?text=Workflow" alt="Workflow Advantages" />
         </div>
       </div>
 
@@ -253,6 +267,7 @@ const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers }) => {
           files={groupedFiles.done}
           {...fileListHandlers}
         />
+        {/* Mensaje si no hay archivos en absoluto */}
         {totalFiles === 0 && (
           <div className="empty-state-small">
             <i className="fas fa-box-open" style={{fontSize: '2rem', marginBottom: '1rem'}}></i>
@@ -289,7 +304,7 @@ const ApartadoView = ({ viewName, onGoHome, t }) => {
   );
 };
 
-// --- Función de Iconos (fuera del componente) ---
+// --- Función de Iconos ---
 const getFileIcon = (fileName) => {
   if (!fileName) return 'fas fa-file';
   const extension = fileName.split('.').pop().toLowerCase();
@@ -307,36 +322,36 @@ const getFileIcon = (fileName) => {
   }
 };
 
-// --- Componente FileListGroup (fuera del componente) ---
-const FileListGroup = ({ 
-  title, 
-  files, 
-  onStatusChange, 
+// --- Componente FileListGroup ---
+const FileListGroup = ({
+  title,
+  files,
+  onStatusChange,
   onNoteClick,
   editingFile,
   onUpdateFile,
   onSetEditingFile,
   onDeleteFile,
-  t 
+  t
 }) => {
-  if (!files || files.length === 0) return null; 
-  
+  if (!files || files.length === 0) return null;
+
   return (
     <div className="file-group-container">
       <h3 className="file-group-header">{title} ({files.length})</h3>
       <ul className="file-list">
         {files.map((file, index) => (
-          <li 
-            key={file.id} 
-            className={`file-item status-${file.status || 'pending'}`} 
+          <li
+            key={file.id}
+            className={`file-item status-${file.status || 'pending'}`}
             style={{ animationDelay: `${index * 30}ms` }}
           >
             {editingFile?.id === file.id ? (
               <form onSubmit={onUpdateFile} className="edit-form">
-                <input 
-                  type="text" 
-                  value={editingFile.nombre_original} 
-                  onChange={(e) => onSetEditingFile({ ...editingFile, nombre_original: e.target.value })} 
+                <input
+                  type="text"
+                  value={editingFile.nombre_original}
+                  onChange={(e) => onSetEditingFile({ ...editingFile, nombre_original: e.target.value })}
                   autoFocus
                 />
                 <button type="submit" title="Guardar"><i className="fas fa-check"></i></button>
@@ -344,11 +359,16 @@ const FileListGroup = ({
               </form>
             ) : (
               <>
-                <a href={`${RENDER_BACKEND_URL}/${file.path_archivo.replace(/\\/g, '/')}`} target="_blank" rel="noopener noreferrer" className="item-name">
+                <a
+                  href={`${RENDER_BACKEND_URL}/${file.path_archivo.replace(/\\/g, '/')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="item-name"
+                >
                   <i className={getFileIcon(file.nombre_original)}></i>
                   <span>{file.nombre_original}</span>
                 </a>
-                
+
                 {file.status === 'in_process' && file.nota && (
                   <div className="note-tooltip">
                     <i className="fas fa-info-circle"></i>
@@ -360,13 +380,13 @@ const FileListGroup = ({
                   <button onClick={() => onSetEditingFile(file)} title={t('rename')}><i className="fas fa-pen"></i></button>
                   <button onClick={() => onDeleteFile(file.id)} title={t('delete')}><i className="fas fa-trash-alt"></i></button>
                 </div>
-                
+
                 <div className="file-status-actions">
                   <button className="status-btn pending" title="Poner Pendiente" onClick={() => onStatusChange(file, { status: 'pending', nota: '' })}>
                     <i className="fas fa-exclamation-circle"></i>
                   </button>
                   <button className="status-btn in-process" title={file.nota ? t('editNote') : t('addNote')} onClick={() => onNoteClick(file)}>
-                    <i className="fas fa-pencil-alt"></i>
+                    <i className="fas fa-sticky-note"></i>
                   </button>
                   <button className="status-btn done" title="Marcar Terminado" onClick={() => onStatusChange(file, { status: 'done' })}>
                     <i className="fas fa-check-circle"></i>
@@ -381,7 +401,7 @@ const FileListGroup = ({
   );
 };
 
-// [AÑADIDO] Componente placeholder para los resultados de Amigos
+// Componente placeholder para los resultados de Amigos
 const UserSearchResults = ({ query, results, onOpenChat }) => {
   return (
     <div className="user-search-results">
@@ -409,6 +429,7 @@ const UserSearchResults = ({ query, results, onOpenChat }) => {
     </div>
   );
 };
+
 
 // --- Componente Principal del Dashboard ---
 const DashboardPage = () => {
@@ -450,14 +471,14 @@ const DashboardPage = () => {
     return text;
   };
 
-  // --- LÓGICA DE CARGA ---
+  // --- Carga ---
   const loadFolders = async (parentId) => {
     try {
       const response = await folderService.getFolders(parentId);
       setFolders(response.data);
-    } catch (error) { 
-      console.error("Error en loadFolders:", error);
-      showMessage(t('errorLoadFolders'), 'error'); 
+    } catch (error) {
+      console.error('Error en loadFolders:', error);
+      showMessage(t('errorLoadFolders'), 'error');
     }
   };
 
@@ -465,28 +486,28 @@ const DashboardPage = () => {
     try {
       const response = await fileService.getFilesByFolder(folderId);
       setFiles(response.data);
-    } catch (error) { 
-      console.error("Error en loadFiles:", error);
-      showMessage(t('errorLoadFiles'), 'error'); 
+    } catch (error) {
+      console.error('Error en loadFiles:', error);
+      showMessage(t('errorLoadFiles'), 'error');
     }
   };
-  
+
   const loadAllUserFiles = async () => {
     try {
       const response = await fileService.getAllFiles();
       setAllFiles(response.data);
     } catch (error) {
-      console.error("Error en loadAllUserFiles:", error);
+      console.error('Error en loadAllUserFiles:', error);
       showMessage(t('errorLoadFiles'), 'error');
     }
   };
+  // -----------------------------------------------------------------
 
   // --- EFECTOS ---
   useEffect(() => {
     if (user) {
       const folderId = currentFolder ? currentFolder.id : null;
       loadFolders(folderId);
-      
       if (folderId) {
         setAllFiles([]);
         loadFiles(folderId);
@@ -505,7 +526,7 @@ const DashboardPage = () => {
           const response = await userService.search(searchTerm);
           setUserSearchResults(response.data);
         } catch (error) {
-          console.error("Error buscando usuarios:", error);
+          console.error('Error buscando usuarios:', error);
           setUserSearchResults([]);
         }
       };
@@ -518,6 +539,36 @@ const DashboardPage = () => {
     }
   }, [searchTerm, searchFilter]);
 
+  // Socket.io listeners para tiempo real
+  useEffect(() => {
+    if (user && user.id) {
+      console.log(`Socket.io: Uniéndose al room del usuario ${user.id}`);
+      socket.emit('join_room', user.id);
+
+      const folderListener = () => {
+        console.log('Socket.io: Recibido evento [folders_updated], recargando carpetas...');
+        loadFolders(currentFolder ? currentFolder.id : null);
+      };
+      socket.on('folders_updated', folderListener);
+
+      const fileListener = () => {
+        console.log('Socket.io: Recibido evento [files_updated], recargando archivos...');
+        if (currentFolder) {
+          loadFiles(currentFolder.id);
+        } else {
+          loadAllUserFiles();
+        }
+      };
+      socket.on('files_updated', fileListener);
+
+      return () => {
+        console.log("Socket.io: Limpiando listeners de dashboard...");
+        socket.off('folders_updated', folderListener);
+        socket.off('files_updated', fileListener);
+      };
+    }
+  }, [user, currentFolder]); // Depende de user y currentFolder
+
   const showMessage = (text, type = 'success') => {
     setMessage({ text, type });
     setTimeout(() => setMessage(null), 3000);
@@ -529,7 +580,7 @@ const DashboardPage = () => {
     setCurrentFolder(folder);
     setSearchTerm('');
   };
-  
+
   const handleGoBack = () => {
     const newPath = [...path];
     const parent = newPath.pop();
@@ -552,13 +603,13 @@ const DashboardPage = () => {
     }
   };
 
-  // Abrir chat
+  // Abrir chat de amigo
   const handleOpenChat = (userToChat) => {
     if (!openChats.find(chat => chat.id === userToChat.id)) {
       setOpenChats(prevChats => [userToChat, ...prevChats.slice(0, 2)]);
     }
   };
-  
+
   // --- MANEJADORES DE ACCIONES (CRUD) ---
   const handleCreateFolder = async (e) => {
     e.preventDefault();
@@ -577,7 +628,7 @@ const DashboardPage = () => {
     setEditingFolder(folder);
     setNewFolderRename(folder.nombre);
   };
-  
+
   const handleUpdateFolder = async (e) => {
     e.preventDefault();
     if (!newFolderRename.trim() || !editingFolder || newFolderRename.trim() === editingFolder.nombre) {
@@ -590,7 +641,7 @@ const DashboardPage = () => {
       setEditingFolder(null);
       setNewFolderRename('');
       loadFolders(currentFolder ? currentFolder.id : null);
-      if(currentFolder && currentFolder.id === editingFolder.id) {
+      if (currentFolder && currentFolder.id === editingFolder.id) {
         setCurrentFolder({ ...currentFolder, nombre: newFolderRename });
       }
     } catch (error) { showMessage(t('errorUpdateFolder'), 'error'); }
@@ -614,15 +665,15 @@ const DashboardPage = () => {
   const handleUploadFile = async (e) => {
     e.preventDefault();
     if (!selectedFile || !currentFolder) {
-        showMessage(t('selectFileAndFolder'), 'error');
-        return;
+      showMessage(t('selectFileAndFolder'), 'error');
+      return;
     }
     setUploading(true);
     showMessage(t('uploading'), 'info');
     try {
       await fileService.uploadFile(currentFolder.id, selectedFile);
       setSelectedFile(null);
-      document.getElementById('fileInput').value = "";
+      document.getElementById('fileInput').value = '';
       loadFiles(currentFolder.id);
       showMessage(t('fileUploaded'));
     } catch (error) {
@@ -644,9 +695,9 @@ const DashboardPage = () => {
       } else {
         loadAllUserFiles();
       }
-    } catch (error) { 
-      console.error("Error en handleUpdateFile:", error);
-      showMessage(t('errorUpdateFile'), 'error'); 
+    } catch (error) {
+      console.error('Error en handleUpdateFile:', error);
+      showMessage(t('errorUpdateFile'), 'error');
     }
   };
 
@@ -666,7 +717,7 @@ const DashboardPage = () => {
     } catch (error) { showMessage(t('errorDeleteFile'), 'error'); }
     closeModal();
   };
-  
+
   const closeModal = () => setModalState({ isOpen: false });
 
   // --- MANEJADORES DE ESTADO Y NOTAS ---
@@ -680,7 +731,7 @@ const DashboardPage = () => {
         currentFiles.map(f => f.id === updatedFile.id ? updatedFile : f)
       );
     } catch (error) {
-      console.error("Error en handleUpdateFileDetails:", error);
+      console.error('Error en handleUpdateFileDetails:', error);
       showMessage(t('errorUpdateFile'), 'error');
     }
   };
@@ -698,7 +749,7 @@ const DashboardPage = () => {
       file.nombre_original.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [files, allFiles, searchTerm, currentFolder, searchFilter]);
-  
+
   const filteredFolders = useMemo(() => {
     if (searchFilter === 'users') return [];
     if (!searchTerm) return folders;
@@ -717,7 +768,7 @@ const DashboardPage = () => {
     });
     return { pending, in_process, done };
   }, [filteredFiles]);
-  
+
   // Agrupación para la VISTA DE INICIO (Home)
   const globalGroupedFiles = useMemo(() => {
     const pending = [], in_process = [], done = [];
@@ -733,6 +784,7 @@ const DashboardPage = () => {
     });
     return { pending, in_process, done };
   }, [allFiles, searchTerm, searchFilter]);
+
 
   const fileListHandlers = {
     onStatusChange: handleUpdateFileDetails,
@@ -783,11 +835,12 @@ const DashboardPage = () => {
         t={t}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
-        searchFilter={searchFilter}
-        setSearchFilter={setSearchFilter}
+        searchFilter={searchFilter} 
+        setSearchFilter={setSearchFilter} 
       />
       
       <div className="dashboard-body">
+      
         {/* Columna 1: Sidebar de Carpetas */}
         <div className="sidebar">
           <h3>{t('myFolders')}</h3>
@@ -804,8 +857,8 @@ const DashboardPage = () => {
           <ul className="folder-list">
             {filteredFolders.map((folder, index) => (
               <li key={folder.id} 
-                  className={currentFolder?.id === folder.id ? 'active' : ''}
-                  style={{ animationDelay: `${index * 30}ms` }}
+                className={currentFolder?.id === folder.id ? 'active' : ''}
+                style={{ animationDelay: `${index * 30}ms` }}
               >
                 {editingFolder?.id === folder.id ? (
                   <form onSubmit={handleUpdateFolder} className="edit-form-folder">
@@ -839,6 +892,7 @@ const DashboardPage = () => {
       
         {/* Columna 2: Contenido Principal (Archivos) */}
         <div className="main-content">
+          
           {(searchFilter === 'users' && searchTerm) ? (
             <UserSearchResults 
               query={searchTerm} 
@@ -848,6 +902,7 @@ const DashboardPage = () => {
           ) : (
             <>
               {currentFolder ? (
+                // --- A. VISTA DE CARPETA ---
                 <>
                   <div className="main-content-header">
                     <h2><i className="fas fa-folder-open"></i> {currentFolder.nombre}</h2>
@@ -865,6 +920,7 @@ const DashboardPage = () => {
                     </button>
                   </form>
                 
+                  {/* Renderizado por grupos de estado (de la carpeta) */}
                   <FileListGroup
                     title={t('pending')}
                     files={groupedFiles.pending}
@@ -883,6 +939,7 @@ const DashboardPage = () => {
                     {...fileListHandlers}
                   />
                   
+                  {/* Estados vacíos */}
                   {files.length === 0 && !uploading && !searchTerm && (
                     <div className="empty-state">
                       <i className="fas fa-box-open"></i>
@@ -899,13 +956,14 @@ const DashboardPage = () => {
                   )}
                 </>
               ) : (
+                // --- B. VISTA DE INICIO (Home Hub) ---
                 <>
                   {mainView === 'home' ? (
                     <HomePageCards 
                       onNavigate={setMainView} 
                       t={t}
-                      groupedFiles={globalGroupedFiles}
-                      fileListHandlers={fileListHandlers}
+                      groupedFiles={globalGroupedFiles} 
+                      fileListHandlers={fileListHandlers} 
                     />
                   ) : (
                     <ApartadoView 
@@ -936,12 +994,12 @@ const DashboardPage = () => {
 
       </div>
 
-      {/* Ventanas de chat de Amigos */}
+      {/* Contenedor para las ventanas de chat de Amigos */}
       <div className="chat-dock-container">
         {openChats.map(chatUser => (
           <UserChatWindow
             key={chatUser.id}
-            friend={chatUser}
+            friend={chatUser} // Pasa el amigo con el que chatear
             onClose={() => setOpenChats(chats => chats.filter(c => c.id !== chatUser.id))}
           />
         ))}
@@ -952,17 +1010,3 @@ const DashboardPage = () => {
 };
 
 export default DashboardPage;
-
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
