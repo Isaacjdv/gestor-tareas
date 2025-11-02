@@ -63,31 +63,42 @@ exports.interpretMessage = async (message) => {
 };
 
 // FUNCIÓN 2: El Conversador (genera respuestas de texto natural con memoria)
-exports.generateConversationalResponse = async (history, userName, userData) => {
-    // 1. Constrir el mensaje del sistema con el contexto
+// [CORRECCIÓN]: 'history' ahora se llama 'historyOrMessage' para aceptar ambos tipos
+exports.generateConversationalResponse = async (historyOrMessage, userName, userData) => {
+    // 1. Construir el mensaje del sistema con el contexto
     const systemInstruction = `
-        Eres "Gestor IA", un asistente de IA conversacional y amable. Tu nombre es ${userName}.
-        Tu trabajo es responder a la conversación y ayudar al usuario a gestionar sus tareas y archivos.
-        
-        Si el usuario pregunta sobre archivos o carpetas, usa la siguiente lista de datos para responder. Si la lista está vacía, menciónalo.
-        
-        DATOS DEL USUARIO:
+        Eres "Gestor IA", un asistente de IA conversacional y amable. El nombre del usuario es ${userName}.
+        Tu trabajo es responder a la conversación y ayudar al usuario a gestionar sus tareas y archivos.
+        
+        Si el usuario pregunta sobre archivos o carpetas, usa la siguiente lista de datos para responder. Si la lista está vacía, menciónalo.
+        
+        DATOS DEL USUARIO:
         Carpetas: ${userData.folders.map(f => f.nombre).join(', ') || 'ninguna'}.
         Archivos Recientes: ${userData.files.slice(0, 5).map(f => `${f.nombre_original} (Estado: ${f.status || 'pending'})`).join('; ') || 'ninguno'}.
         
-        MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respuesta y ofrecer ayuda.
+        MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respuesta y ofrecer ayuda.
     `;
 
-    // 2. Mapear el historial del cliente al formato de roles de la API
-    const messagesForApi = history.map(msg => ({
-        // El rol debe ser 'user' o 'assistant'
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        content: msg.text
-    }));
+    // 2. [CORRECCIÓN] Mapear el historial (si es array) o crear uno (si es string)
+    let messagesForApi;
+    
+    if (Array.isArray(historyOrMessage)) {
+        // Es un array (viene del Dashboard chat)
+        messagesForApi = historyOrMessage.map(msg => ({
+            role: msg.sender === 'user' ? 'user' : 'assistant',
+            content: msg.text // Asegurarse de que usa .text
+        }));
+    } else {
+        // Es un string (viene de WhatsApp)
+        messagesForApi = [
+            { role: 'user', content: historyOrMessage }
+        ];
+    }
+    // [FIN DE CORRECCIÓN]
 
-    // 3. Insertar la instrucción del sistema al inicio
-    messagesForApi.unshift({ role: 'system', content: systemInstruction });
-    
+    // 3. Insertar la instrucción del sistema al inicio
+    messagesForApi.unshift({ role: 'system', content: systemInstruction });
+    
     try {
         const response = await axios.post('https://api.ai21.com/studio/v1/chat/completions', {
             model: 'jamba-large',
@@ -164,7 +175,7 @@ exports.generatePdfContent = async (topic, userName) => {
     // --- PROMPT 2: Generar el contenido de texto ---
     const contentPrompt = `
         Escribe un informe detallado (mínimo 800 palabras) sobre "${topic}". Usa un tono educativo y fácil de entender.
-        Debes seguir esta estructura (ignora las consultas de imagen):
+       Debes seguir esta estructura (ignora las consultas de imagen):
         - Título: ${structure.titulo}
         - Introducción: ${structure.introduccion}
         - Secciones:
@@ -224,7 +235,7 @@ exports.generatePublicResponse = async (message) => {
             temperature: 0.5,
         }, {
             headers: { 'Authorization': `Bearer ${AI21_API_KEY}`, 'Content-Type': 'application/json' }
-        });
+     });
         return response.data?.choices?.[0]?.message?.content?.trim() || "Lo siento, no entendí la pregunta.";
     } catch (error) {
         console.error("Error en el chat público de IA:", error);
