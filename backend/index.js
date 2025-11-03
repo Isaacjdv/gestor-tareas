@@ -1,17 +1,15 @@
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const path = require('path');
 require('dotenv').config();
 
-// [CORRECCIÓN] Añadidos los 'requires' para el servidor de Sockets
 const http = require('http');
 const { Server } = require('socket.io');
 
-// Cargar pool de la BD
+// BD (pool)
 const pool = require('./config/db');
 
-// Importar servicios y rutas
+// Servicios y rutas
 const schedulerService = require('./services/schedulerService');
 const authRoutes = require('./routes/authRoutes');
 const chatRoutes = require('./routes/chatRoutes');
@@ -19,13 +17,13 @@ const fileRoutes = require('./routes/fileRoutes');
 const folderRoutes = require('./routes/folderRoutes');
 const publicChatRoutes = require('./routes/publicChatRoutes');
 const whatsappRoutes = require('./routes/whatsappRoutes');
-const userRoutes = require('./routes/userRoutes'); // Ruta de usuarios
+const userRoutes = require('./routes/userRoutes');
 
-// --- FUNCIÓN PARA INICIALIZAR LA BASE DE DATOS (PostgreSQL) ---
+
+// --- Inicialización de la BD (PostgreSQL) ---
 async function initializeDatabase() {
   console.log('Verificando la estructura de la base de datos (PostgreSQL)...');
   try {
-    // Consulta 100% limpiada de caracteres invisibles
     const createTablesQuery = `
       CREATE TABLE IF NOT EXISTS usuarios (
         id SERIAL PRIMARY KEY,
@@ -86,55 +84,53 @@ async function initializeDatabase() {
 
     await pool.query(createTablesQuery);
 
-    /* --- Alterar 'usuarios' para añadir foto de perfil (se ejecuta por separado) --- */
+    // Columna foto de perfil
     try {
       await pool.query(
         "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_perfil_url VARCHAR(255) DEFAULT 'https://placehold.co/100x100/E0E0E0/121212?text=User'"
       );
-      console.log("✅ Columna 'foto_perfil_url' verificada/añadida a 'usuarios'.");
+      console.log("✅ Columna 'foto_perfil_url' verificada/añadida en 'usuarios'.");
     } catch (alterError) {
-      // Si la columna ya existe (código '42701' en PG), no es un error real.
       if (alterError.code !== '42701') {
-        console.warn("Advertencia al alterar tabla 'usuarios':", alterError.message);
+        console.warn("Advertencia al alterar 'usuarios':", alterError.message);
       }
     }
 
     console.log('✅ Estructura de la base de datos verificada/creada con éxito.');
   } catch (error) {
     console.error('❌ Error al inicializar la base de datos (PostgreSQL):', error);
-    // Si la conexión falla aquí, la aplicación no podrá continuar
     process.exit(1);
   }
 }
 
-// 1. Crear la aplicación Express
+
+// 1) Express
 const app = express();
 
-// --- 2. [CORRECCIÓN] Envolver 'app' en el servidor HTTP y configurar Socket.io ---
-const server = http.createServer(app); // Creamos un servidor HTTP nativo
+// 2) HTTP server + Socket.io
+const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*', // Permite todas las conexiones
-    methods: ['GET', 'POST'],
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   },
 });
 
-// --- 3. Usar los middlewares ---
+// 3) Middlewares
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// --- Servir archivos estáticos (uploads) ---
+// Archivos estáticos
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// --- [NUEVO MIDDLEWARE] Hacemos que 'io' sea accesible en todas las rutas (req.io) ---
+// Hacer disponible io en las rutas
 app.use((req, res, next) => {
   req.io = io;
   next();
 });
-// -------------------------------------------------------------------------
 
-// 4. Importar y usar las rutas
+// 4) Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/files', fileRoutes);
@@ -143,44 +139,58 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/public-chat', publicChatRoutes);
 app.use('/api/users', userRoutes);
 
-// --- Ruta de prueba (opcional) ---
-app.get('/', (req, res) => {
+// Salud
+app.get('/', (_req, res) => {
   res.send('Servidor Gestor IA operativo.');
 });
 
-// --- Manejo de errores 404 ---
-app.use((req, res, next) => {
+// 404
+app.use((_req, res) => {
   res.status(404).json({ message: 'Ruta no encontrada' });
 });
 
-// --- Lógica de Socket.io (Chat de Amigos) ---
-io.on('connection', (socket) => {
-  console.log('Un usuario se conectó:', socket.id);
 
-  // Unir a un "room" privado basado en su ID de usuario
+// --- Socket.io (chat + notificaciones) ---
+io.on('connection', (socket) => {
+  console.log('Usuario conectado:', socket.id);
+
   socket.on('join_room', (userId) => {
+    if (!userId) return;
     socket.join(userId.toString());
-    console.log(`Usuario con ID: ${userId} se unió al room: ${userId}`);
+    console.log(`Usuario ${userId} unido a room ${userId}`);
   });
 
-  // Escuchar un mensaje privado
   socket.on('send_private_message', async (data) => {
     // data = { sender_id, receiver_id, contenido }
-
-    // 1. Guardar en la BD (en la tabla 'mensajes')
     try {
-      const insertQuery =
-        'INSERT INTO mensajes (sender_id, receiver_id, contenido) VALUES ($1, $2, $3)';
-      await pool.query(insertQuery, [
-        data.sender_id,
-        data.receiver_id,
-        data.contenido,
-      ]);
+      const insertQuery = `
+        INSERT INTO mensajes (sender_id, receiver_id, contenido)
+        VALUES ($1, $2, $3)
+      `;
+      await pool.query(insertQuery, [data.sender_id, data.receiver_id, data.contenido]);
 
-      // 2. Enviar al destinatario (si está conectado)
+      // Entregar mensaje en tiempo real al receptor
       io.to(data.receiver_id.toString()).emit('receive_private_message', data);
+
+      // Notificación para la campanita (con info del sender)
+      if (!data.sender_id) return;
+
+      const senderQuery = await pool.query(
+        'SELECT id, nombre, foto_perfil_url FROM usuarios WHERE id = $1',
+        [data.sender_id]
+      );
+
+      if (senderQuery.rows.length > 0) {
+        const senderInfo = senderQuery.rows[0];
+        const notificationData = {
+          sender: senderInfo, // { id, nombre, foto_perfil_url }
+          message: data,      // { sender_id, receiver_id, contenido, ... }
+        };
+
+        io.to(data.receiver_id.toString()).emit('new_notification', notificationData);
+      }
     } catch (dbError) {
-      console.error('Error al guardar mensaje en la BD:', dbError);
+      console.error('Error al guardar/notificar mensaje en la BD:', dbError);
     }
   });
 
@@ -189,23 +199,20 @@ io.on('connection', (socket) => {
   });
 });
 
-// 5. Iniciar el servidor
+
+// 5) Iniciar servidor
 const PORT = process.env.PORT || 10000;
 
-// Envuelve el arranque para asegurar la inicialización de la BD
 (async () => {
   try {
-    // Ejecuta la inicialización antes de empezar a escuchar peticiones
     await initializeDatabase();
 
-    // [CORRECCIÓN] Usar server.listen (que incluye app + socket.io)
     server.listen(PORT, () => {
-      console.log(`🚀 Servidor Express y Socket.io corriendo en el puerto ${PORT}`);
-      // Iniciar el programador de tareas
+      console.log(`🚀 Servidor Express + Socket.io escuchando en el puerto ${PORT}`);
       schedulerService.startScheduler();
     });
   } catch (err) {
-    console.error('❌ Fallo crítico al iniciar el servidor Express:', err);
+    console.error('❌ Fallo crítico al iniciar el servidor:', err);
     process.exit(1);
   }
 })();

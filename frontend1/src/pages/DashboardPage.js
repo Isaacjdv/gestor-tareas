@@ -3,13 +3,13 @@ import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import folderService from '../services/folderService';
 import fileService from '../services/fileService';
-import authService from '../services/authService'; // Importado authService
-import userService from '../services/userService'; // Servicio de búsqueda de usuarios
+import authService from '../services/authService';
+import userService from '../services/userService';
 import { UserContext } from '../App';
 import '../styles/DashboardPage.css';
 import ChatComponent from '../components/ChatComponent';
-import UserChatWindow from '../components/UserChatWindow'; // El nuevo componente de chat
-import { io } from 'socket.io-client'; // Importar Socket.io
+import UserChatWindow from '../components/UserChatWindow';
+import { io } from 'socket.io-client';
 
 // URL de tu backend en Render
 const RENDER_BACKEND_URL = 'https://gestor-tareas-backend-11hi.onrender.com';
@@ -20,68 +20,114 @@ const socket = io(RENDER_BACKEND_URL);
 // --- Objeto de Traducciones ---
 const translations = {
   es: {
-    searchPlaceholder: 'Buscar...', // Placeholder genérico
+    searchPlaceholder: 'Buscar...',
     hello: 'Hola',
     logout: 'Cerrar Sesión',
+    myArea: 'Mi Área de Trabajo',
+    root: 'Inicio',
     myFolders: 'Mis Carpetas',
     goBackTo: 'Volver a',
-    root: 'Raíz',
     newFolderPlaceholder: 'Nueva carpeta...',
+    folderCreated: 'Carpeta creada',
+    errorCreateFolder: 'No se pudo crear la carpeta',
+    folderUpdated: 'Carpeta actualizada',
+    errorUpdateFolder: 'No se pudo actualizar la carpeta',
+    deleteFolderTitle: 'Eliminar carpeta',
+    confirmDeleteFolder: '¿Seguro que deseas eliminar esta carpeta?',
+    folderDeleted: 'Carpeta eliminada',
+    errorDeleteFolder: 'No se pudo eliminar la carpeta',
+    errorLoadFolders: 'No se pudieron cargar las carpetas',
+    errorLoadFiles: 'No se pudieron cargar los archivos',
+    selectFileAndFolder: 'Selecciona un archivo y una carpeta',
+    uploading: 'Subiendo...',
+    uploadFile: 'Subir Archivo',
+    fileUploaded: 'Archivo subido',
+    errorUploadFile: 'No se pudo subir el archivo',
+    fileUpdated: 'Archivo actualizado',
+    errorUpdateFile: 'No se pudo actualizar el archivo',
+    deleteFileTitle: 'Eliminar archivo',
+    confirmDeleteFile: '¿Seguro que deseas eliminar este archivo?',
+    fileDeleted: 'Archivo eliminado',
+    emptyFolderTitle: 'Carpeta vacía',
+    emptyFolderMessage: 'No hay archivos en esta carpeta todavía.',
+    noResultsTitle: 'Sin resultados',
+    noResultsMessage: 'No se encontraron archivos que coincidan con "{searchTerm}"',
+    selectFile: 'Selecciona un archivo',
+    pending: 'Pendientes',
+    in_process: 'En proceso',
+    done: 'Terminados',
     rename: 'Renombrar',
     delete: 'Eliminar',
-    filesIn: 'Archivos en',
-    selectFile: 'Seleccionar archivo...',
-    uploadFile: 'Subir Archivo',
-    uploading: 'Subiendo...',
-    confirmDeleteFolder: 'Esta acción es irreversible. ¿Seguro que quieres eliminar esta carpeta y todo su contenido?',
-    confirmDeleteFile: '¿Seguro que quieres eliminar este archivo?',
-    deleteFolderTitle: 'Eliminar Carpeta',
-    deleteFileTitle: 'Eliminar Archivo',
-    confirm: 'Confirmar',
-    cancel: 'Cancelar',
-    folderCreated: 'Carpeta creada.',
-    folderUpdated: 'Carpeta actualizada.',
-    folderDeleted: 'Carpeta eliminada.',
-    fileUploaded: '¡Archivo subido con éxito!',
-    fileUpdated: 'Nombre del archivo actualizado.',
-    fileDeleted: 'Archivo eliminado.',
-    errorLoadFolders: 'Error al cargar carpetas.',
-    errorLoadFiles: 'Error al cargar archivos.',
-    errorCreateFolder: 'Error al crear la carpeta.',
-    errorUpdateFolder: 'Error al actualizar la carpeta.',
-    errorDeleteFolder: 'Error al eliminar la carpeta.',
-    errorUploadFile: 'Error al subir el archivo.',
-    errorUpdateFile: 'Error al actualizar el archivo.',
-    errorDeleteFile: 'Error al eliminar el archivo.',
-    welcomeTitle: 'Bienvenido a tu Gestor IA',
-    welcomeMessage: 'Selecciona una carpeta o explora tus herramientas.',
-    emptyFolderTitle: 'Carpeta Vacía',
-    emptyFolderMessage: 'Sube un archivo para empezar.',
-    selectFileAndFolder: 'Por favor, selecciona un archivo y una carpeta primero.',
-    noResultsTitle: 'Sin resultados',
-    noResultsMessage: 'No se encontraron archivos o carpetas con el nombre "{searchTerm}".',
-    noFoldersFound: 'No se encontraron carpetas.',
-    homeCardAnalyticsTitle: 'Analíticas',
-    homeCardAnalyticsDesc: 'Revisa el uso de tus archivos.',
-    homeCardReportsTitle: 'Reportes',
-    homeCardReportsDesc: 'Genera reportes automáticos.',
-    homeCardSettingsTitle: 'Configuración',
-    homeCardSettingsDesc: 'Ajusta tu perfil y cuenta.',
-    pending: 'Pendientes',
-    in_process: 'En Proceso',
-    done: 'Terminados',
-    advantagesTitle: 'Potencia tu Flujo de Trabajo',
-    advantagesDesc: 'Organiza, prioriza y ejecuta. Tu gestor ahora te ayuda a seguir el progreso de cada tarea, desde el inicio hasta el final.',
-    addNote: 'Añadir Nota',
-    editNote: 'Editar Nota',
+    addNote: 'Añadir nota',
+    editNote: 'Editar nota',
     noteModalTitle: 'Nota para',
-    saveNote: 'Guardar Nota',
-    notePlaceholder: 'Escribe tu nota aquí...',
-    myArea: 'Mi Área de Trabajo',
+    notePlaceholder: 'Escribe una nota breve…',
+    saveNote: 'Guardar nota',
+    welcomeTitle: 'Bienvenido a tu Hub',
+    welcomeMessage: 'Monitorea tus tareas, sube archivos y organiza tu flujo de trabajo.',
+    advantagesTitle: 'Ventajas',
+    advantagesDesc: 'Organización, colaboración y velocidad en un solo lugar.',
+    homeCardAnalyticsTitle: 'Analítica',
+    homeCardReportsTitle: 'Reportes',
+    homeCardSettingsTitle: 'Ajustes',
+    noFoldersFound: 'No se encontraron cajas.',
+    cancel: 'Cancelar',
+    confirm: 'Confirmar'
   },
   en: {
-    // ... (traducciones en inglés)
+    searchPlaceholder: 'Search...',
+    hello: 'Hello',
+    logout: 'Log out',
     myArea: 'My Workspace',
+    root: 'Home',
+    myFolders: 'My Folders',
+    goBackTo: 'Go back to',
+    newFolderPlaceholder: 'New folder...',
+    folderCreated: 'Folder created',
+    errorCreateFolder: 'Could not create folder',
+    folderUpdated: 'Folder updated',
+    errorUpdateFolder: 'Could not update folder',
+    deleteFolderTitle: 'Delete folder',
+    confirmDeleteFolder: 'Are you sure you want to delete this folder?',
+    folderDeleted: 'Folder deleted',
+    errorDeleteFolder: 'Could not delete folder',
+    errorLoadFolders: 'Could not load folders',
+    errorLoadFiles: 'Could not load files',
+    selectFileAndFolder: 'Select a file and a folder',
+    uploading: 'Uploading...',
+    uploadFile: 'Upload File',
+    fileUploaded: 'File uploaded',
+    errorUploadFile: 'Could not upload file',
+    fileUpdated: 'File updated',
+    errorUpdateFile: 'Could not update file',
+    deleteFileTitle: 'Delete file',
+    confirmDeleteFile: 'Are you sure you want to delete this file?',
+    fileDeleted: 'File deleted',
+    emptyFolderTitle: 'Empty folder',
+    emptyFolderMessage: 'There are no files in this folder yet.',
+    noResultsTitle: 'No results',
+    noResultsMessage: 'No files found matching "{searchTerm}"',
+    selectFile: 'Select a file',
+    pending: 'Pending',
+    in_process: 'In process',
+    done: 'Done',
+    rename: 'Rename',
+    delete: 'Delete',
+    addNote: 'Add note',
+    editNote: 'Edit note',
+    noteModalTitle: 'Note for',
+    notePlaceholder: 'Write a short note…',
+    saveNote: 'Save note',
+    welcomeTitle: 'Welcome to your Hub',
+    welcomeMessage: 'Track tasks, upload files and organize your workflow.',
+    advantagesTitle: 'Advantages',
+    advantagesDesc: 'Organization, collaboration and speed in one place.',
+    homeCardAnalyticsTitle: 'Analytics',
+    homeCardReportsTitle: 'Reports',
+    homeCardSettingsTitle: 'Settings',
+    noFoldersFound: 'No folders found.',
+    cancel: 'Cancel',
+    confirm: 'Confirm'
   }
 };
 // --- (Fin de Traducciones) ---
@@ -93,7 +139,10 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onClose, t }) => {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header"><h3>{title}</h3><button onClick={onClose} className="modal-close-btn" title={t('cancel')}>&times;</button></div>
+        <div className="modal-header">
+          <h3>{title}</h3>
+          <button onClick={onClose} className="modal-close-btn" title={t('cancel')}>&times;</button>
+        </div>
         <div className="modal-body"><p>{message}</p></div>
         <div className="modal-footer">
           <button onClick={onClose} className="btn btn-secondary">{t('cancel')}</button>
@@ -168,7 +217,10 @@ const Breadcrumbs = ({ path, currentFolder, onCrumbClick, t }) => {
 };
 
 // --- Componente Navbar ---
-const DashboardNavbar = ({ user, language, setLanguage, t, searchTerm, setSearchTerm, searchFilter, setSearchFilter }) => {
+const DashboardNavbar = ({
+  user, language, setLanguage, t, searchTerm, setSearchTerm, searchFilter, setSearchFilter,
+  hasUnread, onToggleNotificationPanel
+}) => {
   const navigate = useNavigate();
   const handleLogout = () => {
     authService.logout();
@@ -177,130 +229,53 @@ const DashboardNavbar = ({ user, language, setLanguage, t, searchTerm, setSearch
   return (
     <nav className="dashboard-navbar">
       <div className="navbar-logo"><a href="/dashboard">Gestor IA</a></div>
-      
-      {/* Dropdown de búsqueda */}
+
       <div className="navbar-search">
         <select className="search-filter" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)}>
-            <option value="files">Archivos</option>
-            <option value="folders">Carpetas</option>
-            <option value="users">Amigos</option>
+          <option value="files">Archivos</option>
+          <option value="folders">Carpetas</option>
+          <option value="users">Amigos</option>
         </select>
         <i className="fas fa-search"></i>
-        <input 
-            type="text" 
-            placeholder={
-                searchFilter === 'files' ? 'Buscar en archivos...' :
-                searchFilter === 'folders' ? 'Buscar carpetas...' :
-                'Buscar amigos...'
-            } 
-            value={searchTerm} 
-            onChange={(e) => setSearchTerm(e.target.value)} 
+        <input
+          type="text"
+          placeholder={
+            searchFilter === 'files' ? 'Buscar en archivos...' :
+            searchFilter === 'folders' ? 'Buscar carpetas...' :
+            'Buscar amigos...'
+          }
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
-      {/* Fin de modificación */}
 
       <div className="navbar-user">
         <LanguageSwitcher language={language} setLanguage={setLanguage} />
+
+        {/* Campanita de notificaciones (SVG inline, no depende de FA) */}
+        <div
+          className="notification-bell"
+          onClick={onToggleNotificationPanel}
+          title="Notificaciones"
+          aria-label="Notificaciones"
+          role="button"
+        >
+          <svg
+            className="bell-icon"
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            aria-hidden="true"
+          >
+            <path d="M12 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 006 14h12a1 1 0 00.707-1.707L18 11.586V8a6 6 0 00-6-6zm0 20a3 3 0 002.995-2.824L15 19h-6a3 3 0 002.824 2.995L12 22z"></path>
+          </svg>
+          {hasUnread && <div className="blinking-dot"></div>}
+        </div>
+
         <span className="welcome-text">{t('hello')}, {user ? user.nombre : 'Usuario'}</span>
         <button onClick={handleLogout} className="btn btn-primary">{t('logout')}</button>
       </div>
     </nav>
-  );
-};
-
-// --- Componente para las Tarjetas del Home ---
-const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers }) => {
-  // Lógica de contadores
-  const totalFiles = (groupedFiles.pending || []).length + (groupedFiles.in_process || []).length + (groupedFiles.done || []).length;
-  const totalPending = (groupedFiles.pending || []).length;
-  const totalDone = (groupedFiles.done || []).length;
-
-  return (
-    <div className="home-hub">
-      <h2>{t('welcomeTitle')}</h2>
-      <p className="home-subtitle">{t('welcomeMessage')}</p>
-      
-      <div className="home-card-grid">
-        <div className="home-card" onClick={() => onNavigate('analytics')}>
-          <i className="fas fa-chart-line card-icon"></i>
-          <div className="card-overlay"><h3>{totalFiles} Archivos Totales</h3></div>
-          <div className="card-footer"><h4>{t('homeCardAnalyticsTitle')}</h4></div>
-        </div>
-        <div className="home-card" onClick={() => onNavigate('reports')}>
-          <i className="fas fa-file-alt card-icon"></i>
-          <div className="card-overlay"><h3>{totalPending} Tareas Pendientes</h3></div>
-          <div className="card-footer"><h4>{t('homeCardReportsTitle')}</h4></div>
-        </div>
-        <div className="home-card" onClick={() => onNavigate('settings')}>
-          <i className="fas fa-cog card-icon"></i>
-          <div className="card-overlay"><h3>{totalDone} Tareas Terminadas</h3></div>
-          <div className="card-footer"><h4>{t('homeCardSettingsTitle')}</h4></div>
-        </div>
-      </div>
-
-      {/* Sección de Ventajas */}
-      <div className="advantages-section">
-        <div className="advantages-text">
-          <h3>{t('advantagesTitle')}</h3>
-          <p>{t('advantagesDesc')}</p>
-        </div>
-        <div className="advantages-image">
-          <img src="https://placehold.co/600x400/2C2C2C/E0E0E0?text=Workflow" alt="Workflow Advantages" />
-        </div>
-      </div>
-
-      {/* Sección "Mi Área" */}
-      <div className="mi-area-section">
-        <h3 className="file-group-header">{t('myArea')}</h3>
-        <FileListGroup
-          title={t('pending')}
-          files={groupedFiles.pending}
-          {...fileListHandlers}
-        />
-        <FileListGroup
-          title={t('in_process')}
-          files={groupedFiles.in_process}
-          {...fileListHandlers}
-        />
-        <FileListGroup
-          title={t('done')}
-          files={groupedFiles.done}
-          {...fileListHandlers}
-        />
-        {/* Mensaje si no hay archivos en absoluto */}
-        {totalFiles === 0 && (
-          <div className="empty-state-small">
-            <i className="fas fa-box-open" style={{fontSize: '2rem', marginBottom: '1rem'}}></i>
-            <p>{t('emptyFolderMessage')}</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// --- Componente para la Vista de "Apartado" ---
-const ApartadoView = ({ viewName, onGoHome, t }) => {
-  const getTitle = (name) => ({
-    'analytics': t('homeCardAnalyticsTitle'),
-    'reports': t('homeCardReportsTitle'),
-    'settings': t('homeCardSettingsTitle'),
-  })[name] || name;
-  const title = getTitle(viewName);
-
-  return (
-    <div className="apartado-view">
-      <nav className="breadcrumbs apartado-breadcrumbs">
-        <span className="crumb" onClick={onGoHome}><i className="fas fa-home"></i> {t('root')}</span>
-        <span className="separator">&gt;</span>
-        <span className="crumb">{title}</span>
-      </nav>
-      <div className="apartado-content">
-        <h2>{title}</h2>
-        <p>Aquí iría el contenido específico de la sección "<b>{title}</b>".</p>
-        <img src={`https://placehold.co/800x300/2C2C2C/E0E0E0?text=Contenido+de+${title}`} alt={title} style={{ width: '100%', borderRadius: '8px', marginTop: '1rem' }} />
-      </div>
-    </div>
   );
 };
 
@@ -386,7 +361,7 @@ const FileListGroup = ({
                     <i className="fas fa-exclamation-circle"></i>
                   </button>
                   <button className="status-btn in-process" title={file.nota ? t('editNote') : t('addNote')} onClick={() => onNoteClick(file)}>
-                    <i className="fas fa-sticky-note"></i>
+                    <i className="fas fa-pencil-alt"></i>
                   </button>
                   <button className="status-btn done" title="Marcar Terminado" onClick={() => onStatusChange(file, { status: 'done' })}>
                     <i className="fas fa-check-circle"></i>
@@ -401,7 +376,115 @@ const FileListGroup = ({
   );
 };
 
-// Componente placeholder para los resultados de Amigos
+// --- Componente tarjetas del Home (azul, rojo, blanco) ---
+const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers }) => {
+  const totalFiles = (groupedFiles.pending || []).length + (groupedFiles.in_process || []).length + (groupedFiles.done || []).length;
+  const totalPending = (groupedFiles.pending || []).length;
+  const totalDone = (groupedFiles.done || []).length;
+
+  const cardStyleBlue = {
+    backgroundColor: '#0A84FF',
+    color: '#FFFFFF',
+    border: '1px solid rgba(255,255,255,0.2)'
+  };
+  const cardStyleRed = {
+    backgroundColor: '#FF3B30',
+    color: '#FFFFFF',
+    border: '1px solid rgba(255,255,255,0.2)'
+  };
+  const cardStyleWhite = {
+    backgroundColor: '#FFFFFF',
+    color: '#121212',
+    border: '1px solid #E5E5E5'
+  };
+
+  return (
+    <div className="home-hub">
+      <h2>{t('welcomeTitle')}</h2>
+      <p className="home-subtitle">{t('welcomeMessage')}</p>
+
+      <div className="home-card-grid">
+        <div className="home-card" onClick={() => onNavigate('analytics')} style={cardStyleBlue}>
+          <i className="fas fa-chart-line card-icon"></i>
+          <div className="card-overlay"><h3>{totalFiles} Archivos Totales</h3></div>
+          <div className="card-footer"><h4>{t('homeCardAnalyticsTitle')}</h4></div>
+        </div>
+        <div className="home-card" onClick={() => onNavigate('reports')} style={cardStyleRed}>
+          <i className="fas fa-file-alt card-icon"></i>
+          <div className="card-overlay"><h3>{totalPending} Tareas Pendientes</h3></div>
+          <div className="card-footer"><h4>{t('homeCardReportsTitle')}</h4></div>
+        </div>
+        <div className="home-card" onClick={() => onNavigate('settings')} style={cardStyleWhite}>
+          <i className="fas fa-cog card-icon"></i>
+          <div className="card-overlay"><h3>{totalDone} Tareas Terminadas</h3></div>
+          <div className="card-footer"><h4>{t('homeCardSettingsTitle')}</h4></div>
+        </div>
+      </div>
+
+      <div className="advantages-section">
+        <div className="advantages-text">
+          <h3>{t('advantagesTitle')}</h3>
+          <p>{t('advantagesDesc')}</p>
+        </div>
+        <div className="advantages-image">
+          <img src="https://placehold.co/600x400/2C2C2C/E0E0E0?text=Workflow" alt="Workflow Advantages" />
+        </div>
+      </div>
+
+      <div className="mi-area-section">
+        <h3 className="file-group-header">{t('myArea')}</h3>
+        <FileListGroup
+          title={t('pending')}
+          files={groupedFiles.pending}
+          {...fileListHandlers}
+        />
+        <FileListGroup
+          title={t('in_process')}
+          files={groupedFiles.in_process}
+          {...fileListHandlers}
+        />
+        <FileListGroup
+          title={t('done')}
+          files={groupedFiles.done}
+          {...fileListHandlers}
+        />
+        {(totalFiles === 0) && (
+          <div className="empty-state-small">
+            <i className="fas fa-box-open" style={{fontSize: '2rem', marginBottom: '1rem'}}></i>
+            <p>{t('emptyFolderMessage')}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// --- Componente para la Vista de "Apartado" ---
+const ApartadoView = ({ viewName, onGoHome, t }) => {
+  const getTitle = (name) => ({
+    'analytics': t('homeCardAnalyticsTitle'),
+    'reports': t('homeCardReportsTitle'),
+    'settings': t('homeCardSettingsTitle'),
+  })[name] || name;
+  const title = getTitle(viewName);
+
+  return (
+    <div className="apartado-view">
+      <nav className="breadcrumbs apartado-breadcrumbs">
+        <span className="crumb" onClick={onGoHome}><i className="fas fa-home"></i> {t('root')}</span>
+        <span className="separator">&gt;</span>
+        <span className="crumb">{title}</span>
+      </nav>
+      <div className="apartado-content">
+        <h2>{title}</h2>
+        <p>Aquí iría el contenido específico de la sección "<b>{title}</b>".</p>
+        <img src={`https://placehold.co/800x300/2C2C2C/E0E0E0?text=Contenido+de+${title}`} alt={title} style={{ width: '100%', borderRadius: '8px', marginTop: '1rem' }} />
+      </div>
+    </div>
+  );
+};
+
+// --- Componente placeholder para los resultados de Amigos ---
 const UserSearchResults = ({ query, results, onOpenChat }) => {
   return (
     <div className="user-search-results">
@@ -426,6 +509,40 @@ const UserSearchResults = ({ query, results, onOpenChat }) => {
           </div>
         )}
       </ul>
+    </div>
+  );
+};
+
+// --- Componente para el Panel de Notificaciones ---
+const NotificationPanel = ({ notifications, onOpenChat, onClearNotifications }) => {
+  return (
+    <div className="notification-panel">
+      <div className="notification-header">
+        <h3>Notificaciones</h3>
+        <button onClick={onClearNotifications}>Limpiar</button>
+      </div>
+      <div className="notification-list">
+        {notifications.length === 0 ? (
+          <div className="notification-empty">No tienes notificaciones nuevas.</div>
+        ) : (
+          notifications.map((noti, index) => (
+            <div
+              className="notification-item"
+              key={index}
+              onClick={() => onOpenChat(noti.sender)}
+            >
+              <img src={noti.sender.foto_perfil_url} alt={noti.sender.nombre} />
+              <div className="notification-content">
+                <strong>{noti.sender.nombre}</strong>
+                <span>{noti.message.contenido}</span>
+                <span className="notification-count">
+                  {noti.count > 1 ? `(${noti.count} nuevos)` : 'Nuevo mensaje'}
+                </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 };
@@ -455,6 +572,11 @@ const DashboardPage = () => {
   const [modalState, setModalState] = useState({ isOpen: false });
   const [mainView, setMainView] = useState('home');
   const [noteModalFile, setNoteModalFile] = useState(null);
+
+  // --- NOTIFICACIONES ---
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [hasUnread, setHasUnread] = useState(false);
 
   // --- CONTEXTO ---
   const { user } = useContext(UserContext);
@@ -501,7 +623,6 @@ const DashboardPage = () => {
       showMessage(t('errorLoadFiles'), 'error');
     }
   };
-  // -----------------------------------------------------------------
 
   // --- EFECTOS ---
   useEffect(() => {
@@ -539,20 +660,17 @@ const DashboardPage = () => {
     }
   }, [searchTerm, searchFilter]);
 
-  // Socket.io listeners para tiempo real
+  // Listeners de tiempo real (folders/files/notifications)
   useEffect(() => {
     if (user && user.id) {
-      console.log(`Socket.io: Uniéndose al room del usuario ${user.id}`);
       socket.emit('join_room', user.id);
 
       const folderListener = () => {
-        console.log('Socket.io: Recibido evento [folders_updated], recargando carpetas...');
         loadFolders(currentFolder ? currentFolder.id : null);
       };
       socket.on('folders_updated', folderListener);
 
       const fileListener = () => {
-        console.log('Socket.io: Recibido evento [files_updated], recargando archivos...');
         if (currentFolder) {
           loadFiles(currentFolder.id);
         } else {
@@ -561,13 +679,36 @@ const DashboardPage = () => {
       };
       socket.on('files_updated', fileListener);
 
+      const notificationListener = (data) => {
+        // data: { sender_id, sender_nombre?, sender_foto?, contenido, ... }
+        setHasUnread(true);
+        setNotifications(prevNotis => {
+          const existingNotiIndex = prevNotis.findIndex(n => n.sender.id === data.sender_id);
+          const senderInfo = {
+            id: data.sender_id,
+            nombre: data.sender_nombre || `Usuario ${data.sender_id}`,
+            foto_perfil_url: data.sender_foto || 'https://placehold.co/50x50/E0E0E0/121212?text=?'
+          };
+          if (existingNotiIndex > -1) {
+            const copy = [...prevNotis];
+            const existingNoti = { ...copy[existingNotiIndex] };
+            existingNoti.count += 1;
+            existingNoti.message = data;
+            copy.splice(existingNotiIndex, 1);
+            return [existingNoti, ...copy];
+          }
+          return [{ sender: senderInfo, message: data, count: 1 }, ...prevNotis];
+        });
+      };
+      socket.on('new_notification', notificationListener);
+
       return () => {
-        console.log("Socket.io: Limpiando listeners de dashboard...");
         socket.off('folders_updated', folderListener);
         socket.off('files_updated', fileListener);
+        socket.off('new_notification', notificationListener);
       };
     }
-  }, [user, currentFolder]); // Depende de user y currentFolder
+  }, [user, currentFolder]);
 
   const showMessage = (text, type = 'success') => {
     setMessage({ text, type });
@@ -608,6 +749,19 @@ const DashboardPage = () => {
     if (!openChats.find(chat => chat.id === userToChat.id)) {
       setOpenChats(prevChats => [userToChat, ...prevChats.slice(0, 2)]);
     }
+    markNotificationsAsRead(userToChat.id);
+  };
+
+  // --- NOTIFICACIONES: abrir/cerrar ---
+  const toggleNotificationPanel = () => {
+    setIsNotificationOpen(prev => !prev);
+    if (hasUnread) setHasUnread(false);
+  };
+
+  // --- NOTIFICACIONES: marcar leídas por remitente ---
+  const markNotificationsAsRead = (senderId) => {
+    setNotifications(prev => prev.filter(n => n.sender.id !== senderId));
+    setHasUnread(false);
   };
 
   // --- MANEJADORES DE ACCIONES (CRUD) ---
@@ -623,7 +777,6 @@ const DashboardPage = () => {
     } catch (error) { showMessage(t('errorCreateFolder'), 'error'); }
   };
 
-  // Renombrar Carpeta INLINE
   const handleStartFolderRename = (folder) => {
     setEditingFolder(folder);
     setNewFolderRename(folder.nombre);
@@ -673,7 +826,8 @@ const DashboardPage = () => {
     try {
       await fileService.uploadFile(currentFolder.id, selectedFile);
       setSelectedFile(null);
-      document.getElementById('fileInput').value = '';
+      const input = document.getElementById('fileInput');
+      if (input) input.value = '';
       loadFiles(currentFolder.id);
       showMessage(t('fileUploaded'));
     } catch (error) {
@@ -785,7 +939,6 @@ const DashboardPage = () => {
     return { pending, in_process, done };
   }, [allFiles, searchTerm, searchFilter]);
 
-
   const fileListHandlers = {
     onStatusChange: handleUpdateFileDetails,
     onNoteClick: setNoteModalFile,
@@ -809,7 +962,7 @@ const DashboardPage = () => {
           {message.text}
         </div>
       )}
-      
+
       <ConfirmModal
         isOpen={modalState.isOpen}
         title={modalState.title}
@@ -828,44 +981,55 @@ const DashboardPage = () => {
         />
       )}
 
-      <DashboardNavbar 
-        user={user} 
-        language={language} 
-        setLanguage={setLanguage} 
+      <DashboardNavbar
+        user={user}
+        language={language}
+        setLanguage={setLanguage}
         t={t}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
-        searchFilter={searchFilter} 
-        setSearchFilter={setSearchFilter} 
+        searchFilter={searchFilter}
+        setSearchFilter={setSearchFilter}
+        hasUnread={hasUnread}
+        onToggleNotificationPanel={toggleNotificationPanel}
       />
-      
+
       <div className="dashboard-body">
-      
         {/* Columna 1: Sidebar de Carpetas */}
         <div className="sidebar">
           <h3>{t('myFolders')}</h3>
-        
-          {path.length > 0 && <button onClick={handleGoBack} className="back-button"><i className="fas fa-arrow-left"></i> {t('goBackTo')} {path[path.length - 1]?.nombre || t('root')}</button>}
+
+          {path.length > 0 && (
+            <button onClick={handleGoBack} className="back-button">
+              <i className="fas fa-arrow-left"></i> {t('goBackTo')} {path[path.length - 1]?.nombre || t('root')}
+            </button>
+          )}
 
           <form onSubmit={handleCreateFolder} className="folder-form">
-            <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder={t('newFolderPlaceholder')}/>
+            <input
+              type="text"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder={t('newFolderPlaceholder')}
+            />
             <button type="submit" disabled={!newFolderName.trim()}>
               <i className="fas fa-plus"></i>
             </button>
           </form>
-        
+
           <ul className="folder-list">
             {filteredFolders.map((folder, index) => (
-              <li key={folder.id} 
+              <li
+                key={folder.id}
                 className={currentFolder?.id === folder.id ? 'active' : ''}
                 style={{ animationDelay: `${index * 30}ms` }}
               >
                 {editingFolder?.id === folder.id ? (
                   <form onSubmit={handleUpdateFolder} className="edit-form-folder">
-                    <input 
-                      type="text" 
-                      value={newFolderRename} 
-                      onChange={(e) => setNewFolderRename(e.target.value)} 
+                    <input
+                      type="text"
+                      value={newFolderRename}
+                      onChange={(e) => setNewFolderRename(e.target.value)}
                       autoFocus
                     />
                     <button type="submit" title={t('rename')}><i className="fas fa-check"></i></button>
@@ -889,15 +1053,14 @@ const DashboardPage = () => {
             )}
           </ul>
         </div>
-      
+
         {/* Columna 2: Contenido Principal (Archivos) */}
         <div className="main-content">
-          
           {(searchFilter === 'users' && searchTerm) ? (
-            <UserSearchResults 
-              query={searchTerm} 
-              results={userSearchResults} 
-              onOpenChat={handleOpenChat} 
+            <UserSearchResults
+              query={searchTerm}
+              results={userSearchResults}
+              onOpenChat={handleOpenChat}
             />
           ) : (
             <>
@@ -919,27 +1082,11 @@ const DashboardPage = () => {
                       {uploading ? t('uploading') : t('uploadFile')}
                     </button>
                   </form>
-                
-                  {/* Renderizado por grupos de estado (de la carpeta) */}
-                  <FileListGroup
-                    title={t('pending')}
-                    files={groupedFiles.pending}
-                    {...fileListHandlers}
-                  />
-                  
-                  <FileListGroup
-                    title={t('in_process')}
-                    files={groupedFiles.in_process}
-                    {...fileListHandlers}
-                  />
-                  
-                  <FileListGroup
-                    title={t('done')}
-                    files={groupedFiles.done}
-                    {...fileListHandlers}
-                  />
-                  
-                  {/* Estados vacíos */}
+
+                  <FileListGroup title={t('pending')} files={groupedFiles.pending} {...fileListHandlers} />
+                  <FileListGroup title={t('in_process')} files={groupedFiles.in_process} {...fileListHandlers} />
+                  <FileListGroup title={t('done')} files={groupedFiles.done} {...fileListHandlers} />
+
                   {files.length === 0 && !uploading && !searchTerm && (
                     <div className="empty-state">
                       <i className="fas fa-box-open"></i>
@@ -959,17 +1106,17 @@ const DashboardPage = () => {
                 // --- B. VISTA DE INICIO (Home Hub) ---
                 <>
                   {mainView === 'home' ? (
-                    <HomePageCards 
-                      onNavigate={setMainView} 
+                    <HomePageCards
+                      onNavigate={setMainView}
                       t={t}
-                      groupedFiles={globalGroupedFiles} 
-                      fileListHandlers={fileListHandlers} 
+                      groupedFiles={globalGroupedFiles}
+                      fileListHandlers={fileListHandlers}
                     />
                   ) : (
-                    <ApartadoView 
-                      viewName={mainView} 
-                      onGoHome={() => setMainView('home')} 
-                      t={t} 
+                    <ApartadoView
+                      viewName={mainView}
+                      onGoHome={() => setMainView('home')}
+                      t={t}
                     />
                   )}
                 </>
@@ -977,10 +1124,10 @@ const DashboardPage = () => {
             </>
           )}
         </div>
-        
+
         {/* Columna 3: Chat de IA */}
         <div className="chat-sidebar">
-          <ChatComponent 
+          <ChatComponent
             onReloadFolders={() => loadFolders(currentFolder ? currentFolder.id : null)}
             onReloadFiles={() => {
               if (currentFolder) {
@@ -991,20 +1138,27 @@ const DashboardPage = () => {
             }}
           />
         </div>
-
       </div>
 
-      {/* Contenedor para las ventanas de chat de Amigos */}
+      {/* Panel de Notificaciones */}
+      {isNotificationOpen && (
+        <NotificationPanel
+          notifications={notifications}
+          onOpenChat={handleOpenChat}
+          onClearNotifications={() => setNotifications([])}
+        />
+      )}
+
+      {/* Ventanas de chat de Amigos */}
       <div className="chat-dock-container">
         {openChats.map(chatUser => (
           <UserChatWindow
             key={chatUser.id}
-            friend={chatUser} // Pasa el amigo con el que chatear
+            friend={chatUser}
             onClose={() => setOpenChats(chats => chats.filter(c => c.id !== chatUser.id))}
           />
         ))}
       </div>
-
     </div>
   );
 };
