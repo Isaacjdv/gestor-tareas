@@ -15,11 +15,22 @@ import '../styles/DashboardPage.css';
 import ChatComponent from '../components/ChatComponent';
 import UserChatWindow from '../components/UserChatWindow';
 
-// URL de tu backend
-const RENDER_BACKEND_URL = import.meta.env?.VITE_API_URL || 'https://gestor-tareas-backend-11hi.onrender.com';
+/* ====================== URL BACKEND UNIVERSAL ====================== */
+function getApiBase() {
+  const viteUrl =
+    (typeof import.meta !== 'undefined' &&
+      import.meta &&
+      import.meta.env &&
+      import.meta.env.VITE_API_URL) ||
+    null;
+  const craUrl = typeof process !== 'undefined' ? process.env?.REACT_APP_API_URL : null;
+  const windowUrl = typeof window !== 'undefined' ? window.__API_URL__ : null;
+  return viteUrl || craUrl || windowUrl || 'https://gestor-tareas-backend-11hi.onrender.com';
+}
+const RENDER_BACKEND_URL = getApiBase();
 const socket = io(RENDER_BACKEND_URL);
 
-/* ------------------------ TRADUCCIONES ------------------------ */
+/* ====================== TRADUCCIONES ====================== */
 const translations = {
   es: {
     searchPlaceholder: 'Buscar...',
@@ -33,7 +44,7 @@ const translations = {
     noteModalTitle: 'Nota para',
     notePlaceholder: 'Escribe una nota o instrucciones...',
     saveNote: 'Guardar nota',
-    welcomeTitle: 'Bienvenido a tu Hub',
+    welcomeTitle: 'Bienvenido a tu Espacio',
     welcomeMessage: 'Monitorea tus tareas, sube archivos y organiza tu flujo de trabajo.',
     homeCardAnalyticsTitle: 'Analítica',
     homeCardReportsTitle: 'Reportes',
@@ -72,7 +83,6 @@ const translations = {
     addNote: 'Agregar nota',
     editNote: 'Editar nota',
     noFoldersFound: 'No se encontraron carpetas.',
-    // Navbar filtros
     search_files: 'Archivos',
     search_folders: 'Carpetas',
     search_users: 'Amigos',
@@ -89,7 +99,7 @@ const translations = {
     noteModalTitle: 'Note for',
     notePlaceholder: 'Write a note or instructions...',
     saveNote: 'Save note',
-    welcomeTitle: 'Welcome to your Hub',
+    welcomeTitle: 'Welcome to your Home',
     welcomeMessage: 'Monitor tasks, upload files and organize your workflow.',
     homeCardAnalyticsTitle: 'Analytics',
     homeCardReportsTitle: 'Reports',
@@ -133,10 +143,57 @@ const translations = {
     search_users: 'Friends',
   },
 };
-/* ---------------------- FIN TRADUCCIONES ---------------------- */
 
+/* ====================== PERSISTENCIA LOCAL NOTIS ====================== */
+const LS_NOTIS_KEY = (uid) => `gestoria:notifications:${uid}`;
 
-/* -------------------------- MODALES --------------------------- */
+function loadLocalNotifications(userId) {
+  if (!userId || typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(LS_NOTIS_KEY(userId));
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalNotifications(userId, notifications) {
+  if (!userId || typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(LS_NOTIS_KEY(userId), JSON.stringify(notifications));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Merge por remitente: suma counts y conserva el último mensaje */
+function mergeBySender(existing, incoming) {
+  const map = new Map();
+  const put = (n) => {
+    const id = n?.sender?.id;
+    if (!id) return;
+    if (!map.has(id)) {
+      map.set(id, { ...n, count: n.count ?? 1 });
+    } else {
+      const cur = map.get(id);
+      map.set(id, {
+        ...cur,
+        count: (cur.count ?? 0) + (n.count ?? 1),
+        message: n.message || cur.message,
+        sender: n.sender || cur.sender,
+      });
+    }
+  };
+  existing.forEach(put);
+  incoming.forEach(put);
+  return Array.from(map.values()).sort((a, b) => {
+    const ta = new Date(a.message?.created_at || 0).getTime();
+    const tb = new Date(b.message?.created_at || 0).getTime();
+    return tb - ta;
+  });
+}
+
+/* =========================== MODALES =========================== */
 const ConfirmModal = ({ isOpen, title, message, onConfirm, onClose, t }) => {
   if (!isOpen) return null;
   return (
@@ -184,10 +241,8 @@ const NoteModal = ({ file, onClose, onSave, t }) => {
     </div>
   );
 };
-/* ------------------------ FIN MODALES ------------------------- */
 
-
-/* ----------------------- AUX COMPONENTES ---------------------- */
+/* ===================== AUX COMPONENTES ===================== */
 const LanguageSwitcher = ({ language, setLanguage }) => {
   const toggleLanguage = () => setLanguage((lang) => (lang === 'es' ? 'en' : 'es'));
   return (
@@ -262,7 +317,6 @@ const DashboardNavbar = ({
   );
 };
 
-// Tarjetas (Home)
 const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers }) => {
   const totalFiles = (groupedFiles.pending || []).length + (groupedFiles.in_process || []).length + (groupedFiles.done || []).length;
   const totalPending = (groupedFiles.pending || []).length;
@@ -284,7 +338,7 @@ const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers }) => {
           <div className="card-overlay"><h3>{totalPending} Tareas Pendientes</h3></div>
           <div className="card-footer"><h4>{t('homeCardReportsTitle')}</h4></div>
         </div>
-        <div className="home-card" onClick={() => onNavigate('settings')} style={{ backgroundColor: '#FFFFFF', color: '#222' }}>
+        <div className="home-card" onClick={() => onNavigate('settings')} style={{ backgroundColor: '#60d382ff', color: '#222' }}>
           <i className="fas fa-cog card-icon"></i>
           <div className="card-overlay"><h3>{totalDone} Tareas Terminadas</h3></div>
           <div className="card-footer"><h4>{t('homeCardSettingsTitle')}</h4></div>
@@ -341,7 +395,6 @@ const ApartadoView = ({ viewName, onGoHome, t }) => {
   );
 };
 
-// Iconos por extensión
 const getFileIcon = (fileName) => {
   if (!fileName) return 'fas fa-file';
   const extension = fileName.split('.').pop().toLowerCase();
@@ -359,7 +412,6 @@ const getFileIcon = (fileName) => {
   }
 };
 
-// Lista de archivos por estado
 const FileListGroup = ({
   title, files, onStatusChange, onNoteClick, editingFile, onUpdateFile, onSetEditingFile, onDeleteFile, t
 }) => {
@@ -414,7 +466,7 @@ const FileListGroup = ({
                   <button className="status-btn pending" title="Poner Pendiente" onClick={() => onStatusChange(file, { status: 'pending', nota: '' })}>
                     <i className="fas fa-exclamation-circle"></i>
                   </button>
-                  <button className="status-btn in-process" title={file.nota ? t('editNote') : t('addNote')} onClick={() => onNoteClick(file)}>
+                  <button className="status-btn in-process" title={file.nota ? 'Editar nota' : 'Agregar nota'} onClick={() => onNoteClick(file)}>
                     <i className="fas fa-pencil-alt"></i>
                   </button>
                   <button className="status-btn done" title="Marcar Terminado" onClick={() => onStatusChange(file, { status: 'done' })}>
@@ -430,7 +482,6 @@ const FileListGroup = ({
   );
 };
 
-// Resultados de búsqueda de amigos
 const UserSearchResults = ({ query, results, onOpenChat }) => {
   return (
     <div className="user-search-results">
@@ -459,7 +510,6 @@ const UserSearchResults = ({ query, results, onOpenChat }) => {
   );
 };
 
-// Panel de notificaciones (lista)
 const NotificationPanel = ({ notifications, onOpenChat, onClearNotifications }) => {
   return (
     <div className="notification-panel">
@@ -488,12 +538,9 @@ const NotificationPanel = ({ notifications, onOpenChat, onClearNotifications }) 
     </div>
   );
 };
-/* -------------------- FIN AUX COMPONENTES --------------------- */
 
-
-/* ----------------------- DASHBOARD PAGE ----------------------- */
+/* ======================== DASHBOARD PAGE ======================== */
 const DashboardPage = () => {
-  // ESTADOS
   const navigate = useNavigate();
   const [folders, setFolders] = useState([]);
   const [files, setFiles] = useState([]);
@@ -509,7 +556,7 @@ const DashboardPage = () => {
   const [path, setPath] = useState([]);
   const [language, setLanguage] = useState('es');
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchFilter, setSearchFilter] = useState('files');
+  const [searchFilter, setSearchFilter] = useState('users'); // CAMBIO
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [openChats, setOpenChats] = useState([]);
   const [modalState, setModalState] = useState({ isOpen: false });
@@ -531,7 +578,123 @@ const DashboardPage = () => {
     return text;
   };
 
-  /* ------------------------- CARGAS -------------------------- */
+  /* -------------------- PERSISTENCIA DE NOTIFICACIONES -------------------- */
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // 1) Cargar locales inmediatamente
+    const local = loadLocalNotifications(user.id);
+    setNotifications(local);
+    setHasUnread(local.length > 0);
+
+    // 2) Luego pedir al backend y MERGE con las locales
+    (async () => {
+      try {
+        const summary = await notificationService.getUnreadSummary(user.id);
+        const fromBackend = (summary || []).map(row => ({
+          sender: {
+            id: row.sender_id,
+            nombre: row.nombre || `Usuario ${row.sender_id}`,
+            foto_perfil_url: row.foto_perfil_url || 'https://placehold.co/50x50/E0E0E0/121212?text=?'
+          },
+          message: { contenido: row.last_message, created_at: row.last_created_at },
+          count: row.unread_count
+        }));
+
+        const merged = mergeBySender(local, fromBackend);
+        setNotifications(merged);
+        setHasUnread(merged.length > 0);
+        saveLocalNotifications(user.id, merged);
+      } catch (e) {
+        console.error('Error cargando notificaciones persistidas:', e);
+        // Si falla el backend, mantenemos las locales
+        saveLocalNotifications(user.id, local);
+      }
+    })();
+  }, [user?.id]);
+
+  /* ------------------------------ EFECTOS ----------------------------- */
+  useEffect(() => {
+    if (user) {
+      const folderId = currentFolder ? currentFolder.id : null;
+      loadFolders(folderId);
+      if (folderId) {
+        setAllFiles([]);
+        loadFiles(folderId);
+      } else {
+        setFiles([]);
+        loadAllUserFiles();
+      }
+    }
+  }, [currentFolder, user]);
+
+  useEffect(() => {
+    if (searchFilter === 'users' && searchTerm.trim() !== '') {
+      const searchUsers = async () => {
+        try {
+          const response = await userService.search(searchTerm);
+          setUserSearchResults(response.data);
+        } catch (error) {
+          console.error('Error buscando usuarios:', error);
+          setUserSearchResults([]);
+        }
+      };
+      const timer = setTimeout(() => { searchUsers(); }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      setUserSearchResults([]);
+    }
+  }, [searchTerm, searchFilter]);
+
+  // Socket.io
+  useEffect(() => {
+    if (user?.id) {
+      socket.emit('join_room', user.id);
+
+      const folderListener = () => {
+        loadFolders(currentFolder ? currentFolder.id : null);
+      };
+      socket.on('folders_updated', folderListener);
+
+      const fileListener = () => {
+        if (currentFolder) loadFiles(currentFolder.id);
+        else loadAllUserFiles();
+      };
+      socket.on('files_updated', fileListener);
+
+      const notificationListener = (data) => {
+        const senderId = data.sender?.id ?? data.sender_id;
+        const nombre = data.sender?.nombre || `Usuario ${senderId}`;
+        const foto = data.sender?.foto_perfil_url || 'https://placehold.co/50x50/E0E0E0/121212?text=?';
+        const lastMessage = {
+          contenido: data.message?.contenido ?? data.contenido ?? '',
+          created_at: data.message?.created_at ?? new Date().toISOString()
+        };
+
+        setNotifications(prevNotis => {
+          const incoming = [{
+            sender: { id: senderId, nombre, foto_perfil_url: foto },
+            message: lastMessage,
+            count: 1
+          }];
+          const merged = mergeBySender(prevNotis, incoming);
+          // Guardar inmediatamente en localStorage
+          saveLocalNotifications(user.id, merged);
+          return merged;
+        });
+        setHasUnread(true);
+      };
+      socket.on('new_notification', notificationListener);
+
+      return () => {
+        socket.off('folders_updated', folderListener);
+        socket.off('files_updated', fileListener);
+        socket.off('new_notification', notificationListener);
+      };
+    }
+  }, [user, currentFolder]);
+
+  /* ------------------------------ LOADERS ----------------------------- */
   const loadFolders = async (parentId) => {
     try {
       const response = await folderService.getFolders(parentId);
@@ -562,126 +725,12 @@ const DashboardPage = () => {
     }
   };
 
-  // Notificaciones persistentes: al iniciar o cambiar de usuario
-  useEffect(() => {
-    const loadPersistedNotifications = async () => {
-      if (!user?.id) return;
-      try {
-        const summary = await notificationService.getUnreadSummary(user.id);
-        const mapped = summary.map(row => ({
-          sender: {
-            id: row.sender_id,
-            nombre: row.nombre || `Usuario ${row.sender_id}`,
-            foto_perfil_url: row.foto_perfil_url || 'https://placehold.co/50x50/E0E0E0/121212?text=?'
-          },
-          message: { contenido: row.last_message, created_at: row.last_created_at },
-          count: row.unread_count
-        }));
-        setNotifications(mapped);
-        setHasUnread(mapped.length > 0);
-      } catch (e) {
-        console.error('Error cargando notificaciones persistidas:', e);
-      }
-    };
-    loadPersistedNotifications();
-  }, [user]);
-
-  /* ------------------------- EFECTOS ------------------------- */
-  // Efecto de navegación de carpetas / archivos
-  useEffect(() => {
-    if (user) {
-      const folderId = currentFolder ? currentFolder.id : null;
-      loadFolders(folderId);
-      if (folderId) {
-        setAllFiles([]);
-        loadFiles(folderId);
-      } else {
-        setFiles([]);
-        loadAllUserFiles();
-      }
-    }
-  }, [currentFolder, user]);
-
-  // Búsqueda de amigos
-  useEffect(() => {
-    if (searchFilter === 'users' && searchTerm.trim() !== '') {
-      const searchUsers = async () => {
-        try {
-          const response = await userService.search(searchTerm);
-          setUserSearchResults(response.data);
-        } catch (error) {
-          console.error('Error buscando usuarios:', error);
-          setUserSearchResults([]);
-        }
-      };
-      const timer = setTimeout(() => { searchUsers(); }, 300);
-      return () => clearTimeout(timer);
-    } else {
-      setUserSearchResults([]);
-    }
-  }, [searchTerm, searchFilter]);
-
-  // Socket.io: rooms, actualizaciones y notificaciones en tiempo real
-  useEffect(() => {
-    if (user?.id) {
-      socket.emit('join_room', user.id);
-
-      const folderListener = () => {
-        loadFolders(currentFolder ? currentFolder.id : null);
-      };
-      socket.on('folders_updated', folderListener);
-
-      const fileListener = () => {
-        if (currentFolder) loadFiles(currentFolder.id);
-        else loadAllUserFiles();
-      };
-      socket.on('files_updated', fileListener);
-
-      const notificationListener = (data) => {
-        // data.sender esperado: { id, nombre, foto_perfil_url }
-        setHasUnread(true);
-        setNotifications(prevNotis => {
-          const senderId = data.sender?.id ?? data.sender_id;
-          const nombre = data.sender?.nombre || `Usuario ${senderId}`;
-          const foto = data.sender?.foto_perfil_url || 'https://placehold.co/50x50/E0E0E0/121212?text=?';
-          const idx = prevNotis.findIndex(n => n.sender.id === senderId);
-          const lastMessage = {
-            contenido: data.message?.contenido ?? data.contenido ?? '',
-            created_at: data.message?.created_at ?? null
-          };
-          if (idx > -1) {
-            const copy = [...prevNotis];
-            const updated = { ...copy[idx] };
-            updated.count = (updated.count || 0) + 1;
-            updated.message = lastMessage;
-            updated.sender = { id: senderId, nombre, foto_perfil_url: foto };
-            copy.splice(idx, 1);
-            return [updated, ...copy];
-          } else {
-            return [
-              { sender: { id: senderId, nombre, foto_perfil_url: foto }, message: lastMessage, count: 1 },
-              ...prevNotis
-            ];
-          }
-        });
-      };
-      socket.on('new_notification', notificationListener);
-
-      return () => {
-        socket.off('folders_updated', folderListener);
-        socket.off('files_updated', fileListener);
-        socket.off('new_notification', notificationListener);
-      };
-    }
-  }, [user, currentFolder]);
-
-  /* ------------------------- HELPERS ------------------------- */
+  /* ------------------------------ HELPERS ----------------------------- */
   const showMessage = (text, type = 'success') => {
     setMessage({ text, type });
     setTimeout(() => setMessage(null), 3000);
   };
 
-  // Navegación de carpetas
   const handleFolderClick = (folder) => {
     setPath(prevPath => [...prevPath.filter(p => p), currentFolder].filter(Boolean));
     setCurrentFolder(folder);
@@ -710,7 +759,6 @@ const DashboardPage = () => {
     }
   };
 
-  // Abrir chat con amigo + marcar notificaciones como leídas (persistente)
   const handleOpenChat = async (userToChat) => {
     if (!openChats.find(chat => chat.id === userToChat.id)) {
       setOpenChats(prevChats => [userToChat, ...prevChats.slice(0, 2)]);
@@ -718,31 +766,27 @@ const DashboardPage = () => {
     try {
       if (user?.id) await notificationService.markFromSender(user.id, userToChat.id);
     } catch (e) { /* noop */ }
-    setNotifications(prev => prev.filter(n => n.sender.id !== userToChat.id));
-    setHasUnread(prev => {
-      const remaining = notifications.filter(n => n.sender.id !== userToChat.id).length;
-      return remaining > 0;
+    setNotifications(prev => {
+      const filtered = prev.filter(n => n.sender.id !== userToChat.id);
+      saveLocalNotifications(user.id, filtered);
+      setHasUnread(filtered.length > 0);
+      return filtered;
     });
   };
 
-  // Notificaciones: abrir/cerrar panel
   const toggleNotificationPanel = () => {
     setIsNotificationOpen(prev => !prev);
-    if (hasUnread && !isNotificationOpen) {
-      // Abrir panel no marca por sí solo; persistimos solo con acciones explícitas
-    }
   };
 
-  // Marcar todas como leídas (botón "Limpiar")
   const handleClearNotifications = async () => {
     try {
       if (user?.id) await notificationService.markAllRead(user.id);
     } catch (e) { /* noop */ }
+    saveLocalNotifications(user?.id, []);
     setNotifications([]);
     setHasUnread(false);
   };
 
-  // CRUD carpetas/archivos
   const handleCreateFolder = async (e) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
@@ -868,7 +912,7 @@ const DashboardPage = () => {
     handleUpdateFileDetails(file, { status: 'in_process', nota: noteText });
   };
 
-  /* --------------------- FILTRO / AGRUPACIÓN ------------------- */
+  /* ------------------- FILTRO Y AGRUPACIÓN ------------------- */
   const filteredFiles = useMemo(() => {
     const sourceFiles = currentFolder ? files : allFiles;
     if (searchFilter === 'users') return [];
@@ -878,8 +922,9 @@ const DashboardPage = () => {
     );
   }, [files, allFiles, searchTerm, currentFolder, searchFilter]);
 
+  // ⬇⬇ AJUSTE CLAVE: mantener carpetas visibles aunque el filtro esté en "users"
   const filteredFolders = useMemo(() => {
-    if (searchFilter === 'users') return [];
+    if (searchFilter === 'users') return folders; // antes devolvía [], causando que desaparezcan
     if (!searchTerm) return folders;
     return folders.filter((folder) =>
       folder.nombre?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -965,7 +1010,7 @@ const DashboardPage = () => {
         searchFilter={searchFilter}
         setSearchFilter={setSearchFilter}
         hasUnread={hasUnread}
-        onToggleNotificationPanel={toggleNotificationPanel}
+        onToggleNotificationPanel={() => setIsNotificationOpen(prev => !prev)}
       />
 
       <div className="dashboard-body">
@@ -1131,4 +1176,4 @@ const DashboardPage = () => {
 };
 
 export default DashboardPage;
-/* --------------------- FIN DASHBOARD PAGE --------------------- */
+  
