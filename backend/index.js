@@ -6,6 +6,8 @@ require('dotenv').config();
 
 const http = require('http');
 const { Server } = require('socket.io');
+
+// Pool PostgreSQL
 const pool = require('./config/db');
 
 // Servicios y rutas
@@ -17,9 +19,9 @@ const folderRoutes = require('./routes/folderRoutes');
 const publicChatRoutes = require('./routes/publicChatRoutes');
 const whatsappRoutes = require('./routes/whatsappRoutes');
 const userRoutes = require('./routes/userRoutes');
+const notificationRoutes = require('./routes/notificationRoutes'); // NUEVA RUTA
 
-
-// --- Inicialización de la BD (PostgreSQL) ---
+// --- Inicialización de la BD ---
 async function initializeDatabase() {
   console.log('Verificando la estructura de la base de datos (PostgreSQL)...');
   try {
@@ -80,12 +82,11 @@ async function initializeDatabase() {
         FOREIGN KEY (receiver_id) REFERENCES usuarios(id) ON DELETE CASCADE
       );
 
-      /* Nueva tabla para persistir notificaciones */
       CREATE TABLE IF NOT EXISTS notifications (
         id SERIAL PRIMARY KEY,
-        recipient_id INT NOT NULL,   -- quien recibe la notificación
-        sender_id INT NOT NULL,      -- quien la genera
-        message_id INT NOT NULL,     -- mensaje que originó la notificación
+        recipient_id INT NOT NULL,        -- quien recibe la notificación
+        sender_id INT NOT NULL,           -- quien la genera
+        message_id INT NOT NULL,          -- mensaje que originó la notificación
         type VARCHAR(50) DEFAULT 'new_message',
         is_read BOOLEAN DEFAULT false,
         created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -97,7 +98,7 @@ async function initializeDatabase() {
 
     await pool.query(createTablesQuery);
 
-    // Columna foto_perfil_url (idempotente)
+    // Columna de foto de perfil (idempotente)
     try {
       await pool.query(
         "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_perfil_url VARCHAR(255) DEFAULT 'https://placehold.co/100x100/E0E0E0/121212?text=User'"
@@ -115,7 +116,6 @@ async function initializeDatabase() {
     process.exit(1);
   }
 }
-
 
 // 1) Express
 const app = express();
@@ -137,7 +137,7 @@ app.use(express.urlencoded({ extended: false }));
 // Archivos estáticos
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Hacer disponible io en las rutas
+// Exponer io en las rutas
 app.use((req, _res, next) => {
   req.io = io;
   next();
@@ -151,41 +151,45 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/public-chat', publicChatRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/notifications', notificationRoutes); // NUEVA
 
 // Salud
-app.get('/', (_req, res) => res.send('Servidor Gestor IA operativo.'));
+app.get('/', (_req, res) => {
+  res.send('Servidor Gestor IA operativo.');
+});
 
 // 404
-app.use((_req, res) => res.status(404).json({ message: 'Ruta no encontrada' }));
-
+app.use((_req, res) => {
+  res.status(404).json({ message: 'Ruta no encontrada' });
+});
 
 // --- Socket.io (chat + notificaciones) ---
 io.on('connection', (socket) => {
-  console.log('Usuario conectado:', socket.id);
+  console.log('Un usuario se conectó:', socket.id);
 
   socket.on('join_room', (userId) => {
     if (!userId) return;
     socket.join(userId.toString());
-    console.log(`Usuario ${userId} unido a room ${userId}`);
+    console.log(`Usuario con ID: ${userId} se unió al room: ${userId}`);
   });
 
   socket.on('send_private_message', async (data) => {
-    // data esperado: { sender_id, receiver_id, contenido }
+    // data = { sender_id, receiver_id, contenido }
     try {
-      // 1) Guardar mensaje y devolver id/fecha
-      const insertMsg = `
+      // 1) Guardar mensaje
+      const insertQuery = `
         INSERT INTO mensajes (sender_id, receiver_id, contenido)
         VALUES ($1, $2, $3)
         RETURNING id, created_at
       `;
-      const msgResult = await pool.query(insertMsg, [
+      const messageResult = await pool.query(insertQuery, [
         data.sender_id,
         data.receiver_id,
         data.contenido,
       ]);
-      const newMessage = msgResult.rows[0];
+      const newMessage = messageResult.rows[0];
 
-      // Empaquetar el mensaje completo para enviar al chat en tiempo real
+      // Payload consistente (incluye id y created_at)
       const messagePayload = {
         id: newMessage.id,
         sender_id: data.sender_id,
@@ -194,31 +198,29 @@ io.on('connection', (socket) => {
         created_at: newMessage.created_at,
       };
 
-      // 2) Emitir el mensaje al receptor (ventana de chat)
+      // 2) Emitir a la ventana de chat del receptor
       io.to(data.receiver_id.toString()).emit('receive_private_message', messagePayload);
 
-      // 3) Obtener info del remitente para la notificación
+      // 3) Info del remitente para la notificación
       if (!data.sender_id) return;
       const senderQuery = await pool.query(
         'SELECT id, nombre, foto_perfil_url FROM usuarios WHERE id = $1',
         [data.sender_id]
       );
-
       if (senderQuery.rows.length === 0) return;
       const senderInfo = senderQuery.rows[0];
 
-      // 4) Guardar notificación persistente
+      // 4) Persistir notificación
       await pool.query(
         'INSERT INTO notifications (recipient_id, sender_id, message_id) VALUES ($1, $2, $3)',
         [data.receiver_id, data.sender_id, newMessage.id]
       );
 
-      // 5) Emitir notificación
+      // 5) Emitir notificación (estructura compatible)
       const notificationData = {
-        sender: senderInfo,          // Objeto: { id, nombre, foto_perfil_url }
-        message: messagePayload,     // Mensaje con id y created_at
-        // Campos planos para compatibilidad (si el front antiguo los usa)
-        sender_id: data.sender_id,
+        sender: senderInfo,          // objeto: { id, nombre, foto_perfil_url }
+        message: messagePayload,     // mensaje con id/created_at
+        sender_id: data.sender_id,   // campos planos (compatibilidad)
         receiver_id: data.receiver_id,
       };
 
@@ -233,20 +235,18 @@ io.on('connection', (socket) => {
   });
 });
 
-
 // 5) Arrancar servidor
 const PORT = process.env.PORT || 10000;
 
 (async () => {
   try {
     await initializeDatabase();
-
     server.listen(PORT, () => {
-      console.log(`🚀 Servidor Express + Socket.io escuchando en el puerto ${PORT}`);
+      console.log(`🚀 Servidor Express y Socket.io corriendo en el puerto ${PORT}`);
       schedulerService.startScheduler();
     });
   } catch (err) {
-    console.error('❌ Fallo crítico al iniciar el servidor:', err);
+    console.error('❌ Fallo crítico al iniciar el servidor Express:', err);
     process.exit(1);
   }
 })();
