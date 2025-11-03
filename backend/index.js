@@ -1,3 +1,4 @@
+// index.js
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -5,8 +6,6 @@ require('dotenv').config();
 
 const http = require('http');
 const { Server } = require('socket.io');
-
-// BD (pool)
 const pool = require('./config/db');
 
 // Servicios y rutas
@@ -80,11 +79,25 @@ async function initializeDatabase() {
         FOREIGN KEY (sender_id) REFERENCES usuarios(id) ON DELETE CASCADE,
         FOREIGN KEY (receiver_id) REFERENCES usuarios(id) ON DELETE CASCADE
       );
+
+      /* Nueva tabla para persistir notificaciones */
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        recipient_id INT NOT NULL,   -- quien recibe la notificación
+        sender_id INT NOT NULL,      -- quien la genera
+        message_id INT NOT NULL,     -- mensaje que originó la notificación
+        type VARCHAR(50) DEFAULT 'new_message',
+        is_read BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (recipient_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        FOREIGN KEY (sender_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        FOREIGN KEY (message_id) REFERENCES mensajes(id) ON DELETE CASCADE
+      );
     `;
 
     await pool.query(createTablesQuery);
 
-    // Columna foto de perfil
+    // Columna foto_perfil_url (idempotente)
     try {
       await pool.query(
         "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_perfil_url VARCHAR(255) DEFAULT 'https://placehold.co/100x100/E0E0E0/121212?text=User'"
@@ -125,7 +138,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Hacer disponible io en las rutas
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   req.io = io;
   next();
 });
@@ -140,14 +153,10 @@ app.use('/api/public-chat', publicChatRoutes);
 app.use('/api/users', userRoutes);
 
 // Salud
-app.get('/', (_req, res) => {
-  res.send('Servidor Gestor IA operativo.');
-});
+app.get('/', (_req, res) => res.send('Servidor Gestor IA operativo.'));
 
 // 404
-app.use((_req, res) => {
-  res.status(404).json({ message: 'Ruta no encontrada' });
-});
+app.use((_req, res) => res.status(404).json({ message: 'Ruta no encontrada' }));
 
 
 // --- Socket.io (chat + notificaciones) ---
@@ -161,34 +170,59 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send_private_message', async (data) => {
-    // data = { sender_id, receiver_id, contenido }
+    // data esperado: { sender_id, receiver_id, contenido }
     try {
-      const insertQuery = `
+      // 1) Guardar mensaje y devolver id/fecha
+      const insertMsg = `
         INSERT INTO mensajes (sender_id, receiver_id, contenido)
         VALUES ($1, $2, $3)
+        RETURNING id, created_at
       `;
-      await pool.query(insertQuery, [data.sender_id, data.receiver_id, data.contenido]);
+      const msgResult = await pool.query(insertMsg, [
+        data.sender_id,
+        data.receiver_id,
+        data.contenido,
+      ]);
+      const newMessage = msgResult.rows[0];
 
-      // Entregar mensaje en tiempo real al receptor
-      io.to(data.receiver_id.toString()).emit('receive_private_message', data);
+      // Empaquetar el mensaje completo para enviar al chat en tiempo real
+      const messagePayload = {
+        id: newMessage.id,
+        sender_id: data.sender_id,
+        receiver_id: data.receiver_id,
+        contenido: data.contenido,
+        created_at: newMessage.created_at,
+      };
 
-      // Notificación para la campanita (con info del sender)
+      // 2) Emitir el mensaje al receptor (ventana de chat)
+      io.to(data.receiver_id.toString()).emit('receive_private_message', messagePayload);
+
+      // 3) Obtener info del remitente para la notificación
       if (!data.sender_id) return;
-
       const senderQuery = await pool.query(
         'SELECT id, nombre, foto_perfil_url FROM usuarios WHERE id = $1',
         [data.sender_id]
       );
 
-      if (senderQuery.rows.length > 0) {
-        const senderInfo = senderQuery.rows[0];
-        const notificationData = {
-          sender: senderInfo, // { id, nombre, foto_perfil_url }
-          message: data,      // { sender_id, receiver_id, contenido, ... }
-        };
+      if (senderQuery.rows.length === 0) return;
+      const senderInfo = senderQuery.rows[0];
 
-        io.to(data.receiver_id.toString()).emit('new_notification', notificationData);
-      }
+      // 4) Guardar notificación persistente
+      await pool.query(
+        'INSERT INTO notifications (recipient_id, sender_id, message_id) VALUES ($1, $2, $3)',
+        [data.receiver_id, data.sender_id, newMessage.id]
+      );
+
+      // 5) Emitir notificación
+      const notificationData = {
+        sender: senderInfo,          // Objeto: { id, nombre, foto_perfil_url }
+        message: messagePayload,     // Mensaje con id y created_at
+        // Campos planos para compatibilidad (si el front antiguo los usa)
+        sender_id: data.sender_id,
+        receiver_id: data.receiver_id,
+      };
+
+      io.to(data.receiver_id.toString()).emit('new_notification', notificationData);
     } catch (dbError) {
       console.error('Error al guardar/notificar mensaje en la BD:', dbError);
     }
@@ -200,7 +234,7 @@ io.on('connection', (socket) => {
 });
 
 
-// 5) Iniciar servidor
+// 5) Arrancar servidor
 const PORT = process.env.PORT || 10000;
 
 (async () => {
