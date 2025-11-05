@@ -1,6 +1,29 @@
+// backend/services/aiService.js
 const axios = require('axios');
+
 const AI21_API_KEY = process.env.AI21_API_KEY;
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
+
+/* ----------------------------- Helpers ----------------------------- */
+
+/** Extrae el primer objeto JSON de un string (quita cercas de código si vienen) */
+function extractFirstJson(str = '') {
+  let s = String(str || '').trim();
+  if (s.startsWith('```')) {
+    // Quita cercas de código y lenguaje opcional
+    s = s.replace(/^```[a-zA-Z-]*\n?/, '').replace(/```$/, '').trim();
+  }
+  const match = s.match(/{[\s\S]*}/);
+  return match ? match[0] : s;
+}
+
+/** Construye headers estándar para AI21 */
+function ai21Headers() {
+  return {
+    Authorization: `Bearer ${AI21_API_KEY}`,
+    'Content-Type': 'application/json',
+  };
+}
 
 /* ===========================
  * FUNCIÓN 1: El Intérprete
@@ -17,17 +40,20 @@ Las intenciones posibles son:
 
 REGLAS CRÍTICAS:
 1. Al extraer nombres en "entity", "parent_entity" o "new_entity", sé EXTREMADAMENTE LITERAL. No simplifiques "Base de datos II" a "Base de datos".
-2. Para "upload_file", la "entity" es SIEMPRE el nombre de la carpeta destino.
-3. Para "generate_pdf", extrae el tema de la consulta en "entity".
+2. Intención "upload_file":
+   - Actívala si el usuario quiere GUARDAR, SUBIR o ARCHIVAR algo (ej: "guarda esto", "sube esto", "archiva esto").
+   - Si menciona una carpeta (ej: "en la carpeta X", "en X", "a X"), extrae "X" como "entity".
+   - Si el usuario solo adjunta un archivo sin texto (mensaje vacío o marcador), devuelve {"intent":"upload_file"} sin "entity".
+3. Para "generate_pdf", extrae el tema en "entity".
 4. Para "confirm_save_yes", si se menciona una carpeta, extráela en "entity".
 5. Para "set_reminder":
-   - "entity": La descripción de la actividad.
-   - "time": La hora o período de tiempo (ej: "en 2 horas", "mañana a las 9 am").
+   - "entity": descripción de la actividad.
+   - "time": hora o período (ej: "en 2 horas", "mañana a las 9 am").
 6. Para "schedule_file_send":
-   - "entity": El nombre del archivo a enviar.
-   - "contact": El nombre o número del contacto.
-   - "time": La hora o período de tiempo.
-   - "message": Un mensaje adicional (opcional).
+   - "entity": nombre del archivo.
+   - "contact": nombre o número del contacto.
+   - "time": hora o período.
+   - "message": mensaje adicional (opcional).
 7. Si una acción necesita un nombre y no está claro, usa "clarification_needed".
 
 ### Ejemplos ###
@@ -36,18 +62,23 @@ REGLAS CRÍTICAS:
 - Usuario: "qué hay dentro de la carpeta Base de datos II" -> {"intent": "view_folder", "entity": "Base de datos II"}
 - Usuario: "crea la carpeta 'Impuestos 2025' dentro de 'Facturas'" -> {"intent": "create_folder", "entity": "Impuestos 2025", "parent_entity": "Facturas"}
 - Usuario: "renombra 'mate' a 'matemáticas'" -> {"intent": "edit_folder", "entity": "mate", "new_entity": "matemáticas"}
-- Usuario: "sube esto en la carpeta deberes" -> {"intent": "upload_file", "entity": "deberes"}
 - Usuario: "pásame el primer archivo" -> {"intent": "send_latest_file"}
 - Usuario: "pásame el archivo" -> {"intent": "clarification_needed"}
 - Usuario: "haz un resumen de la segunda guerra mundial en pdf" -> {"intent": "generate_pdf", "entity": "la segunda guerra mundial"}
 - Usuario: "recuérdame hacer la compra en 30 minutos" -> {"intent": "set_reminder", "entity": "hacer la compra", "time": "en 30 minutos"}
-- Usuario: "envíale el reporte a Juan en 5 minutos con el mensaje 'Ahí te va'" -> {"intent": "schedule_file_send", "entity": "reporte", "contact": "Juan", "time": "en 5 minutos", "message": "Ahí te va"}
 
-Analiza: "${message}"
-`;
+--- Nuevos ejemplos de subida ---
+- Usuario: "sube esto en la carpeta deberes" -> {"intent": "upload_file", "entity": "deberes"}
+- Usuario: "Guarda esto en carpetaxd" -> {"intent": "upload_file", "entity": "carpetaxd"}
+- Usuario: "Archiva esto en 'importante'" -> {"intent": "upload_file", "entity": "importante"}
+- Usuario: "[ADJUNTO]" (solo archivo) -> {"intent": "upload_file"}
+- Usuario: "Guárdalo en la carpeta archivos" -> {"intent": "confirm_save_yes", "entity": "archivos"}
+
+Analiza: "${message || ''}"
+`.trim();
 
   try {
-    const response = await axios.post(
+    const { data } = await axios.post(
       'https://api.ai21.com/studio/v1/chat/completions',
       {
         model: 'jamba-large',
@@ -55,27 +86,13 @@ Analiza: "${message}"
         max_tokens: 250,
         temperature: 0.0,
       },
-      {
-        headers: {
-          Authorization: `Bearer ${AI21_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      }
+      { headers: ai21Headers() }
     );
 
-    let rawResponse = response.data?.choices?.[0]?.message?.content?.trim() || '';
-
-    // Quitar cercas de código si vienen
-    if (rawResponse.startsWith('```')) {
-      rawResponse = rawResponse.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/, '').trim();
-    }
-
-    // Intentar extraer el primer objeto JSON
-    const jsonMatch = rawResponse.match(/{[\s\S]*}/);
-    const cleanedJsonString = jsonMatch ? jsonMatch[0] : rawResponse;
-
+    const raw = data?.choices?.[0]?.message?.content ?? '';
+    const jsonString = extractFirstJson(raw);
     try {
-      return JSON.parse(cleanedJsonString);
+      return JSON.parse(jsonString);
     } catch {
       return { intent: 'unknown' };
     }
@@ -85,7 +102,7 @@ Analiza: "${message}"
 };
 
 /* ==============================================
- * FUNCIÓN 2: El Conversador (string o array)
+ * FUNCIÓN 2: Conversador (string o array)
  * ============================================== */
 exports.generateConversationalResponse = async (historyOrMessage, userName, userData) => {
   const foldersList = Array.isArray(userData?.folders)
@@ -110,23 +127,22 @@ Carpetas: ${foldersList || 'ninguna'}.
 Archivos Recientes: ${filesList || 'ninguno'}.
 
 MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respuesta y ofrecer ayuda.
-`;
+`.trim();
 
   let messagesForApi;
-
   if (Array.isArray(historyOrMessage)) {
     messagesForApi = historyOrMessage.map((msg) => ({
       role: msg.sender === 'user' ? 'user' : 'assistant',
-      content: msg.text,
+      content: String(msg.text ?? ''),
     }));
   } else {
-    messagesForApi = [{ role: 'user', content: String(historyOrMessage || '') }];
+    messagesForApi = [{ role: 'user', content: String(historyOrMessage ?? '') }];
   }
 
   messagesForApi.unshift({ role: 'system', content: systemInstruction });
 
   try {
-    const response = await axios.post(
+    const { data } = await axios.post(
       'https://api.ai21.com/studio/v1/chat/completions',
       {
         model: 'jamba-large',
@@ -134,16 +150,11 @@ MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respu
         max_tokens: 300,
         temperature: 0.7,
       },
-      {
-        headers: {
-          Authorization: `Bearer ${AI21_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      }
+      { headers: ai21Headers() }
     );
 
     return (
-      response.data?.choices?.[0]?.message?.content?.trim() ||
+      data?.choices?.[0]?.message?.content?.trim() ||
       'Lo siento, tuve un problema para generar una respuesta coherente.'
     );
   } catch (error) {
@@ -164,7 +175,7 @@ async function fetchRelevantImage(topic) {
     return null;
   }
   try {
-    const response = await axios.get('https://api.unsplash.com/search/photos', {
+    const { data } = await axios.get('https://api.unsplash.com/search/photos', {
       params: {
         query: topic,
         per_page: 1,
@@ -173,7 +184,7 @@ async function fetchRelevantImage(topic) {
       },
       headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` },
     });
-    return response.data?.results?.[0]?.urls?.regular || null;
+    return data?.results?.[0]?.urls?.regular || null;
   } catch (error) {
     console.error('Error al buscar imagen en Unsplash:', error.message);
     return null;
@@ -202,29 +213,16 @@ El JSON debe tener:
 
 REGLAS DE imageQuery:
 - La consulta debe ser ESPECÍFICA al tema.
-- Si el tema es un **dibujo animado** (como 'Ben 10', 'Dragon Ball'), la consulta debe pedir por el personaje o el logo. (Ej: "Ben 10 cartoon character", "Dragon Ball Z Goku")
-- Si el tema es un **hecho histórico** (como 'Segunda Guerra Mundial'), la consulta debe pedir una foto histórica. (Ej: "World War 2 historical photo")
-- Si el tema es **general** (como 'El Océano'), la consulta debe ser descriptiva. (Ej: "deep ocean")
+- Si el tema es un **dibujo animado** (como 'Ben 10', 'Dragon Ball'), pide por el personaje o el logo. (Ej: "Ben 10 cartoon character", "Dragon Ball Z Goku")
+- Si el tema es un **hecho histórico** (como 'Segunda Guerra Mundial'), pide una foto histórica. (Ej: "World War 2 historical photo")
+- Si el tema es **general** (como 'El Océano'), usa una consulta descriptiva. (Ej: "deep ocean")
 - NO uses términos abstractos como 'concept' o 'art'.
-
-Ejemplo de JSON para "Ben 10":
-{
-  "titulo": "Ben 10: Héroe Intergaláctico",
-  "introduccion": "Ben 10 es una popular serie animada...",
-  "secciones": [
-    { "subtitulo": "El Descubrimiento del Omnitrix" },
-    { "subtitulo": "Aliens Principales" },
-    { "subtitulo": "Villanos y Amenazas" }
-  ],
-  "conclusion": "El legado de Ben 10 continúa...",
-  "imageQuery": "Ben 10 cartoon character aliens"
-}
-`;
+`.trim();
 
   let structure = null;
 
   try {
-    const structureResponse = await axios.post(
+    const { data } = await axios.post(
       'https://api.ai21.com/studio/v1/chat/completions',
       {
         model: 'jamba-large',
@@ -232,18 +230,20 @@ Ejemplo de JSON para "Ben 10":
         max_tokens: 1500,
         temperature: 0.5,
       },
-      { headers: { Authorization: `Bearer ${AI21_API_KEY}`, 'Content-Type': 'application/json' } }
+      { headers: ai21Headers() }
     );
 
-    let jsonString = structureResponse.data?.choices?.[0]?.message?.content?.trim() || '{}';
-    if (jsonString.startsWith('```')) {
-      jsonString = jsonString.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/, '').trim();
+    let content = data?.choices?.[0]?.message?.content?.trim() || '{}';
+    content = extractFirstJson(content);
+
+    try {
+      structure = JSON.parse(content);
+    } catch {
+      structure = null;
     }
-    const jsonMatch = jsonString.match(/{[\s\S]*}/);
-    structure = JSON.parse(jsonMatch ? jsonMatch[0] : jsonString);
   } catch (e) {
     console.error('Error al generar la ESTRUCTURA del PDF:', e?.message || e);
-    return null;
+    structure = null;
   }
 
   // Asegurar estructura mínima
@@ -255,7 +255,7 @@ Ejemplo de JSON para "Ben 10":
         ? structure.secciones
         : [{ subtitulo: 'Contexto' }, { subtitulo: 'Desarrollo' }, { subtitulo: 'Aplicaciones' }],
     conclusion: structure?.conclusion || 'Conclusión.',
-    imageQuery: structure?.imageQuery || 'generic cover',
+    imageQuery: structure?.imageQuery || 'report cover',
   };
 
   // PROMPT 2: Generar contenido extenso
@@ -268,10 +268,10 @@ Debes seguir esta estructura exacta (desarrolla cada punto):
 ${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
 - Conclusión: ${structure.conclusion}
 - Bibliografía: (Añade una sección de 3 a 5 fuentes realistas o ficticias sobre el tema)
-`;
+`.trim();
 
   try {
-    const textResponse = await axios.post(
+    const { data } = await axios.post(
       'https://api.ai21.com/studio/v1/chat/completions',
       {
         model: 'jamba-large',
@@ -279,19 +279,18 @@ ${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
         max_tokens: 3500,
         temperature: 0.6,
       },
-      { headers: { Authorization: `Bearer ${AI21_API_KEY}`, 'Content-Type': 'application/json' } }
+      { headers: ai21Headers() }
     );
 
-    const textContent = textResponse.data?.choices?.[0]?.message?.content?.trim() || '';
+    const textContent = data?.choices?.[0]?.message?.content?.trim() || '';
 
     // Buscar imagen con la consulta generada
-    console.log(`Buscando imagen con la consulta de IA: "${structure.imageQuery}"`);
     const imageUrl = await fetchRelevantImage(structure.imageQuery);
 
     return {
       textContent, // Texto largo del informe
-      structure, // Objeto con {titulo, introduccion, secciones, conclusion, imageQuery}
-      imageUrl, // URL de imagen sugerida
+      structure,   // Objeto con {titulo, introduccion, secciones, conclusion, imageQuery}
+      imageUrl,    // URL de imagen sugerida
       userName,
       today,
       topic,
@@ -319,12 +318,12 @@ Permite a los usuarios:
 
 Sé amable, conciso y responde solo a preguntas sobre la aplicación. Si te preguntan algo no relacionado, di amablemente que solo puedes hablar sobre el Gestor de Tareas.
 
-Usuario: "${message}"
+Usuario: "${String(message || '')}"
 Respuesta:
 `.trim();
 
   try {
-    const response = await axios.post(
+    const { data } = await axios.post(
       'https://api.ai21.com/studio/v1/chat/completions',
       {
         model: 'jamba-large',
@@ -335,11 +334,10 @@ Respuesta:
         max_tokens: 150,
         temperature: 0.5,
       },
-      {
-        headers: { Authorization: `Bearer ${AI21_API_KEY}`, 'Content-Type': 'application/json' },
-      }
+      { headers: ai21Headers() }
     );
-    return response.data?.choices?.[0]?.message?.content?.trim() || 'Lo siento, no entendí la pregunta.';
+
+    return data?.choices?.[0]?.message?.content?.trim() || 'Lo siento, no entendí la pregunta.';
   } catch (error) {
     console.error('Error en el chat público de IA:', error?.message || error);
     return 'Tuve un problema para conectarme con mi cerebro de IA.';

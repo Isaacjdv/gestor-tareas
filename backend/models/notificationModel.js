@@ -6,24 +6,47 @@ const db = require('../config/db');
  * @param   {number} recipientId - El ID del usuario (tú) que recibe las notificaciones.
  */
 exports.getUnreadGrouped = async (recipientId) => {
+    // [INICIO DE CORRECCIÓN] Consulta SQL reescrita para evitar el error '42803'
     const query = `
-        SELECT
-            n.sender_id,
-            u.nombre AS sender_nombre,
-            u.foto_perfil_url AS sender_foto,
-            COUNT(n.id) AS count,
-            
-            /* Usamos MAX para obtener el contenido del último mensaje en el grupo */
-            /* (Esto asume que el ID más alto es el mensaje más reciente) */
-            (SELECT contenido FROM mensajes WHERE id = MAX(n.message_id)) AS ultimo_mensaje,
-            
-            MAX(n.created_at) AS ultimo_mensaje_fecha
-        FROM notifications n
-        JOIN usuarios u ON n.sender_id = u.id
-        WHERE n.recipient_id = $1 AND n.is_read = false
-        GROUP BY n.sender_id, u.nombre, u.foto_perfil_url
-        ORDER BY ultimo_mensaje_fecha DESC;
+        WITH RankedMessages AS (
+            -- Paso 1: Obtener todas las notificaciones no leídas y rankearlas
+            -- (rn = 1 es la más reciente de cada remitente)
+            SELECT
+                n.id AS notification_id,
+                n.recipient_id,
+                n.sender_id,
+                m.contenido,
+                n.created_at,
+                ROW_NUMBER() OVER(PARTITION BY n.sender_id ORDER BY n.created_at DESC) as rn
+            FROM notifications n
+            JOIN mensajes m ON n.message_id = m.id
+            WHERE n.recipient_id = $1 AND n.is_read = false
+	),
+	AggregatedCounts AS (
+		-- Paso 2: Contar el total de notificaciones no leídas por remitente
+		SELECT
+			sender_id,
+			COUNT(id) as count
+		FROM notifications
+		WHERE recipient_id = $1 AND is_read = false
+		GROUP BY sender_id
+	)
+	-- Paso 3: Unir los datos del remitente, el conteo total, y el ÚLTIMO mensaje
+	SELECT 
+		r.sender_id,
+		u.nombre AS sender_nombre,
+		u.foto_perfil_url AS sender_foto,
+		a.count,
+		r.contenido AS ultimo_mensaje,
+		r.created_at AS ultimo_mensaje_fecha
+	FROM RankedMessages r
+	JOIN usuarios u ON r.sender_id = u.id
+	JOIN AggregatedCounts a ON r.sender_id = a.sender_id
+	WHERE r.rn = 1 -- Seleccionar solo el mensaje más reciente de cada grupo
+	ORDER BY r.created_at DESC;
     `;
+    // [FIN DE CORRECCIÓN]
+
     try {
         const { rows } = await db.query(query, [recipientId]);
         return rows;
