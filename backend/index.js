@@ -1,4 +1,4 @@
-
+// index.js
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -19,7 +19,8 @@ const folderRoutes = require('./routes/folderRoutes');
 const publicChatRoutes = require('./routes/publicChatRoutes');
 const whatsappRoutes = require('./routes/whatsappRoutes');
 const userRoutes = require('./routes/userRoutes');
-const notificationRoutes = require('./routes/notificationRoutes'); // NUEVA RUTA
+const notificationRoutes = require('./routes/notificationRoutes');
+const tasksRoutes = require('./routes/tasksRoutes'); // NUEVO
 
 // --- Inicialización de la BD ---
 async function initializeDatabase() {
@@ -94,6 +95,18 @@ async function initializeDatabase() {
         FOREIGN KEY (sender_id) REFERENCES usuarios(id) ON DELETE CASCADE,
         FOREIGN KEY (message_id) REFERENCES mensajes(id) ON DELETE CASCADE
       );
+
+      /* ===== NUEVA TABLA: tasks ===== */
+      CREATE TABLE IF NOT EXISTS tasks (
+        id SERIAL PRIMARY KEY,
+        usuario_id INT NOT NULL,
+        titulo VARCHAR(255) NOT NULL,
+        descripcion TEXT,
+        status VARCHAR(20) DEFAULT 'pending', -- 'pending' | 'in_process' | 'done'
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+      );
     `;
 
     await pool.query(createTablesQuery);
@@ -151,7 +164,8 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/public-chat', publicChatRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/notifications', notificationRoutes); // NUEVA
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/tasks', tasksRoutes); // NUEVO
 
 // Salud
 app.get('/', (_req, res) => {
@@ -163,7 +177,7 @@ app.use((_req, res) => {
   res.status(404).json({ message: 'Ruta no encontrada' });
 });
 
-// --- Socket.io (chat + notificaciones) ---
+// --- Socket.io (chat + notificaciones + tareas) ---
 io.on('connection', (socket) => {
   console.log('Un usuario se conectó:', socket.id);
 

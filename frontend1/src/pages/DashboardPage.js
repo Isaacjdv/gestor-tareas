@@ -8,6 +8,7 @@ import fileService from '../services/fileService';
 import authService from '../services/authService';
 import userService from '../services/userService';
 import notificationService from '../services/notificationService';
+import tasksService from '../services/tasksService'; // ⬅️ NUEVO
 
 import { UserContext } from '../App';
 import '../styles/DashboardPage.css';
@@ -75,6 +76,7 @@ const translations = {
     errorLoadFiles: 'No se pudieron cargar los archivos',
     fileUploaded: 'Archivo subido',
     fileUpdated: 'Archivo actualizado',
+    fileDeleted: 'Archivo eliminado',
     errorUploadFile: 'No se pudo subir el archivo',
     deleteFolderTitle: 'Eliminar carpeta',
     confirmDeleteFolder: '¿Seguro que deseas eliminar esta carpeta?',
@@ -86,6 +88,26 @@ const translations = {
     search_files: 'Archivos',
     search_folders: 'Carpetas',
     search_users: 'Amigos',
+
+    // Tareas rápidas (NUEVO)
+    quickTasksTitle: 'Tareas rápidas',
+    quickTasksSubtitle: 'Crea tareas de texto (una por línea) o individuales.',
+    quickTasksPlaceholder: 'Ejemplos:\n- Hacer tarea de matemáticas\n- Imprimir imágenes de computadoras',
+    addTasks: 'Crear en lote',
+    addOne: 'Agregar',
+    creating: 'Creando...',
+    tasks: 'Tareas',
+    emptyTasks: 'Sin tareas por ahora.',
+    markPending: 'Poner Pendiente',
+    markInProcess: 'Marcar En Proceso',
+    markDone: 'Marcar Hecho',
+    editTask: 'Editar tarea',
+    deleteTask: 'Eliminar tarea',
+    updateTaskOk: 'Tarea actualizada',
+    deleteTaskOk: 'Tarea eliminada',
+    createTasksOk: 'Tareas creadas',
+    createTaskOk: 'Tarea creada',
+    errorTasks: 'No se pudieron cargar las tareas',
   },
   en: {
     searchPlaceholder: 'Search...',
@@ -130,6 +152,7 @@ const translations = {
     errorLoadFiles: 'Failed to load files',
     fileUploaded: 'File uploaded',
     fileUpdated: 'File updated',
+    fileDeleted: 'File deleted',
     errorUploadFile: 'Failed to upload file',
     deleteFolderTitle: 'Delete folder',
     confirmDeleteFolder: 'Are you sure you want to delete this folder?',
@@ -141,6 +164,25 @@ const translations = {
     search_files: 'Files',
     search_folders: 'Folders',
     search_users: 'Friends',
+
+    quickTasksTitle: 'Quick tasks',
+    quickTasksSubtitle: 'Create plain-text tasks (one per line) or single ones.',
+    quickTasksPlaceholder: 'Examples:\n- Do math homework\n- Print computer images',
+    addTasks: 'Bulk create',
+    addOne: 'Add',
+    creating: 'Creating...',
+    tasks: 'Tasks',
+    emptyTasks: 'No tasks yet.',
+    markPending: 'Set Pending',
+    markInProcess: 'Set In Process',
+    markDone: 'Set Done',
+    editTask: 'Edit task',
+    deleteTask: 'Delete task',
+    updateTaskOk: 'Task updated',
+    deleteTaskOk: 'Task deleted',
+    createTasksOk: 'Tasks created',
+    createTaskOk: 'Task created',
+    errorTasks: 'Failed to load tasks',
   },
 };
 
@@ -317,7 +359,231 @@ const DashboardNavbar = ({
   );
 };
 
-const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers }) => {
+/* ============== WIDGET TARJETA: TAREAS RÁPIDAS (HOME) ============== */
+const QuickTasksCard = ({
+  userId,
+  language,
+  t,
+  tasks,
+  setTasks,
+  loading,
+  setLoading,
+  onToast,
+}) => {
+  const [oneTask, setOneTask] = useState('');
+  const [bulkText, setBulkText] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editingTitle, setEditingTitle] = useState('');
+
+  const handleCreateOne = async (e) => {
+    e.preventDefault();
+    const title = (oneTask || '').trim();
+    if (!userId || !title) return;
+    try {
+      setLoading(true);
+      const created = await tasksService.create({
+        usuario_id: userId,
+        titulo: title,
+      });
+      setTasks((cur) => [created, ...cur]);
+      setOneTask('');
+      onToast(t('createTaskOk'), 'success');
+      socket.emit('tasks_updated', { user_id: userId }); // aviso opcional
+    } catch {
+      onToast(t('errorTasks'), 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkCreate = async () => {
+    const lines = (bulkText || '')
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!userId || lines.length === 0) return;
+    try {
+      setLoading(true);
+      const { created } = await tasksService.bulkCreate({
+        usuario_id: userId,
+        items: lines,
+      });
+      setTasks((cur) => [...created, ...cur]);
+      setBulkText('');
+      onToast(t('createTasksOk'), 'success');
+      socket.emit('tasks_updated', { user_id: userId });
+    } catch {
+      onToast(t('errorTasks'), 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await tasksService.remove(id);
+      setTasks((cur) => cur.filter((t) => t.id !== id));
+      onToast(t('deleteTaskOk'), 'success');
+      socket.emit('tasks_updated', { user_id: userId });
+    } catch {
+      onToast(t('errorTasks'), 'error');
+    }
+  };
+
+  const startEdit = (task) => {
+    setEditingId(task.id);
+    setEditingTitle(task.titulo);
+  };
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    if (!editingId) return;
+    try {
+      const updated = await tasksService.update(editingId, { titulo: editingTitle });
+      setTasks((cur) => cur.map((t) => (t.id === updated.id ? updated : t)));
+      setEditingId(null);
+      setEditingTitle('');
+      onToast(t('updateTaskOk'), 'success');
+      socket.emit('tasks_updated', { user_id: userId });
+    } catch {
+      onToast(t('errorTasks'), 'error');
+    }
+  };
+
+  const setStatus = async (task, status) => {
+    try {
+      const updated = await tasksService.update(task.id, { status });
+      setTasks((cur) => cur.map((t) => (t.id === updated.id ? updated : t)));
+      socket.emit('tasks_updated', { user_id: userId });
+    } catch {
+      onToast(t('errorTasks'), 'error');
+    }
+  };
+
+  return (
+    <div className="home-card home-card--white" style={{ position: 'relative' }}>
+      <i className="fas fa-list-check card-icon"></i>
+      <div className="card-footer">
+        <h4>{t('quickTasksTitle')}</h4>
+        <p style={{ color: 'var(--font-color-light)', marginTop: '6px' }}>{t('quickTasksSubtitle')}</p>
+      </div>
+
+      <div style={{ padding: '0 1rem 1rem 1rem' }}>
+        {/* Crear 1 */}
+        <form onSubmit={handleCreateOne} style={{ display: 'flex', gap: '.5rem', marginBottom: '.75rem' }}>
+          <input
+            type="text"
+            placeholder="Ej: Hacer tarea de matemáticas"
+            value={oneTask}
+            onChange={(e) => setOneTask(e.target.value)}
+            style={{
+              flex: 1,
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              padding: '.6rem .75rem'
+            }}
+          />
+          <button className="btn btn-success" type="submit" disabled={loading}>
+            {loading ? t('creating') : `${t('addOne')} ➕`}
+          </button>
+        </form>
+
+        {/* Crear en lote */}
+        <div style={{ marginBottom: '.75rem' }}>
+          <textarea
+            placeholder={t('quickTasksPlaceholder')}
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            style={{
+              width: '100%',
+              minHeight: '90px',
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              padding: '.6rem .75rem',
+              color: 'var(--font-color)'
+            }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '.5rem' }}>
+            <button className="btn btn-primary" onClick={handleBulkCreate} disabled={loading || !bulkText.trim()}>
+              {loading ? t('creating') : `${t('addTasks')} 📚`}
+            </button>
+          </div>
+        </div>
+
+        {/* Lista de tareas */}
+        <div>
+          <h5 style={{ margin: '6px 0 8px', color: 'var(--font-color)' }}>{t('tasks')}</h5>
+          {tasks.length === 0 ? (
+            <div className="empty-state-small">{t('emptyTasks')}</div>
+          ) : (
+            <ul className="file-list list-view" style={{ gap: '.35rem' }}>
+              {tasks.map((task) => (
+                <li key={task.id} className={`file-item status-${task.status || 'pending'}`} style={{ padding: '.6rem .75rem' }}>
+                  <div className="item-name" style={{ gap: '.5rem', alignItems: 'center' }}>
+                    <i className="fas fa-check-square" />
+                    {editingId === task.id ? (
+                      <form onSubmit={saveEdit} className="edit-form" style={{ margin: 0 }}>
+                        <input
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          autoFocus
+                        />
+                        <button type="submit" title="Guardar">✔️</button>
+                        <button type="button" onClick={() => setEditingId(null)} title="Cancelar">✖️</button>
+                      </form>
+                    ) : (
+                      <span>{task.titulo}</span>
+                    )}
+                  </div>
+
+                  {/* Acciones visibles (editar / eliminar) con emojis */}
+                  <div className="actions">
+                    {editingId !== task.id && (
+                      <>
+                        <button onClick={() => startEdit(task)} title={t('editTask')}>✏️</button>
+                        <button onClick={() => handleDelete(task.id)} title={t('deleteTask')}>🗑️</button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Semaforización SIEMPRE coloreada */}
+                  <div className="file-status-actions" style={{ marginTop: '.25rem' }}>
+                    <button
+                      className="status-btn pending"
+                      title={t('markPending')}
+                      onClick={() => setStatus(task, 'pending')}
+                    >
+                      ⛔
+                    </button>
+                    <button
+                      className="status-btn in-process"
+                      title={t('markInProcess')}
+                      onClick={() => setStatus(task, 'in_process')}
+                    >
+                      📝
+                    </button>
+                    <button
+                      className="status-btn done"
+                      title={t('markDone')}
+                      onClick={() => setStatus(task, 'done')}
+                    >
+                      ✅
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ====== TARJETAS HOME (CON TAREAS RÁPIDAS ADENTRO DE LA TERCERA) ====== */
+const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers, quickTasksProps }) => {
   const totalFiles = (groupedFiles.pending || []).length + (groupedFiles.in_process || []).length + (groupedFiles.done || []).length;
   const totalPending = (groupedFiles.pending || []).length;
   const totalDone = (groupedFiles.done || []).length;
@@ -327,28 +593,28 @@ const HomePageCards = ({ onNavigate, t, groupedFiles, fileListHandlers }) => {
       <h2>{t('welcomeTitle')}</h2>
       <p className="home-subtitle">{t('welcomeMessage')}</p>
 
-      <div className="home-card-grid">
-        <div className="home-card" onClick={() => onNavigate('analytics')} style={{ backgroundColor: '#0A84FF', color: '#fff' }}>
+      {/* Fila de tarjetas */}
+      <div className="home-card-row">
+        <div className="home-card home-card--blue" onClick={() => onNavigate('analytics')}>
           <i className="fas fa-chart-line card-icon"></i>
           <div className="card-overlay"><h3>{totalFiles} Archivos Totales</h3></div>
           <div className="card-footer"><h4>{t('homeCardAnalyticsTitle')}</h4></div>
         </div>
-        <div className="home-card" onClick={() => onNavigate('reports')} style={{ backgroundColor: '#FF3B30', color: '#fff' }}>
+
+        <div className="home-card home-card--green" onClick={() => onNavigate('reports')}>
           <i className="fas fa-file-alt card-icon"></i>
           <div className="card-overlay"><h3>{totalPending} Tareas Pendientes</h3></div>
           <div className="card-footer"><h4>{t('homeCardReportsTitle')}</h4></div>
         </div>
-        <div className="home-card" onClick={() => onNavigate('settings')} style={{ backgroundColor: '#60d382ff', color: '#222' }}>
-          <i className="fas fa-cog card-icon"></i>
-          <div className="card-overlay"><h3>{totalDone} Tareas Terminadas</h3></div>
-          <div className="card-footer"><h4>{t('homeCardSettingsTitle')}</h4></div>
-        </div>
+
+        {/* Aquí metemos la tarjeta con el widget de Tareas rápidas */}
+        <QuickTasksCard {...quickTasksProps} />
       </div>
 
       <div className="advantages-section">
         <div className="advantages-text">
           <h3>{t('advantagesTitle')}</h3>
-          <p>{t('advantagesDesc')}</p>
+        <p>{t('advantagesDesc')}</p>
         </div>
         <div className="advantages-image">
           <img src="https://placehold.co/600x400/2C2C2C/E0E0E0?text=Workflow" alt="Workflow Advantages" />
@@ -435,8 +701,8 @@ const FileListGroup = ({
                   onChange={(e) => onSetEditingFile({ ...editingFile, nombre_original: e.target.value })}
                   autoFocus
                 />
-                <button type="submit" title="Guardar"><i className="fas fa-check"></i></button>
-                <button type="button" onClick={() => onSetEditingFile(null)} title="Cancelar"><i className="fas fa-times"></i></button>
+                <button type="submit" title="Guardar">✔️</button>
+                <button type="button" onClick={() => onSetEditingFile(null)} title="Cancelar">✖️</button>
               </form>
             ) : (
               <>
@@ -458,19 +724,19 @@ const FileListGroup = ({
                 )}
 
                 <div className="actions">
-                  <button onClick={() => onSetEditingFile(file)} title={t('rename')}><i className="fas fa-pen"></i></button>
-                  <button onClick={() => onDeleteFile(file.id)} title={t('delete')}><i className="fas fa-trash-alt"></i></button>
+                  <button onClick={() => onSetEditingFile(file)} title={t('editTask')}>✏️</button>
+                  <button onClick={() => onDeleteFile(file.id)} title={t('delete')}>🗑️</button>
                 </div>
 
                 <div className="file-status-actions">
                   <button className="status-btn pending" title="Poner Pendiente" onClick={() => onStatusChange(file, { status: 'pending', nota: '' })}>
-                    <i className="fas fa-exclamation-circle"></i>
+                    ⛔
                   </button>
                   <button className="status-btn in-process" title={file.nota ? 'Editar nota' : 'Agregar nota'} onClick={() => onNoteClick(file)}>
-                    <i className="fas fa-pencil-alt"></i>
+                    📝
                   </button>
                   <button className="status-btn done" title="Marcar Terminado" onClick={() => onStatusChange(file, { status: 'done' })}>
-                    <i className="fas fa-check-circle"></i>
+                    ✅
                   </button>
                 </div>
               </>
@@ -556,7 +822,7 @@ const DashboardPage = () => {
   const [path, setPath] = useState([]);
   const [language, setLanguage] = useState('es');
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchFilter, setSearchFilter] = useState('users'); // CAMBIO
+  const [searchFilter, setSearchFilter] = useState('users'); // mantiene carpetas visibles
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [openChats, setOpenChats] = useState([]);
   const [modalState, setModalState] = useState({ isOpen: false });
@@ -568,6 +834,10 @@ const DashboardPage = () => {
   const [notifications, setNotifications] = useState([]);
   const [hasUnread, setHasUnread] = useState(false);
 
+  // TAREAS (NUEVO)
+  const [tasks, setTasks] = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+
   // CONTEXTO
   const { user } = useContext(UserContext);
 
@@ -576,6 +846,11 @@ const DashboardPage = () => {
     let text = translations[language][key] || translations['es'][key] || key;
     if (text) Object.keys(params).forEach(k => { text = text.replace(`{${k}}`, params[k]); });
     return text;
+  };
+
+  const showMessage = (text, type = 'success') => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 3000);
   };
 
   /* -------------------- PERSISTENCIA DE NOTIFICACIONES -------------------- */
@@ -607,7 +882,6 @@ const DashboardPage = () => {
         saveLocalNotifications(user.id, merged);
       } catch (e) {
         console.error('Error cargando notificaciones persistidas:', e);
-        // Si falla el backend, mantenemos las locales
         saveLocalNotifications(user.id, local);
       }
     })();
@@ -628,6 +902,7 @@ const DashboardPage = () => {
     }
   }, [currentFolder, user]);
 
+  // Buscar usuarios cuando el filtro está en "users"
   useEffect(() => {
     if (searchFilter === 'users' && searchTerm.trim() !== '') {
       const searchUsers = async () => {
@@ -646,7 +921,7 @@ const DashboardPage = () => {
     }
   }, [searchTerm, searchFilter]);
 
-  // Socket.io
+  // Socket.io listeners (carpetas, archivos, notificaciones, tareas)
   useEffect(() => {
     if (user?.id) {
       socket.emit('join_room', user.id);
@@ -678,7 +953,6 @@ const DashboardPage = () => {
             count: 1
           }];
           const merged = mergeBySender(prevNotis, incoming);
-          // Guardar inmediatamente en localStorage
           saveLocalNotifications(user.id, merged);
           return merged;
         });
@@ -686,13 +960,43 @@ const DashboardPage = () => {
       };
       socket.on('new_notification', notificationListener);
 
+      // 🔔 TAREAS en tiempo real
+      const tasksListener = async () => {
+        if (!user?.id) return;
+        try {
+          const data = await tasksService.listByUser(user.id, { limit: 50 });
+          setTasks(data);
+        } catch (e) {
+          // silencio: no bloquear UI
+        }
+      };
+      socket.on('tasks_updated', tasksListener);
+
       return () => {
         socket.off('folders_updated', folderListener);
         socket.off('files_updated', fileListener);
         socket.off('new_notification', notificationListener);
+        socket.off('tasks_updated', tasksListener);
       };
     }
   }, [user, currentFolder]);
+
+  // Cargar TAREAS al entrar
+  useEffect(() => {
+    const fetchTasks = async () => {
+      if (!user?.id) return;
+      try {
+        setTasksLoading(true);
+        const data = await tasksService.listByUser(user.id, { limit: 50 });
+        setTasks(data);
+      } catch {
+        showMessage(t('errorTasks'), 'error');
+      } finally {
+        setTasksLoading(false);
+      }
+    };
+    fetchTasks();
+  }, [user?.id, language]); // recarga si cambia idioma (solo textos UI)
 
   /* ------------------------------ LOADERS ----------------------------- */
   const loadFolders = async (parentId) => {
@@ -726,11 +1030,6 @@ const DashboardPage = () => {
   };
 
   /* ------------------------------ HELPERS ----------------------------- */
-  const showMessage = (text, type = 'success') => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage(null), 3000);
-  };
-
   const handleFolderClick = (folder) => {
     setPath(prevPath => [...prevPath.filter(p => p), currentFolder].filter(Boolean));
     setCurrentFolder(folder);
@@ -844,7 +1143,7 @@ const DashboardPage = () => {
 
   const handleUploadFile = async (e) => {
     e.preventDefault();
-    if (!selectedFile || !currentFolder) { showMessage(t('selectFileAndFolder'), 'error'); return; }
+    if (!selectedFile || !currentFolder) { showMessage(t('selectFile'), 'error'); return; }
     setUploading(true);
     showMessage(t('uploading'), 'info');
     try {
@@ -913,18 +1212,20 @@ const DashboardPage = () => {
   };
 
   /* ------------------- FILTRO Y AGRUPACIÓN ------------------- */
+  // ✅ FIX: mostrar archivos incluso cuando el filtro está en "Amigos"
   const filteredFiles = useMemo(() => {
     const sourceFiles = currentFolder ? files : allFiles;
-    if (searchFilter === 'users') return [];
-    if (!searchTerm) return sourceFiles;
+    // Si NO estamos buscando "archivos" explícitamente, mostramos los archivos tal cual
+    if (searchFilter !== 'files' || !searchTerm) return sourceFiles;
+    // Solo filtramos cuando el usuario eligió "Archivos" y escribió algo
     return sourceFiles.filter((file) =>
       file.nombre_original?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [files, allFiles, searchTerm, currentFolder, searchFilter]);
 
-  // ⬇⬇ AJUSTE CLAVE: mantener carpetas visibles aunque el filtro esté en "users"
+  // Mantener carpetas visibles aunque el filtro esté en "users"
   const filteredFolders = useMemo(() => {
-    if (searchFilter === 'users') return folders; // antes devolvía [], causando que desaparezcan
+    if (searchFilter === 'users') return folders;
     if (!searchTerm) return folders;
     return folders.filter((folder) =>
       folder.nombre?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -944,11 +1245,11 @@ const DashboardPage = () => {
   const globalGroupedFiles = useMemo(() => {
     const pending = [], in_process = [], done = [];
     const filesToGroup =
-      (searchFilter === 'users' || !searchTerm)
-        ? allFiles
-        : allFiles.filter((file) =>
+      (searchFilter === 'files' && searchTerm)
+        ? allFiles.filter((file) =>
             file.nombre_original?.toLowerCase().includes(searchTerm.toLowerCase())
-          );
+          )
+        : allFiles;
 
     filesToGroup.forEach((f) => {
       if (f.status === 'done') done.push(f);
@@ -1051,8 +1352,8 @@ const DashboardPage = () => {
                       onChange={(e) => setNewFolderRename(e.target.value)}
                       autoFocus
                     />
-                    <button type="submit" title={t('rename')}><i className="fas fa-check"></i></button>
-                    <button type="button" onClick={() => setEditingFolder(null)} title={t('cancel')}><i className="fas fa-times"></i></button>
+                    <button type="submit" title={t('rename')}>✔️</button>
+                    <button type="button" onClick={() => setEditingFolder(null)} title={t('cancel')}>✖️</button>
                   </form>
                 ) : (
                   <span className="item-name" onClick={() => handleFolderClick(folder)}>
@@ -1060,8 +1361,8 @@ const DashboardPage = () => {
                   </span>
                 )}
                 <div className="actions">
-                  <button onClick={() => handleStartFolderRename(folder)} title={t('rename')}><i className="fas fa-pen"></i></button>
-                  <button onClick={() => handleDeleteFolder(folder.id)} title={t('delete')}><i className="fas fa-trash-alt"></i></button>
+                  <button onClick={() => handleStartFolderRename(folder)} title={t('rename')}>✏️</button>
+                  <button onClick={() => handleDeleteFolder(folder.id)} title={t('delete')}>🗑️</button>
                 </div>
               </li>
             ))}
@@ -1126,6 +1427,16 @@ const DashboardPage = () => {
                       t={t}
                       groupedFiles={globalGroupedFiles}
                       fileListHandlers={fileListHandlers}
+                      quickTasksProps={{
+                        userId: user?.id,
+                        language,
+                        t,
+                        tasks,
+                        setTasks,
+                        loading: tasksLoading,
+                        setLoading: setTasksLoading,
+                        onToast: showMessage
+                      }}
                     />
                   ) : (
                     <ApartadoView
@@ -1176,4 +1487,3 @@ const DashboardPage = () => {
 };
 
 export default DashboardPage;
-  
