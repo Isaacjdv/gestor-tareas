@@ -17,16 +17,12 @@ router.get('/unread/summary/:recipientId', async (req, res) => {
         u.foto_perfil_url,
         COUNT(*)::int AS unread_count,
         MAX(n.created_at) AS last_created_at,
-        (
-          SELECT m.contenido
-          FROM mensajes m
-          WHERE m.id = n.message_id
-          ORDER BY m.created_at DESC
-          LIMIT 1
-        ) AS last_message
+        (ARRAY_AGG(m.contenido ORDER BY n.created_at DESC))[1] AS last_message
       FROM notifications n
-      JOIN usuarios u ON u.id = n.sender_id
-      WHERE n.recipient_id = $1 AND n.is_read = false
+      JOIN usuarios u  ON u.id = n.sender_id
+      JOIN mensajes m  ON m.id = n.message_id
+      WHERE n.recipient_id = $1
+        AND n.is_read = false
       GROUP BY n.sender_id, u.nombre, u.foto_perfil_url
       ORDER BY last_created_at DESC
     `;
@@ -43,7 +39,9 @@ router.put('/mark-all-read/:recipientId', async (req, res) => {
   const { recipientId } = req.params;
   try {
     await pool.query(
-      `UPDATE notifications SET is_read = true WHERE recipient_id = $1 AND is_read = false`,
+      `UPDATE notifications
+       SET is_read = true
+       WHERE recipient_id = $1 AND is_read = false`,
       [recipientId]
     );
     res.json({ ok: true });
@@ -58,13 +56,15 @@ router.put('/mark-from/:recipientId/:senderId', async (req, res) => {
   const { recipientId, senderId } = req.params;
   try {
     await pool.query(
-      `UPDATE notifications SET is_read = true WHERE recipient_id = $1 AND sender_id = $2 AND is_read = false`,
+      `UPDATE notifications
+       SET is_read = true
+       WHERE recipient_id = $1 AND sender_id = $2 AND is_read = false`,
       [recipientId, senderId]
     );
     res.json({ ok: true });
   } catch (err) {
     console.error('PUT /mark-from error:', err);
-    res.status(500).json({ message: 'Error marcando notificaciones' });
+    res.status(500).json({ message: 'Error marcando noficaciones' });
   }
 });
 
