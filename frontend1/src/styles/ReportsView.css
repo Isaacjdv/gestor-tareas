@@ -1,0 +1,224 @@
+/* Layout general */
+.reports-view .reports-title {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: 0;
+}
+
+/* Fila título + botón descargar */
+.reports-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+
+/* Barra de filtros */
+.reports-toolbar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .75rem;
+  background: var(--bg-content, #1E1E1E);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 10px;
+  padding: .75rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 900px) {
+  .reports-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .reports-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
+.report-field {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+
+.report-label {
+  font-size: .9rem;
+  color: var(--font-color-light, #B0B0B0);
+}
+
+.report-input {
+  background: var(--bg-input, #2C2C2C);
+  color: var(--font-color, #E0E0E0);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 8px;
+  padding: .55rem .65rem;
+  outline: none;
+}
+.report-input:focus {
+  border-color: var(--primary-color, #007AFF);
+}
+
+.report-search .report-input::placeholder {
+  color: #9aa0a6;
+}
+
+/* Acciones */
+.report-actions {
+  display: flex;
+  align-items: end;
+  gap: .5rem;
+}
+
+.btn {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: .55rem .8rem;
+  cursor: pointer;
+}
+.btn-primary {
+  background: var(--primary-color, #007AFF);
+  color: #fff;
+}
+.btn-secondary {
+  background: transparent;
+  color: var(--font-color, #E0E0E0);
+  border-color: var(--border-color, #333);
+}
+
+/* Botón descargar */
+.btn-download {
+  background: transparent;
+  color: var(--font-color, #E0E0E0);
+  border: 1px solid var(--primary-color, #007AFF);
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+}
+.btn-download:hover {
+  background: rgba(0,122,255,0.1);
+}
+.btn:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+/* Chips de estado */
+.status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-bottom: 1rem;
+}
+
+.status-chip {
+  background: var(--bg-input, #2C2C2C);
+  color: var(--font-color, #E0E0E0);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 999px;
+  padding: .35rem .7rem;
+  cursor: pointer;
+  font-size: .9rem;
+}
+.status-chip.active {
+  border-color: var(--primary-color, #007AFF);
+  box-shadow: 0 0 0 2px rgba(0,122,255,0.15);
+}
+.status-chip.pending.active {
+  background: rgba(229,62,62,0.15);
+  border-color: #E53E3E;
+}
+.status-chip.inproc.active {
+  background: rgba(255,193,7,0.15);
+  border-color: #FFC107;
+}
+.status-chip.done.active {
+  background: rgba(16,185,129,0.15);
+  border-color: #10B981;
+}
+
+/* Resultados */
+.results-title {
+  margin: .5rem 0 1rem;
+  color: var(--font-color, #E0E0E0);
+}
+
+/* Columnas de resultados */
+.report-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+@media (max-width: 1000px) {
+  .report-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.report-col {
+  background: var(--bg-content, #1E1E1E);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.report-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .6rem .8rem;
+  font-weight: 600;
+}
+.report-col-header.pending {
+  background: rgba(229,62,62,0.1);
+  border-bottom: 1px solid rgba(229,62,62,0.3);
+}
+.report-col-header.inproc {
+  background: rgba(255,193,7,0.08);
+  border-bottom: 1px solid rgba(255,193,7,0.25);
+}
+.report-col-header.done {
+  background: rgba(16,185,129,0.08);
+  border-bottom: 1px solid rgba(16,185,129,0.25);
+}
+.report-col-header .count {
+  font-size: .9rem;
+  opacity: .85;
+}
+
+/* Lista de tareas */
+.report-list {
+  list-style: none;
+  margin: 0;
+  padding: .5rem;
+  display: grid;
+  gap: .5rem;
+}
+
+.report-item {
+  background: var(--bg-input, #2C2C2C);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 8px;
+  padding: .55rem .7rem;
+}
+
+.report-item-title {
+  font-weight: 600;
+  margin-bottom: .25rem;
+  color: var(--font-color, #E0E0E0);
+  overflow-wrap: anywhere;
+}
+
+.report-item-meta {
+  font-size: .85rem;
+  color: var(--font-color-light, #B0B0B0);
+}
+
+/* Vacíos */
+.report-empty {
+  padding: .9rem;
+  color: var(--font-color-light, #B0B0B0);
+}

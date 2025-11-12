@@ -9,13 +9,13 @@ import axios from 'axios';
 const RENDER_BACKEND_URL = 'https://gestor-tareas-backend-11hi.onrender.com'; // Asegúrate de que esta URL es correcta
 const CHAT_API_URL = `${RENDER_BACKEND_URL}/api/public-chat`;
 
-// --- Componente NavBar ---
+// --- Componente NavBar (USADO EN LOGIN PAGE) ---
 const NavBar = ({ scrollToLogin }) => {
     const [scrolled, setScrolled] = useState(false);
 
     useEffect(() => {
         const handleScroll = () => {
-            const isScrolled = window.scrollY > 50; // Cambia a true si el scroll es mayor a 50px
+            const isScrolled = window.scrollY > 50;
             if (isScrolled !== scrolled) {
                 setScrolled(isScrolled);
             }
@@ -32,14 +32,53 @@ const NavBar = ({ scrollToLogin }) => {
             <div className="navbar-logo">
                 <Link to="/">Gestor IA</Link>
             </div>
+
             <ul className="navbar-links">
-                <li><a href="#whatsapp">Características</a></li>
-                <li><a href="#login-section" onClick={scrollToLogin}>Empezar Ahora</a></li>
-                {/* Puedes añadir más enlaces aquí si lo deseas */}
+                {/* Inicio (scroll en la misma página) */}
+               
+
+                {/* SUBMENÚ SOBRE NOSOTROS (APUNTA AL ABOUT) */}
+                <li className="has-submenu">
+                    <span className="submenu-label">
+                        Sobre Nosotros ▾
+                    </span>
+                    <ul className="submenu">
+                        <li>
+                            <Link to="/about#about">Visión general</Link>
+                        </li>
+                        <li>
+                            <Link to="/about#vision">Misión & Visión</Link>
+                        </li>
+                        <li>
+                            <Link to="/about#timeline">Historia</Link>
+                        </li>
+                        <li>
+                            <Link to="/about#team">Comunidad</Link>
+                        </li>
+                        <li>
+                            <Link to="/about#faq">FAQ</Link>
+                        </li>
+                    </ul>
+                </li>
+
+
+                 <li>
+                    <a href="#whatsapp">Características</a>
+                </li>
+               
+                {/* Scroll al login en la misma landing */}
+                <li>
+                    <a href="#login-section" onClick={scrollToLogin}>
+                        Empezar Ahora
+                    </a>
+                </li>
+
+                
             </ul>
         </nav>
     );
 };
+
 
 
 // --- Componente del Chatbot de IA Público ---
@@ -220,7 +259,7 @@ const LoginPage = () => {
                             className={visibleSection === 'whatsapp' ? 'visible' : ''}
                         />
                         <img 
-                            src="https://i.ibb.co/B5XPpc4v/Gemini-Generated-Image-6ihfa6ihfa6ihfa6.png" 
+                            src="https://i.ibb.co/8D7gffDv/Chicos-viendo-el-programa.png" 
                             alt="Gestor de archivos" 
                             className={visibleSection === 'files' ? 'visible' : ''}
                         />
