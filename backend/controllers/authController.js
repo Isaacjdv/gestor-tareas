@@ -1,83 +1,81 @@
+// controllers/authController.js
 const userModel = require('../models/userModel');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-// Lógica para registrar un usuario
 exports.register = async (req, res) => {
-    try {
-        const { nombre, email, password, whatsapp_number } = req.body;
+  try {
+    // Normaliza posibles nombres alternativos del frontend
+    const body = req.body || {};
+    const nombre = body.nombre ?? body.name ?? body.usuario ?? null;
+    const email = body.email ?? body.correo ?? null;
+    let password = body.password ?? body.pass ?? body.contraseña ?? body.pwd ?? undefined;
+    const whatsapp_number = body.whatsapp_number ?? body.whatsapp ?? body.phone ?? null;
 
-        // Validar que el usuario no exista
-        const existingUser = await userModel.findByEmail(email);
-        if (existingUser) {
-            return res.status(400).json({ message: 'El correo electrónico ya está registrado.' });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 12);
-
-        // Crear usuario en la base de datos con el número
-        await userModel.create(nombre, email, hashedPassword, whatsapp_number);
-
-        res.status(201).json({ message: 'Usuario registrado con éxito.' });
-    } catch (error) {
-        console.error("Error en el registro:", error);
-        res.status(500).json({ message: 'Error en el servidor al registrar el usuario.', error: error.message });
+    // Validación básica
+    if (!nombre || !email || password == null) {
+      return res.status(400).json({ message: 'Faltan campos: nombre, email o password.' });
     }
+
+    // Asegura que password sea string (por si llega número)
+    if (typeof password !== 'string') password = String(password);
+
+    if (password.length < 8) {
+      return res.status(400).json({ message: 'El password debe tener al menos 8 caracteres.' });
+    }
+
+    // Evita duplicados
+    const existingUser = await userModel.findByEmail(email);
+    if (existingUser) {
+      return res.status(400).json({ message: 'El correo electrónico ya está registrado.' });
+    }
+
+    // Hash seguro
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // IMPORTANTE: verifica que tu modelo reciba los argumentos en este orden
+    // o usa un objeto para evitar desorden
+    await userModel.create({ nombre, email, password: hashedPassword, whatsapp_number });
+
+    return res.status(201).json({ message: 'Usuario registrado con éxito.' });
+  } catch (error) {
+    console.error('Error en el registro:', error);
+    return res.status(500).json({ message: 'Error en el servidor al registrar el usuario.', error: error.message });
+  }
 };
 
-// Lógica para iniciar sesión
 exports.login = async (req, res) => {
-    try {
-        const { email, password } = req.body;
+  try {
+    const body = req.body || {};
+    const email = body.email ?? body.correo ?? null;
+    let password = body.password ?? body.pass ?? body.contraseña ?? body.pwd ?? undefined;
 
-        // Buscar al usuario
-        const user = await userModel.findByEmail(email);
-        if (!user) {
-            return res.status(401).json({ message: 'Credenciales inválidas.' });
-        }
-
-        // Comparar contraseñas
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ message: 'Credenciales inválidas.' });
-        }
-
-        // Crear y firmar el token JWT
-        // ¡IMPORTANTE! Añadimos el 'nombre' al token para que 'getMe' funcione
-        const payload = {
-            userId: user.id,
-            email: user.email,
-            nombre: user.nombre 
-        };
-        
-        const token = jwt.sign(
-            payload,
-            process.env.JWT_SECRET,
-            { expiresIn: '1h' } // El token expira en 1 hora
-        );
-
-        res.status(200).json({ 
-            message: 'Inicio de sesión exitoso.',
-            token: token,
-            userId: user.id
-        });
-    } catch (error) {
-        console.error("Error en el login:", error);
-        res.status(500).json({ message: 'Error en el servidor', error: error.message });
+    if (!email || password == null) {
+      return res.status(400).json({ message: 'Faltan email o password.' });
     }
+    if (typeof password !== 'string') password = String(password);
+
+    const user = await userModel.findByEmail(email);
+    if (!user) return res.status(401).json({ message: 'Credenciales inválidas.' });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(401).json({ message: 'Credenciales inválidas.' });
+
+    const payload = { userId: user.id, email: user.email, nombre: user.nombre };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+    return res.status(200).json({ message: 'Inicio de sesión exitoso.', token, userId: user.id });
+  } catch (error) {
+    console.error('Error en el login:', error);
+    return res.status(500).json({ message: 'Error en el servidor', error: error.message });
+  }
 };
 
-// --- FUNCIÓN PARA OBTENER DATOS DEL USUARIO LOGUEADO ---
 exports.getMe = async (req, res) => {
-    try {
-        // req.user es inyectado por el authMiddleware y contiene el payload del token
-        res.status(200).json({
-            id: req.user.userId,
-            nombre: req.user.nombre,
-            email: req.user.email
-        });
-    } catch (error) {
-        console.error("Error en getMe:", error);
-        res.status(500).json({ message: 'Error al obtener los datos del usuario.' });
-    }
+  try {
+    return res.status(200).json({ id: req.user.userId, nombre: req.user.nombre, email: req.user.email });
+  } catch (error) {
+    console.error('Error en getMe:', error);
+    return res.status(500).json({ message: 'Error al obtener los datos del usuario.' });
+  }
 };
