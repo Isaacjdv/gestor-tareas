@@ -115,8 +115,85 @@ const translations = {
     createTaskOk: 'Tarea creada',
     errorTasks: 'No se pudieron cargar las tareas',
   },
-  en: {},
+  en: {
+    searchPlaceholder: 'Search...',
+    hello: 'Hello',
+    logout: 'Log out',
+    root: 'Home',
+    cancel: 'Cancel',
+    confirm: 'Confirm',
+    rename: 'Rename',
+    delete: 'Delete',
+    noteModalTitle: 'Note for',
+    notePlaceholder: 'Write a note or instructions...',
+    saveNote: 'Save note',
+    welcomeTitle: 'Welcome to your Space',
+    welcomeMessage: 'Monitor your tasks, upload files and organize your workflow.',
+    homeCardAnalyticsTitle: 'Analytics',
+    homeCardReportsTitle: 'Reports',
+    homeCardSettingsTitle: 'Settings',
+    advantagesTitle: 'Workflow advantages',
+    advantagesDesc: 'Automate processes, collaborate with your team and keep everything organized.',
+    myArea: 'My Workspace',
+    pending: 'Pending',
+    in_process: 'In progress',
+    done: 'Done',
+    tasks: 'Tasks',
+    tasks_pending_title: 'To do',
+    tasks_in_process_title: 'In progress',
+    tasks_done_title: 'Completed',
+    emptyFolderMessage: 'This folder is empty. Upload a file to get started.',
+    emptyFolderTitle: 'No files',
+    noResultsTitle: 'No results',
+    noResultsMessage: 'No files found matching "{searchTerm}".',
+    myFolders: 'My Folders',
+    goBackTo: 'Back to',
+    newFolderPlaceholder: 'New folder...',
+    selectFile: 'Select a file',
+    uploading: 'Uploading...',
+    uploadFile: 'Upload',
+    folderCreated: 'Folder created',
+    folderUpdated: 'Folder updated',
+    folderDeleted: 'Folder deleted',
+    errorCreateFolder: 'Could not create folder',
+    errorUpdateFolder: 'Could not update',
+    errorDeleteFolder: 'Could not delete',
+    errorLoadFolders: 'Could not load folders',
+    errorLoadFiles: 'Could not load files',
+    fileUploaded: 'File uploaded',
+    fileUpdated: 'File updated',
+    fileDeleted: 'File deleted',
+    errorUploadFile: 'Could not upload file',
+    deleteFolderTitle: 'Delete folder',
+    confirmDeleteFolder: 'Are you sure you want to delete this folder?',
+    deleteFileTitle: 'Delete file',
+    confirmDeleteFile: 'Are you sure you want to delete this file?',
+    addNote: 'Add note',
+    editNote: 'Edit note',
+    noFoldersFound: 'No folders found.',
+    search_files: 'Files',
+    search_folders: 'Folders',
+    search_users: 'Friends',
+    quickTasksTitle: 'Quick tasks',
+    quickTasksSubtitle: 'Create text tasks (one per line) or single ones.',
+    quickTasksPlaceholder: 'Examples:\n- Do math homework\n- Print computer images',
+    addTasks: 'Create batch',
+    addOne: 'Add',
+    creating: 'Creating...',
+    emptyTasks: 'No tasks for now.',
+    markPending: 'Set Pending',
+    markInProcess: 'Mark In Progress',
+    markDone: 'Mark Done',
+    editTask: 'Edit task',
+    deleteTask: 'Delete task',
+    updateTaskOk: 'Task updated',
+    deleteTaskOk: 'Task deleted',
+    createTasksOk: 'Tasks created',
+    createTaskOk: 'Task created',
+    errorTasks: 'Could not load tasks',
+  },
 };
+
 
 /* ===================== UTILIDADES PARA RESÚMENES EN TARJETAS ===================== */
 const dateKey = (d) => {
@@ -239,12 +316,14 @@ const DashboardNavbar = ({
         </select>
         <i className="fas fa-search"></i>
         <input
-          type="text"
-          placeholder={
-            searchFilter === 'files' ? 'Buscar en archivos...' :
-            searchFilter === 'folders' ? 'Buscar carpetas...' :
-            'Buscar amigos...'
-          }
+  type="text"
+  placeholder={
+    searchFilter === 'files'
+      ? t('searchPlaceholder')       // o un key más específico
+      : searchFilter === 'folders'
+      ? t('search_folders')
+      : t('search_users')
+  }
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />

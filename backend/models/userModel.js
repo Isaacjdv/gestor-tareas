@@ -1,56 +1,79 @@
-const db = require('../config/db');
+// backend/models/userModel.js
+'use strict';
 
-// Crear un nuevo usuario (sintaxis para PostgreSQL)
-exports.create = async (nombre, email, password, whatsapp_number) => {
-    const query = `
-        INSERT INTO usuarios (nombre, email, password, whatsapp_number) 
-        VALUES ($1, $2, $3, $4)
-        RETURNING id;
-    `;
-    const values = [nombre, email, password, whatsapp_number];
-    const { rows } = await db.query(query, values);
-    return { id: rows[0].id };
-};
-
-// Encontrar un usuario por su email
-exports.findByEmail = async (email) => {
-    const { rows } = await db.query('SELECT * FROM usuarios WHERE email = $1', [email]);
-    return rows[0];
-};
-
-// Encontrar un usuario por su número de WhatsApp
-exports.findByWhatsapp = async (whatsapp_number) => {
-    // [¡CORRECCIÓN!] Aquí decía [email] por error. Debe ser [whatsapp_number].
-    const { rows } = await db.query('SELECT * FROM usuarios WHERE whatsapp_number = $1', [whatsapp_number]);
-    return rows[0];
-};
-
-// Encontrar un usuario por su nombre (insensible a mayúsculas)
-exports.findByName = async (name) => {
-    const { rows } = await db.query(
-        'SELECT * FROM usuarios WHERE nombre ILIKE $1',
-        [name]
-    );
-    return rows[0];
-};
+const pool = require('../config/db');
+const bcrypt = require('bcryptjs');
 
 /**
- * [FUNCIÓN AÑADIDA PARA BUSCAR AMIGOS]
- * Buscar usuarios por nombre o email (excluyendo al usuario actual)
- * Usamos ILIKE para búsquedas 'case-insensitive' en PostgreSQL.
- * Seleccionamos solo los datos públicos.
+ * Crea usuario.
+ * - Hasheamos la contraseña aquí. Si YA la hasheas en el controller,
+ *   comenta la línea del hash y pasa directamente passwordHash = password.
  */
-exports.search = async (searchTerm, currentUserId) => {
-    // Consulta SQL limpiada de caracteres invisibles
-    const query = `
-        SELECT id, nombre, email, foto_perfil_url 
-        FROM usuarios
-        WHERE (nombre ILIKE $1 OR email ILIKE $1) 
-          AND id != $2
-        LIMIT 10;
-    `;
-    // Añadimos '%' para que busque coincidencias parciales (ej: 'pep' encuentra 'pepito')
-    const values = [`%${searchTerm}%`, currentUserId];
-    const { rows } = await db.query(query, values);
-    return rows;
+async function create({ nombre, email, password, whatsapp_number }) {
+  // 🔐 Si ya hasheas en el controller, reemplaza esta línea por:
+  // const passwordHash = password;
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  const query = `
+    INSERT INTO usuarios (nombre, email, password, whatsapp_number)
+    VALUES ($1, $2, $3, $4)
+    RETURNING id, nombre, email, whatsapp_number, created_at
+  `;
+  const values = [nombre, email, passwordHash, whatsapp_number || null];
+
+  const { rows } = await pool.query(query, values);
+  return rows[0];
+}
+
+/** Busca por email (case-sensitive by default) */
+async function findByEmail(email) {
+  const { rows } = await pool.query(
+    'SELECT * FROM usuarios WHERE email = $1 LIMIT 1',
+    [email]
+  );
+  return rows[0] || null;
+}
+
+/** Busca por número de WhatsApp exacto */
+async function findByWhatsapp(whatsapp_number) {
+  const { rows } = await pool.query(
+    'SELECT * FROM usuarios WHERE whatsapp_number = $1 LIMIT 1',
+    [whatsapp_number]
+  );
+  return rows[0] || null;
+}
+
+/** Busca un usuario por nombre con ILIKE (case-insensitive, parcial) */
+async function findByName(name) {
+  const { rows } = await pool.query(
+    'SELECT * FROM usuarios WHERE nombre ILIKE $1 LIMIT 1',
+    [name]
+  );
+  return rows[0] || null;
+}
+
+/**
+ * search: listar usuarios por nombre o email (parcial, case-insensitive),
+ * excluyendo al usuario actual. Devuelve solo datos públicos.
+ */
+async function search(searchTerm, currentUserId) {
+  const query = `
+    SELECT id, nombre, email, foto_perfil_url
+    FROM usuarios
+    WHERE (nombre ILIKE $1 OR email ILIKE $1)
+      AND id <> $2
+    ORDER BY nombre ASC
+    LIMIT 10
+  `;
+  const values = [`%${searchTerm}%`, currentUserId];
+  const { rows } = await pool.query(query, values);
+  return rows;
+}
+
+module.exports = {
+  create,
+  findByEmail,
+  findByWhatsapp,
+  findByName,
+  search,
 };
