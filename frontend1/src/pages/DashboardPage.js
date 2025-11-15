@@ -784,18 +784,37 @@ const DashboardPage = () => {
       try { const data = await tasksService.listByUser(user.id, { limit: 50 }); setTasks(data); }
       catch { /* ignore */ }
     };
+
     const notificationListener = (data) => {
-      const senderId = data.sender?.id ?? data.sender_id;
-      const nombre = data.sender?.nombre || `Usuario ${senderId}`;
-      const foto = data.sender?.foto_perfil_url || 'https://placehold.co/50x50/E0E0E0/121212?text=?';
-      const lastMessage = { contenido: data.message?.contenido ?? data.contenido ?? '', created_at: data.message?.created_at ?? new Date().toISOString() };
-      setNotifications(prev => {
-        const arr = [{ sender: { id: senderId, nombre, foto_perfil_url: foto }, message: lastMessage, count: 1 }, ...prev];
-        window.localStorage.setItem(`gestoria:notifications:${user.id}`, JSON.stringify(arr));
-        return arr;
-      });
-      setHasUnread(true);
-    };
+  const senderId = data.sender?.id ?? data.sender_id;
+
+  // ⛔ No quiero notificaciones de mensajes que YO mismo envié
+  if (!user?.id || senderId === user.id) {
+    return;
+  }
+
+  const nombre = data.sender?.nombre || `Usuario ${senderId}`;
+  const foto = data.sender?.foto_perfil_url || 'https://placehold.co/50x50/E0E0E0/121212?text=?';
+  const lastMessage = {
+    contenido: data.message?.contenido ?? data.contenido ?? '',
+    created_at: data.message?.created_at ?? new Date().toISOString()
+  };
+
+  setNotifications(prev => {
+    const arr = [
+      {
+        sender: { id: senderId, nombre, foto_perfil_url: foto },
+        message: lastMessage,
+        count: 1
+      },
+      ...prev
+    ];
+    window.localStorage.setItem(`gestoria:notifications:${user.id}`, JSON.stringify(arr));
+    return arr;
+  });
+  setHasUnread(true);
+};
+
 
     socket.on('files_updated', fileListener);
     socket.on('folders_updated', folderListener);
