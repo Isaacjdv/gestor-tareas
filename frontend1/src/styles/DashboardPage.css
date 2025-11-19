@@ -818,3 +818,63 @@
 .notification-bell .bell-icon {
   fill: currentColor;
 }
+
+
+.navbar-logo img,
+.navbar-logo-img {
+  height: 100px !important;   /* fuerza el valor */
+  width: auto;
+  display: block;
+}
+.home-card {
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  color: #fff;            /* para que el texto se vea bien sobre el fondo */
+  overflow: hidden;
+}
+
+/* Analítica */
+.home-card--analytics {
+  background-image: url("https://i.ibb.co/ccFTgzZJ/Chat-GPT-Image-18-nov-2025-10-10-08-p-m.png");
+}
+
+/* Reportes */
+.home-card--reports {
+  background-image: url("https://i.ibb.co/jkZcxy0F/2c19f447-10f8-4aab-a40a-1c9d49bd259d.png");
+}
+
+/* Si quieres oscurecer un poco el fondo para leer mejor el texto */
+.home-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.7));
+  z-index: 0;
+}
+
+.home-card > * {
+  position: relative;
+  z-index: 1;
+}
+.navbar-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.navbar-profile:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.navbar-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+}

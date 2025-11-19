@@ -13,5 +13,8 @@ router.post('/login', authController.login);
 // Devuelve los datos del usuario logueado usando su token
 router.get('/me', authMiddleware, authController.getMe);
 
+
+router.post('/change-password', authMiddleware, authController.changePassword);
+
 module.exports = router;
 

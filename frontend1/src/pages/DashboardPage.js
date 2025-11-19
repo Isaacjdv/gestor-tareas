@@ -20,6 +20,8 @@ import QuickTasksContent from '../components/QuickTasksContent';
 // Vistas separadas
 import AnalyticsView from '../components/AnalyticsView';
 import ReportsView from '../components/ReportsView';
+import Lestat from '../components/lestat'; // 👈 NUEVO: importa tu lestat.js
+import Perfil from '../components/Perfil';  // 👈 NUEVO: vista de perfil
 
 /* ====================== URL BACKEND UNIVERSAL ====================== */
 function getApiBase() {
@@ -114,6 +116,25 @@ const translations = {
     createTasksOk: 'Tareas creadas',
     createTaskOk: 'Tarea creada',
     errorTasks: 'No se pudieron cargar las tareas',
+
+    // ==== NUEVO: perfil ====
+    profile: 'Perfil',
+    profileUpdated: 'Perfil actualizado',
+    errorProfileUpdate: 'No se pudo actualizar el perfil',
+    passwordUpdated: 'Contraseña actualizada',
+    errorPasswordUpdate: 'No se pudo cambiar la contraseña',
+    currentPassword: 'Contraseña anterior',
+    newPassword: 'Contraseña nueva',
+    changePassword: 'Cambiar contraseña',
+    saveChanges: 'Guardar cambios',
+    savePassword: 'Guardar contraseña',
+    uploadNewAvatar: 'Cambiar foto',
+    userSince: 'Usuario desde',
+    name: 'Nombre',
+    email: 'Correo',
+    whatsapp: 'WhatsApp',
+    saving: 'Guardando...',
+    chooseAvatar: 'Elige tu avatar',
   },
   en: {
     searchPlaceholder: 'Search...',
@@ -191,6 +212,25 @@ const translations = {
     createTasksOk: 'Tasks created',
     createTaskOk: 'Task created',
     errorTasks: 'Could not load tasks',
+
+    // ==== NEW: profile ====
+    profile: 'Profile',
+    profileUpdated: 'Profile updated',
+    errorProfileUpdate: 'Could not update profile',
+    passwordUpdated: 'Password updated',
+    errorPasswordUpdate: 'Could not change password',
+    currentPassword: 'Current password',
+    newPassword: 'New password',
+    changePassword: 'Change password',
+    saveChanges: 'Save changes',
+    savePassword: 'Save password',
+    uploadNewAvatar: 'Change picture',
+    userSince: 'User since',
+    name: 'Name',
+    email: 'Email',
+    whatsapp: 'WhatsApp',
+    saving: 'Saving...',
+    chooseAvatar: 'Choose your avatar',
   },
 };
 
@@ -298,15 +338,36 @@ const Breadcrumbs = ({ path, currentFolder, onCrumbClick, t }) => {
 };
 
 const DashboardNavbar = ({
-  user, language, setLanguage, t, searchTerm, setSearchTerm, searchFilter, setSearchFilter,
-  hasUnread, onToggleNotificationPanel
+  user,
+  language,
+  setLanguage,
+  t,
+  searchTerm,
+  setSearchTerm,
+  searchFilter,
+  setSearchFilter,
+  hasUnread,
+  onToggleNotificationPanel,
+  onOpenProfile, // 👈 NUEVO
 }) => {
   const navigate = useNavigate();
   const handleLogout = () => { authService.logout(); navigate('/'); };
 
+  const handleProfileClick = () => {
+    if (onOpenProfile) onOpenProfile();
+  };
+
   return (
-    <nav className="dashboard-navbar">
-      <div className="navbar-logo"><a href="/dashboard">Gestor IA</a></div>
+   <nav className="dashboard-navbar">
+  <div className="navbar-logo">
+    <a href="/dashboard">
+      <img
+        src="https://i.ibb.co/G4JcrC0v/852ae06c-511e-4480-8441-afd340897585.png"
+        alt="Gesia IA"
+        className="navbar-logo-img"
+      />
+    </a>
+  </div>
 
       <div className="navbar-search">
         <select className="search-filter" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)}>
@@ -316,14 +377,14 @@ const DashboardNavbar = ({
         </select>
         <i className="fas fa-search"></i>
         <input
-  type="text"
-  placeholder={
-    searchFilter === 'files'
-      ? t('searchPlaceholder')       // o un key más específico
-      : searchFilter === 'folders'
-      ? t('search_folders')
-      : t('search_users')
-  }
+          type="text"
+          placeholder={
+            searchFilter === 'files'
+              ? t('searchPlaceholder')       // o un key más específico
+              : searchFilter === 'folders'
+              ? t('search_folders')
+              : t('search_users')
+          }
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -338,7 +399,20 @@ const DashboardNavbar = ({
           {hasUnread && <div className="blinking-dot"></div>}
         </div>
 
-        <span className="welcome-text">{t('hello')}, {user ? user.nombre : 'Usuario'}</span>
+        {/* Avatar + nombre que abre el perfil */}
+        <div
+          className="navbar-profile"
+          onClick={handleProfileClick}
+          title={t('profile')}
+        >
+          <img
+            src={user?.foto_perfil_url || 'https://placehold.co/40x40/E0E0E0/121212?text=U'}
+            alt={user ? user.nombre : 'Usuario'}
+            className="navbar-avatar"
+          />
+          <span className="welcome-text">{t('hello')}, {user ? user.nombre : 'Usuario'}</span>
+        </div>
+
         <button onClick={handleLogout} className="btn btn-primary">{t('logout')}</button>
       </div>
     </nav>
@@ -467,7 +541,7 @@ const QuickTasksCard = ({ userId, t, tasks, setTasks, loading, setLoading, onToa
 };
 
 
-/* ====== TARJETAS HOME (con RESÚMENES) + VENTAJAS (como estaba) + MI ÁREA ====== */
+/* ====== TARJETAS HOME (con RESÚMENES) + VENTAJAS (clickable a Lestat) + MI ÁREA ====== */
 const HomePageCards = ({ onNavigate, t, tasks, groupedFiles, fileListHandlers, quickTasksProps }) => {
   const totalFiles = (groupedFiles.pending || []).length + (groupedFiles.in_process || []).length + (groupedFiles.done || []).length;
 
@@ -484,34 +558,49 @@ const HomePageCards = ({ onNavigate, t, tasks, groupedFiles, fileListHandlers, q
       <h2>{t('welcomeTitle')}</h2>
       <p className="home-subtitle">{t('welcomeMessage')}</p>
 
-      {/* Fila de tarjetas */}
-      <div className="home-card-row">
-        {/* Analítica */}
-        <div className="home-card home-card--blue" onClick={() => onNavigate('analytics')}>
-          <i className="fas fa-chart-line card-icon"></i>
-          <div className="card-overlay"><h3>✔️ {completion}% · {spark}</h3></div>
-          <div className="card-footer">
-            <h4>{t('homeCardAnalyticsTitle')}</h4>
-            <p style={{ marginTop: 6, opacity: .85 }}>Tendencia 7d y tasa de finalización</p>
-          </div>
-        </div>
+     {/* Fila de tarjetas */}
+<div className="home-card-row">
+  {/* Analítica */}
+  <div
+    className="home-card home-card--analytics"
+    onClick={() => onNavigate('analytics')}
+  >
+    <i className="fas fa-chart-line card-icon"></i>
+    <div className="card-overlay">
+      <h3>✔️ {completion}% · {spark}</h3>
+    </div>
+    <div className="card-footer">
+      <h4>{t('homeCardAnalyticsTitle')}</h4>
+      <p style={{ marginTop: 6, opacity: .85 }}>Tendencia 7d y tasa de finalización</p>
+    </div>
+  </div>
 
-        {/* Reportes */}
-        <div className="home-card home-card--green" onClick={() => onNavigate('reports')}>
-          <i className="fas fa-file-alt card-icon"></i>
-          <div className="card-overlay"><h3>⛔ {pending} · 📝 {inproc} · ✅ {done}</h3></div>
-          <div className="card-footer">
-            <h4>{t('homeCardReportsTitle')}</h4>
-            <p style={{ marginTop: 6, opacity: .85 }}>{totalFiles} archivos totales</p>
-          </div>
-        </div>
+  {/* Reportes */}
+  <div
+    className="home-card home-card--reports"
+    onClick={() => onNavigate('reports')}
+  >
+    <i className="fas fa-file-alt card-icon"></i>
+    <div className="card-overlay">
+      <h3>⛔ {pending} · 📝 {inproc} · ✅ {done}</h3>
+    </div>
+    <div className="card-footer">
+      <h4>{t('homeCardReportsTitle')}</h4>
+      <p style={{ marginTop: 6, opacity: .85 }}>{totalFiles} archivos totales</p>
+    </div>
+  </div>
+
 
         {/* Tareas rápidas (abre pestaña de Tareas) */}
         <QuickTasksCard {...quickTasksProps} onOpenSection={(name)=>onNavigate(name)} />
       </div>
 
-      {/* === VENTAJAS DEL FLUJO / WORKFLOW (DEJADA TAL CUAL) === */}
-      <div className="advantages-section">
+      {/* === VENTAJAS DEL FLUJO / WORKFLOW (CLICK -> Lestat) === */}
+      <div
+        className="advantages-section"
+        onClick={() => onNavigate('workflow')}   // 👈 al clic, abre la vista Lestat
+        style={{ cursor: 'pointer' }}
+      >
         <div className="advantages-text">
           <h3>{t('advantagesTitle')}</h3>
           <p>{t('advantagesDesc')}</p>
@@ -688,7 +777,7 @@ const DashboardPage = () => {
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [openChats, setOpenChats] = useState([]);
   const [modalState, setModalState] = useState({ isOpen: false });
-  const [mainView, setMainView] = useState('home');
+  const [mainView, setMainView] = useState('home'); // home | tasks | analytics | reports | workflow | profile
   const [noteModalFile, setNoteModalFile] = useState(null);
 
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -786,35 +875,34 @@ const DashboardPage = () => {
     };
 
     const notificationListener = (data) => {
-  const senderId = data.sender?.id ?? data.sender_id;
+      const senderId = data.sender?.id ?? data.sender_id;
 
-  // ⛔ No quiero notificaciones de mensajes que YO mismo envié
-  if (!user?.id || senderId === user.id) {
-    return;
-  }
+      // ⛔ No quiero notificaciones de mensajes que YO mismo envié
+      if (!user?.id || senderId === user.id) {
+        return;
+      }
 
-  const nombre = data.sender?.nombre || `Usuario ${senderId}`;
-  const foto = data.sender?.foto_perfil_url || 'https://placehold.co/50x50/E0E0E0/121212?text=?';
-  const lastMessage = {
-    contenido: data.message?.contenido ?? data.contenido ?? '',
-    created_at: data.message?.created_at ?? new Date().toISOString()
-  };
+      const nombre = data.sender?.nombre || `Usuario ${senderId}`;
+      const foto = data.sender?.foto_perfil_url || 'https://placehold.co/50x50/E0E0E0/121212?text=?';
+      const lastMessage = {
+        contenido: data.message?.contenido ?? data.contenido ?? '',
+        created_at: data.message?.created_at ?? new Date().toISOString()
+      };
 
-  setNotifications(prev => {
-    const arr = [
-      {
-        sender: { id: senderId, nombre, foto_perfil_url: foto },
-        message: lastMessage,
-        count: 1
-      },
-      ...prev
-    ];
-    window.localStorage.setItem(`gestoria:notifications:${user.id}`, JSON.stringify(arr));
-    return arr;
-  });
-  setHasUnread(true);
-};
-
+      setNotifications(prev => {
+        const arr = [
+          {
+            sender: { id: senderId, nombre, foto_perfil_url: foto },
+            message: lastMessage,
+            count: 1
+          },
+          ...prev
+        ];
+        window.localStorage.setItem(`gestoria:notifications:${user.id}`, JSON.stringify(arr));
+        return arr;
+      });
+      setHasUnread(true);
+    };
 
     socket.on('files_updated', fileListener);
     socket.on('folders_updated', folderListener);
@@ -1037,6 +1125,7 @@ const DashboardPage = () => {
         setSearchFilter={setSearchFilter}
         hasUnread={hasUnread}
         onToggleNotificationPanel={toggleNotificationPanel}
+        onOpenProfile={() => setMainView('profile')}   // 👈 abrir vista perfil
       />
 
       <div className="dashboard-body">
@@ -1195,6 +1284,26 @@ const DashboardPage = () => {
                       tasks={tasks}
                       files={allFiles}
                       folders={folders}
+                    />
+                  ) : mainView === 'workflow' ? (
+                    <div className="apartado-view">
+                      <nav className="breadcrumbs apartado-breadcrumbs">
+                        <span className="crumb" onClick={()=>setMainView('home')}>
+                          <i className="fas fa-home"></i> {t('root')}
+                        </span>
+                        <span className="separator">&gt;</span>
+                        <span className="crumb">{t('advantagesTitle')}</span>
+                      </nav>
+                      <div className="apartado-content">
+                        {/* Contenido de lestat.js en el panel central */}
+                        <Lestat t={t} />
+                      </div>
+                    </div>
+                  ) : mainView === 'profile' ? (
+                    <Perfil
+                      t={(k)=>t(k)}
+                      user={user}
+                      onGoHome={() => setMainView('home')}
                     />
                   ) : null}
                 </>

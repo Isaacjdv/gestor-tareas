@@ -1,0 +1,148 @@
+.profile-view {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.profile-header {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.profile-avatar-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.profile-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--accent-color, #3b82f6);
+}
+
+.btn-change-avatar {
+  font-size: 0.85rem;
+  padding: 0.35rem 0.8rem;
+}
+
+.profile-main-info h2 {
+  margin: 0;
+}
+
+.profile-created-at {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.profile-form {
+  margin-top: 1rem;
+}
+
+.profile-form-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.profile-form-group {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.8rem;
+}
+
+.profile-form-group input {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  color: var(--font-color);
+}
+
+.profile-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.profile-alert {
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.profile-alert.success {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.profile-alert.error {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+/* Teléfono */
+.phone-input-wrapper {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  overflow: hidden;
+}
+
+.phone-prefix {
+  padding: 0.5rem 0.7rem;
+  border-right: 1px solid var(--border-color);
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.phone-input-wrapper input {
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0.5rem 0.7rem;
+  flex: 1;
+  color: var(--font-color);
+}
+
+.phone-help {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+/* Grid de avatares */
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 0.75rem;
+}
+
+.avatar-option {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  padding: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.avatar-option img {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.avatar-option.selected {
+  border-color: var(--accent-color, #3b82f6);
+}

@@ -28,10 +28,16 @@ const NavBar = ({ scrollToLogin }) => {
     }, [scrolled]);
 
     return (
-        <nav className={`landing-navbar ${scrolled ? 'scrolled' : ''}`}>
-            <div className="navbar-logo">
-                <Link to="/">Gestor IA</Link>
-            </div>
+    <nav className={`landing-navbar ${scrolled ? 'scrolled' : ''}`}>
+  <div className="navbar-logo">
+    <Link to="/">
+      <img
+        src="https://i.ibb.co/G4JcrC0v/852ae06c-511e-4480-8441-afd340897585.png"  
+        alt="Gesia AI"
+        className="navbar-logo-img"
+      />
+    </Link>
+  </div>
 
             <ul className="navbar-links">
                 {/* Inicio (scroll en la misma página) */}
