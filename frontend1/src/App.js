@@ -18,7 +18,7 @@ function App() {
     const fetchUser = async () => {
       try {
         const response = await authService.getSelf();
-        setUser(response.data);
+        setUser(response.data);   // 👈 aquí ya viene foto_perfil_url, whatsapp_number, etc.
       } catch (error) {
         authService.logout(); // Limpia token inválido
       }
@@ -55,7 +55,6 @@ function App() {
               </PrivateRoute>
             }
           />
-          
         </Routes>
       </UserContext.Provider>
     </Router>

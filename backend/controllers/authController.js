@@ -74,10 +74,18 @@ const login = async (req, res) => {
     const payload = { userId: user.id, email: user.email, nombre: user.nombre };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
+    // devolvemos también los datos del usuario (incluida la foto) para el frontend
     return res.status(200).json({
       message: 'Inicio de sesión exitoso.',
       token,
-      userId: user.id,
+      user: {
+        id: user.id,
+        nombre: user.nombre,
+        email: user.email,
+        whatsapp_number: user.whatsapp_number,
+        foto_perfil_url: user.foto_perfil_url,
+        created_at: user.created_at,
+      },
     });
   } catch (error) {
     console.error('Error en el login:', error);
@@ -88,12 +96,30 @@ const login = async (req, res) => {
 /* ============ GET ME ============ */
 const getMe = async (req, res) => {
   try {
-    // authMiddleware debe poner el payload en req.user
-    return res.status(200).json({
-      id: req.user.userId,
-      nombre: req.user.nombre,
-      email: req.user.email,
-    });
+    const userId = req.user?.userId; // viene del token (authMiddleware)
+
+    if (!userId) {
+      return res.status(401).json({ message: 'No autenticado' });
+    }
+
+    const result = await pool.query(
+      `SELECT id,
+              nombre,
+              email,
+              whatsapp_number,
+              foto_perfil_url,
+              created_at
+       FROM usuarios
+       WHERE id = $1`,
+      [userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    // devolvemos toda la info útil
+    return res.json(result.rows[0]);
   } catch (error) {
     console.error('Error en getMe:', error);
     return res.status(500).json({ message: 'Error al obtener los datos del usuario.' });
@@ -103,7 +129,7 @@ const getMe = async (req, res) => {
 /* ============ CHANGE PASSWORD ============ */
 const changePassword = async (req, res) => {
   try {
-    // IMPORTANTE: authMiddleware debe decodificar el token y poner { userId, ... } en req.user
+    // authMiddleware debe poner { userId, ... } en req.user
     const userId = req.user?.userId;
 
     const { currentPassword, newPassword } = req.body;

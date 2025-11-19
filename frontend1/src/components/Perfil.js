@@ -5,11 +5,11 @@ import authService from '../services/authService';
 import '../styles/Profile.css';
 
 const DEFAULT_AVATAR =
-  'https://api.dicebear.com/7.x/adventurer/png?seed=User';
+  'https://placehold.co/100x100/E0E0E0/121212?text=User';
 
-// Avatares de estilo personajes (NO son imágenes oficiales, solo estilo)
+// Avatares estilo personajes (usando DiceBear, NO imágenes oficiales)
 const AVATAR_OPTIONS = [
-  // Dragon Ball (seeds)
+  // Dragon Ball
   'https://api.dicebear.com/7.x/adventurer/png?seed=Goku',
   'https://api.dicebear.com/7.x/adventurer/png?seed=Vegeta',
   'https://api.dicebear.com/7.x/adventurer/png?seed=Gohan',
@@ -130,7 +130,6 @@ const Perfil = ({ t, user, onGoHome }) => {
     setMessage(null);
 
     try {
-      // llamada a /api/auth/change-password
       await authService.changePassword({
         currentPassword,
         newPassword,
