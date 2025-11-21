@@ -6,6 +6,27 @@ const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
 
 /* ----------------------------- Helpers ----------------------------- */
 
+/** * 🔥 NUEVO: Limpia el texto para que la voz no lea "asterisco asterisco".
+ * Elimina Markdown, negritas, listas y símbolos de código.
+ */
+function cleanTextForTTS(text = '') {
+  if (!text) return '';
+  let clean = text;
+
+  // Eliminar bloques de código, negritas, cursivas, etc.
+  clean = clean.replace(/```[\s\S]*?```/g, '');
+  clean = clean.replace(/\*\*(.*?)\*\*/g, '$1'); 
+  clean = clean.replace(/\*(.*?)\*/g, '$1');     
+  clean = clean.replace(/__(.*?)__/g, '$1');
+  clean = clean.replace(/^#+\s+/gm, '');
+  clean = clean.replace(/^\s*[-*]\s+/gm, ', '); 
+  clean = clean.replace(/`/g, ''); 
+  clean = clean.replace(/\[|\]/g, ''); 
+
+  return clean.replace(/\s+/g, ' ').trim();
+}
+
+
 /** Extrae el primer objeto JSON de un string (quita cercas de código si vienen) */
 function extractFirstJson(str = '') {
   let s = String(str || '').trim();
@@ -26,7 +47,7 @@ function ai21Headers() {
 }
 
 /* ===========================
- * FUNCIÓN 1: El Intérprete
+ * FUNCIÓN 1: El Intérprete (INTACTA)
  * =========================== */
 exports.interpretMessage = async (message) => {
   const prompt = `
@@ -79,7 +100,7 @@ Analiza: "${message || ''}"
 
   try {
     const { data } = await axios.post(
-      'https://api.ai21.com/studio/v1/chat/completions',
+      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
       {
         model: 'jamba-large',
         messages: [{ role: 'user', content: prompt }],
@@ -102,7 +123,7 @@ Analiza: "${message || ''}"
 };
 
 /* ==============================================
- * FUNCIÓN 2: Conversador (string o array)
+ * FUNCIÓN 2: Conversador (MEJORADO: CHARLA LIBRE + SIN MARKDOWN)
  * ============================================== */
 exports.generateConversationalResponse = async (historyOrMessage, userName, userData) => {
   const foldersList = Array.isArray(userData?.folders)
@@ -116,17 +137,24 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
         .join('; ')
     : 'ninguno';
 
+  // 🔥 SYSTEM INSTRUCTION MODIFICADO: Ahora permite hablar de CUALQUIER TEMA
   const systemInstruction = `
-Eres "Gestor IA", un asistente de IA conversacional y amable. El nombre del usuario es ${userName}.
+Eres "Gestor IA", un asistente virtual inteligente, amable y útil. El nombre del usuario es ${userName}.
 Tu trabajo es responder a la conversación y ayudar al usuario a gestionar sus tareas y archivos.
 
-Si el usuario pregunta sobre archivos o carpetas, usa la siguiente lista de datos para responder. Si la lista está vacía, menciónalo.
+TUS CAPACIDADES:
+1. Gestionar archivos y carpetas.
+2. **CHARLA GENERAL:** Responde preguntas sobre CUALQUIER tema (cultura, historia, ciencia, vida diaria) con naturalidad.
 
 DATOS DEL USUARIO:
-Carpetas: ${foldersList || 'ninguna'}.
-Archivos Recientes: ${filesList || 'ninguno'}.
+- Carpetas: ${foldersList || 'ninguna'}.
+- Archivos Recientes: ${filesList || 'ninguno'}.
 
-MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respuesta y ofrecer ayuda.
+⚠️ REGLA OBLIGATORIA DE FORMATO:
+- NO USES MARKDOWN. Prohibido usar asteriscos (**negrita**), guiones de lista o almohadillas (#).
+- Escribe en texto plano.
+
+MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respuesta.
 `.trim();
 
   let messagesForApi;
@@ -143,7 +171,7 @@ MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respu
 
   try {
     const { data } = await axios.post(
-      'https://api.ai21.com/studio/v1/chat/completions',
+      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
       {
         model: 'jamba-large',
         messages: messagesForApi,
@@ -153,10 +181,12 @@ MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respu
       { headers: ai21Headers() }
     );
 
-    return (
-      data?.choices?.[0]?.message?.content?.trim() ||
-      'Lo siento, tuve un problema para generar una respuesta coherente.'
-    );
+    const rawReply = data?.choices?.[0]?.message?.content?.trim() ||
+      'Lo siento, tuve un problema para generar una respuesta coherente.';
+    
+    // 🔥 APLICAMOS LIMPIEZA DE VOZ
+    return cleanTextForTTS(rawReply);
+
   } catch (error) {
     console.error(
       'Error en generateConversationalResponse:',
@@ -167,7 +197,7 @@ MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respu
 };
 
 /* ==============================
- * FUNCIÓN: Buscar imagen (Unsplash)
+ * FUNCIÓN: Buscar imagen (Unsplash) - INTACTA
  * ============================== */
 async function fetchRelevantImage(topic) {
   if (!UNSPLASH_ACCESS_KEY) {
@@ -175,7 +205,7 @@ async function fetchRelevantImage(topic) {
     return null;
   }
   try {
-    const { data } = await axios.get('https://api.unsplash.com/search/photos', {
+    const { data } = await axios.get('[https://api.unsplash.com/search/photos](https://api.unsplash.com/search/photos)', {
       params: {
         query: topic,
         per_page: 1,
@@ -201,7 +231,7 @@ exports.generatePdfContent = async (topic, userName) => {
     year: 'numeric',
   });
 
-  // PROMPT 1: Generar estructura + imageQuery
+  // PROMPT 1: Generar estructura (Instrucción para evitar markdown en JSON)
   const structurePrompt = `
 Tu tarea es generar la estructura de un informe sobre "${topic}". Responde SIEMPRE y ÚNICAMENTE con un objeto JSON.
 El JSON debe tener:
@@ -211,19 +241,14 @@ El JSON debe tener:
 4. "conclusion": Un párrafo corto de conclusión.
 5. "imageQuery": Una frase corta y específica, en INGLÉS, para buscar la imagen de portada en Unsplash.
 
-REGLAS DE imageQuery:
-- La consulta debe ser ESPECÍFICA al tema.
-- Si el tema es un **dibujo animado** (como 'Ben 10', 'Dragon Ball'), pide por el personaje o el logo. (Ej: "Ben 10 cartoon character", "Dragon Ball Z Goku")
-- Si el tema es un **hecho histórico** (como 'Segunda Guerra Mundial'), pide una foto histórica. (Ej: "World War 2 historical photo")
-- Si el tema es **general** (como 'El Océano'), usa una consulta descriptiva. (Ej: "deep ocean")
-- NO uses términos abstractos como 'concept' o 'art'.
+REGLAS: NO USES MARKDOWN.
 `.trim();
 
   let structure = null;
 
   try {
     const { data } = await axios.post(
-      'https://api.ai21.com/studio/v1/chat/completions',
+      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
       {
         model: 'jamba-large',
         messages: [{ role: 'user', content: structurePrompt }],
@@ -258,7 +283,7 @@ REGLAS DE imageQuery:
     imageQuery: structure?.imageQuery || 'report cover',
   };
 
-  // PROMPT 2: Generar contenido extenso
+  // PROMPT 2: Generar contenido extenso (Instrucción para evitar markdown en el texto)
   const contentPrompt = `
 Escribe un informe detallado (mínimo 800 palabras) sobre "${topic}". Usa un tono educativo y fácil de entender.
 Debes seguir esta estructura exacta (desarrolla cada punto):
@@ -268,11 +293,14 @@ Debes seguir esta estructura exacta (desarrolla cada punto):
 ${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
 - Conclusión: ${structure.conclusion}
 - Bibliografía: (Añade una sección de 3 a 5 fuentes realistas o ficticias sobre el tema)
+
+REGLAS DE FORMATO:
+- NO USES MARKDOWN (**negrita**, ## titulos). Usa texto plano.
 `.trim();
 
   try {
     const { data } = await axios.post(
-      'https://api.ai21.com/studio/v1/chat/completions',
+      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
       {
         model: 'jamba-large',
         messages: [{ role: 'user', content: contentPrompt }],
@@ -282,7 +310,10 @@ ${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
       { headers: ai21Headers() }
     );
 
-    const textContent = data?.choices?.[0]?.message?.content?.trim() || '';
+    let rawTextContent = data?.choices?.[0]?.message?.content?.trim() || '';
+
+    // Aplicamos limpieza de voz al contenido
+    const textContent = cleanTextForTTS(rawTextContent);
 
     // Buscar imagen con la consulta generada
     const imageUrl = await fetchRelevantImage(structure.imageQuery);
@@ -305,18 +336,10 @@ ${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
  * FUNCIÓN 4: Chat público (landing/app home)
  * ============================================ */
 exports.generatePublicResponse = async (message) => {
-  const systemMsg = 'Eres "Gestor IA", un asistente de IA en la página de inicio de una aplicación.';
+  const systemMsg = 'Eres "Gestor IA". Responde sobre la aplicación. NO USES MARKDOWN.';
   const prompt = `
-Eres "Gestor IA", un asistente de IA en la página de inicio de una aplicación.
-La aplicación es un gestor de archivos y tareas que se integra con WhatsApp.
-
-Permite a los usuarios:
-- Subir y organizar archivos (PDFs, imágenes, etc.) en carpetas y subcarpetas.
-- Interactuar con un bot de WhatsApp para crear carpetas, subir archivos y pedir resúmenes.
-- Generar PDFs sobre cualquier tema usando IA.
-- Transcribir audios de WhatsApp a texto.
-
-Sé amable, conciso y responde solo a preguntas sobre la aplicación. Si te preguntan algo no relacionado, di amablemente que solo puedes hablar sobre el Gestor de Tareas.
+Eres "Gestor IA", un asistente de IA en la página de inicio.
+Sé amable, conciso. NO USES MARKDOWN.
 
 Usuario: "${String(message || '')}"
 Respuesta:
@@ -324,7 +347,7 @@ Respuesta:
 
   try {
     const { data } = await axios.post(
-      'https://api.ai21.com/studio/v1/chat/completions',
+      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
       {
         model: 'jamba-large',
         messages: [
@@ -337,9 +360,14 @@ Respuesta:
       { headers: ai21Headers() }
     );
 
-    return data?.choices?.[0]?.message?.content?.trim() || 'Lo siento, no entendí la pregunta.';
+    const rawReply = data?.choices?.[0]?.message?.content?.trim() || 'Lo siento, no entendí la pregunta.';
+    
+    // Aplicamos limpieza de voz
+    return cleanTextForTTS(rawReply);
+
   } catch (error) {
     console.error('Error en el chat público de IA:', error?.message || error);
     return 'Tuve un problema para conectarme con mi cerebro de IA.';
   }
 };
+````
