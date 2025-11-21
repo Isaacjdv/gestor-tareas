@@ -227,10 +227,6 @@ exports.handleChatMessage = async (req, res) => {
             .replace(/\\/g, '/');
 
           const fileUrlPdf = `${RENDER_URL}/${publicPdfPath}`;
-          // Aquí podrías:
-          // - Guardar el archivo en tu tabla de files
-          // - Enviar notificación por WhatsApp con el link
-          // - O simplemente dejarlo disponible en el dashboard
           console.log('PDF generado y disponible en:', fileUrlPdf);
         } catch (pdfError) {
           console.error("Error generando PDF asíncrono:", pdfError);
@@ -243,11 +239,33 @@ exports.handleChatMessage = async (req, res) => {
        * ACLARACIÓN / UPLOAD
        * ====================== */
 
-      case 'clarification_needed':
-        return res.status(200).json({
-          reply:
-            "No estoy seguro de a qué archivo o carpeta te refieres. ¿Podrías ser un poco más específico, por favor?",
-        });
+      case 'clarification_needed': {
+        // 👇 Comprobamos si el mensaje habla de archivos/carpetas
+        const textLower = (latestUserMessage || '').toLowerCase();
+        const isFileRelated = /(archivo|archivos|carpeta|carpetas|pdf|documento|documentos|sube|subir|guarda|guardar|envía|enviar|mandar)/.test(
+          textLower
+        );
+
+        if (isFileRelated) {
+          // Aquí sí tiene sentido pedir aclaración
+          return res.status(200).json({
+            reply:
+              "No estoy seguro de a qué archivo o carpeta te refieres. ¿Podrías ser un poco más específico, por favor?",
+          });
+        }
+
+        // Si NO es de archivos (como "¿quieres jugar un juego?"), lo tratamos como conversación normal
+        const userFolders = await folderModel.findByUserId(user.userId);
+        const userFiles = await fileModel.findAllByUserId(user.userId);
+
+        const conversationalReply = await aiService.generateConversationalResponse(
+          history,
+          user.nombre,
+          { folders: userFolders, files: userFiles }
+        );
+
+        return res.status(200).json({ reply: conversationalReply });
+      }
 
       case 'upload_file': // En el dashboard no gestionamos subidas por texto
         return res.status(200).json({
