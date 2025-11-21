@@ -6,30 +6,11 @@ const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
 
 /* ----------------------------- Helpers ----------------------------- */
 
-/** * Limpia el texto para que la voz no lea "asterisco asterisco".
- */
-function cleanTextForTTS(text = '') {
-  if (!text) return '';
-  let clean = text;
-
-  // Eliminar bloques de código, negritas, cursivas, etc.
-  clean = clean.replace(/```[\s\S]*?```/g, '');
-  clean = clean.replace(/\*\*(.*?)\*\*/g, '$1'); 
-  clean = clean.replace(/\*(.*?)\*/g, '$1');     
-  clean = clean.replace(/__(.*?)__/g, '$1');
-  clean = clean.replace(/^#+\s+/gm, '');
-  clean = clean.replace(/^\s*[-*]\s+/gm, ', '); 
-  clean = clean.replace(/`/g, ''); 
-  clean = clean.replace(/\[|\]/g, ''); 
-
-  return clean.replace(/\s+/g, ' ').trim();
-}
-
-
 /** Extrae el primer objeto JSON de un string (quita cercas de código si vienen) */
 function extractFirstJson(str = '') {
   let s = String(str || '').trim();
   if (s.startsWith('```')) {
+    // Quita cercas de código y lenguaje opcional
     s = s.replace(/^```[a-zA-Z-]*\n?/, '').replace(/```$/, '').trim();
   }
   const match = s.match(/{[\s\S]*}/);
@@ -59,15 +40,46 @@ Las intenciones posibles son:
 
 REGLAS CRÍTICAS:
 1. Al extraer nombres en "entity", "parent_entity" o "new_entity", sé EXTREMADAMENTE LITERAL. No simplifiques "Base de datos II" a "Base de datos".
-2. Intención "upload_file": Actívala si el usuario quiere GUARDAR, SUBIR o ARCHIVAR algo.
+2. Intención "upload_file":
+   - Actívala si el usuario quiere GUARDAR, SUBIR o ARCHIVAR algo (ej: "guarda esto", "sube esto", "archiva esto").
+   - Si menciona una carpeta (ej: "en la carpeta X", "en X", "a X"), extrae "X" como "entity".
+   - Si el usuario solo adjunta un archivo sin texto (mensaje vacío o marcador), devuelve {"intent":"upload_file"} sin "entity".
 3. Para "generate_pdf", extrae el tema en "entity".
+4. Para "confirm_save_yes", si se menciona una carpeta, extráela en "entity".
+5. Para "set_reminder":
+   - "entity": descripción de la actividad.
+   - "time": hora o período (ej: "en 2 horas", "mañana a las 9 am").
+6. Para "schedule_file_send":
+   - "entity": nombre del archivo.
+   - "contact": nombre o número del contacto.
+   - "time": hora o período.
+   - "message": mensaje adicional (opcional).
+7. Si una acción necesita un nombre y no está claro, usa "clarification_needed".
+
+### Ejemplos ###
+- Usuario: "hola" -> {"intent": "greeting"}
+- Usuario: "muéstrame mis carpetas" -> {"intent": "list_folders"}
+- Usuario: "qué hay dentro de la carpeta Base de datos II" -> {"intent": "view_folder", "entity": "Base de datos II"}
+- Usuario: "crea la carpeta 'Impuestos 2025' dentro de 'Facturas'" -> {"intent": "create_folder", "entity": "Impuestos 2025", "parent_entity": "Facturas"}
+- Usuario: "renombra 'mate' a 'matemáticas'" -> {"intent": "edit_folder", "entity": "mate", "new_entity": "matemáticas"}
+- Usuario: "pásame el primer archivo" -> {"intent": "send_latest_file"}
+- Usuario: "pásame el archivo" -> {"intent": "clarification_needed"}
+- Usuario: "haz un resumen de la segunda guerra mundial en pdf" -> {"intent": "generate_pdf", "entity": "la segunda guerra mundial"}
+- Usuario: "recuérdame hacer la compra en 30 minutos" -> {"intent": "set_reminder", "entity": "hacer la compra", "time": "en 30 minutos"}
+
+--- Nuevos ejemplos de subida ---
+- Usuario: "sube esto en la carpeta deberes" -> {"intent": "upload_file", "entity": "deberes"}
+- Usuario: "Guarda esto en carpetaxd" -> {"intent": "upload_file", "entity": "carpetaxd"}
+- Usuario: "Archiva esto en 'importante'" -> {"intent": "upload_file", "entity": "importante"}
+- Usuario: "[ADJUNTO]" (solo archivo) -> {"intent": "upload_file"}
+- Usuario: "Guárdalo en la carpeta archivos" -> {"intent": "confirm_save_yes", "entity": "archivos"}
 
 Analiza: "${message || ''}"
 `.trim();
 
   try {
     const { data } = await axios.post(
-      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
+      'https://api.ai21.com/studio/v1/chat/completions',
       {
         model: 'jamba-large',
         messages: [{ role: 'user', content: prompt }],
@@ -90,7 +102,7 @@ Analiza: "${message || ''}"
 };
 
 /* ==============================================
- * FUNCIÓN 2: Conversador (MEJORADO: CHARLA LIBRE + SIN MARKDOWN)
+ * FUNCIÓN 2: Conversador (string o array)
  * ============================================== */
 exports.generateConversationalResponse = async (historyOrMessage, userName, userData) => {
   const foldersList = Array.isArray(userData?.folders)
@@ -104,22 +116,31 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
         .join('; ')
     : 'ninguno';
 
+  // 🔥 PROMPT ACTUALIZADO: permite conversación de cualquier tema, pero usa datos de archivos cuando toque
   const systemInstruction = `
-Eres "Gestor IA", un asistente virtual inteligente, amable y útil. El nombre del usuario es ${userName}.
+Eres "Gestor IA", un asistente de IA conversacional y amable. El nombre del usuario es ${userName}.
 
-TUS RESPONSABILIDADES:
-1. Ayudar a gestionar archivos y carpetas.
-2. **CHARLA GENERAL:** Responde preguntas sobre CUALQUIER tema con naturalidad.
+TU ROL PRINCIPAL:
+1. Mantener una conversación natural, cercana y útil.
+2. Ayudar al usuario a gestionar sus tareas y archivos cuando lo necesite.
+
+SI EL USUARIO:
+- Habla de carpetas, archivos, PDFs, resúmenes, WhatsApp, recordatorios o la aplicación:
+   - Usa la información disponible para darle contexto.
+   - Propón acciones útiles (por ejemplo: "podemos crear una carpeta para eso", "puedes subir el archivo y luego te hago un resumen", etc.).
+- Habla de otros temas (estudio, trabajo, dudas generales, curiosidades, temas random, problemas personales, etc.):
+   - Responde normalmente sobre ese tema.
+   - NO digas que solo puedes hablar de archivos o de la aplicación.
+   - Puedes hacer preguntas de seguimiento cortas para mantener la conversación.
 
 DATOS DEL USUARIO:
-- Carpetas: ${foldersList || 'ninguna'}.
-- Archivos Recientes: ${filesList || 'ninguno'}.
+Carpetas: ${foldersList || 'ninguna'}.
+Archivos Recientes: ${filesList || 'ninguno'}.
 
-⚠️ REGLA OBLIGATORIA DE FORMATO:
-- NO USES MARKDOWN. Prohibido usar asteriscos (**negrita**), guiones de lista o almohadillas (#).
-- Escribe en texto plano.
-
-MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respuesta.
+MANTÉN LA CONVERSACIÓN:
+- Usa el historial anterior para contextualizar tu respuesta.
+- Sé empático y directo, evita respuestas excesivamente largas.
+- No inventes archivos o carpetas que no estén en la lista.
 `.trim();
 
   let messagesForApi;
@@ -136,7 +157,7 @@ MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respu
 
   try {
     const { data } = await axios.post(
-      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
+      'https://api.ai21.com/studio/v1/chat/completions',
       {
         model: 'jamba-large',
         messages: messagesForApi,
@@ -146,11 +167,10 @@ MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respu
       { headers: ai21Headers() }
     );
 
-    const rawReply = data?.choices?.[0]?.message?.content?.trim() ||
-      'Lo siento, tuve un problema para generar una respuesta coherente.';
-    
-    return cleanTextForTTS(rawReply);
-
+    return (
+      data?.choices?.[0]?.message?.content?.trim() ||
+      'Lo siento, tuve un problema para generar una respuesta coherente.'
+    );
   } catch (error) {
     console.error(
       'Error en generateConversationalResponse:',
@@ -169,7 +189,7 @@ async function fetchRelevantImage(topic) {
     return null;
   }
   try {
-    const { data } = await axios.get('[https://api.unsplash.com/search/photos](https://api.unsplash.com/search/photos)', {
+    const { data } = await axios.get('https://api.unsplash.com/search/photos', {
       params: {
         query: topic,
         per_page: 1,
@@ -195,18 +215,29 @@ exports.generatePdfContent = async (topic, userName) => {
     year: 'numeric',
   });
 
-  // PROMPT 1: Generar estructura (Se pide evitar Markdown)
+  // PROMPT 1: Generar estructura + imageQuery
   const structurePrompt = `
 Tu tarea es generar la estructura de un informe sobre "${topic}". Responde SIEMPRE y ÚNICAMENTE con un objeto JSON.
-El JSON debe tener: "titulo", "introduccion", "secciones" (array de objetos con "subtitulo"), "conclusion", "imageQuery" (en inglés).
-REGLAS: NO USES MARKDOWN.
+El JSON debe tener:
+1. "titulo": El título oficial del informe.
+2. "introduccion": Un párrafo corto de introducción.
+3. "secciones": Un array de objetos, donde cada objeto solo tiene "subtitulo". (Mínimo 3 secciones)
+4. "conclusion": Un párrafo corto de conclusión.
+5. "imageQuery": Una frase corta y específica, en INGLÉS, para buscar la imagen de portada en Unsplash.
+
+REGLAS DE imageQuery:
+- La consulta debe ser ESPECÍFICA al tema.
+- Si el tema es un **dibujo animado** (como 'Ben 10', 'Dragon Ball'), pide por el personaje o el logo. (Ej: "Ben 10 cartoon character", "Dragon Ball Z Goku")
+- Si el tema es un **hecho histórico** (como 'Segunda Guerra Mundial'), pide una foto histórica. (Ej: "World War 2 historical photo")
+- Si el tema es **general** (como 'El Océano'), usa una consulta descriptiva. (Ej: "deep ocean")
+- NO uses términos abstractos como 'concept' o 'art'.
 `.trim();
 
   let structure = null;
 
   try {
     const { data } = await axios.post(
-      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
+      'https://api.ai21.com/studio/v1/chat/completions',
       {
         model: 'jamba-large',
         messages: [{ role: 'user', content: structurePrompt }],
@@ -241,22 +272,21 @@ REGLAS: NO USES MARKDOWN.
     imageQuery: structure?.imageQuery || 'report cover',
   };
 
-  // PROMPT 2: Generar contenido extenso (Se pide evitar Markdown)
+  // PROMPT 2: Generar contenido extenso
   const contentPrompt = `
-Escribe un informe detallado (mínimo 800 palabras) sobre "${topic}".
-Debes seguir esta estructura exacta:
+Escribe un informe detallado (mínimo 800 palabras) sobre "${topic}". Usa un tono educativo y fácil de entender.
+Debes seguir esta estructura exacta (desarrolla cada punto):
 - Título: ${structure.titulo}
 - Introducción: ${structure.introduccion}
-- Secciones: ${structure.secciones.map((s) => s.subtitulo).join('\n')}
+- Secciones (desarrolla cada uno de estos subtítulos):
+${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
 - Conclusión: ${structure.conclusion}
 - Bibliografía: (Añade una sección de 3 a 5 fuentes realistas o ficticias sobre el tema)
-
-REGLAS DE FORMATO: NO USES MARKDOWN (**negrita**, ## titulos). Usa texto plano.
 `.trim();
 
   try {
     const { data } = await axios.post(
-      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
+      'https://api.ai21.com/studio/v1/chat/completions',
       {
         model: 'jamba-large',
         messages: [{ role: 'user', content: contentPrompt }],
@@ -266,18 +296,15 @@ REGLAS DE FORMATO: NO USES MARKDOWN (**negrita**, ## titulos). Usa texto plano.
       { headers: ai21Headers() }
     );
 
-    let rawTextContent = data?.choices?.[0]?.message?.content?.trim() || '';
-
-    // Aplicamos limpieza de voz al contenido
-    const textContent = cleanTextForTTS(rawTextContent);
+    const textContent = data?.choices?.[0]?.message?.content?.trim() || '';
 
     // Buscar imagen con la consulta generada
     const imageUrl = await fetchRelevantImage(structure.imageQuery);
 
     return {
-      textContent,
-      structure,
-      imageUrl,
+      textContent, // Texto largo del informe
+      structure,   // Objeto con {titulo, introduccion, secciones, conclusion, imageQuery}
+      imageUrl,    // URL de imagen sugerida
       userName,
       today,
       topic,
@@ -292,32 +319,47 @@ REGLAS DE FORMATO: NO USES MARKDOWN (**negrita**, ## titulos). Usa texto plano.
  * FUNCIÓN 4: Chat público (landing/app home)
  * ============================================ */
 exports.generatePublicResponse = async (message) => {
-  const systemMsg = 'Eres "Gestor IA". Responde sobre la aplicación. NO USES MARKDOWN.';
-  const prompt = `
-Eres "Gestor IA", un asistente de IA en la página de inicio.
-Sé amable, conciso. NO USES MARKDOWN.
+  // 🔥 Ahora permite hablar de cualquier tema, pero sigue explicando la app cuando toque
+  const systemMsg = `
+Eres "Gestor IA", un asistente de IA en la página de inicio de una aplicación.
 
+La aplicación es un gestor de archivos y tareas que se integra con WhatsApp y permite:
+- Subir y organizar archivos (PDFs, imágenes, etc.) en carpetas y subcarpetas.
+- Interactuar con un bot de WhatsApp para crear carpetas, subir archivos y pedir resúmenes.
+- Generar PDFs sobre cualquier tema usando IA.
+- Transcribir audios de WhatsApp a texto.
+
+REGLAS:
+- Si el usuario pregunta por la app, WhatsApp, archivos, carpetas, PDFs, resúmenes, audios, o dice cosas como "¿qué hace esta app?", explícale las funcionalidades de forma sencilla.
+- Si el usuario pregunta por otros temas (por ejemplo: ciencia, estudios, dudas generales, cosas random), responde normalmente sobre ese tema. NO digas que solo puedes hablar de la app.
+- Sé amable, cercano y relativamente conciso (unas 3–6 frases).
+`.trim();
+
+  const prompt = `
 Usuario: "${String(message || '')}"
-Respuesta:
+
+Responde de forma amable y natural, siguiendo las reglas anteriores.
 `.trim();
 
   try {
     const { data } = await axios.post(
-      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
+      'https://api.ai21.com/studio/v1/chat/completions',
       {
         model: 'jamba-large',
         messages: [
           { role: 'system', content: systemMsg },
           { role: 'user', content: prompt },
         ],
-        max_tokens: 150,
-        temperature: 0.5,
+        max_tokens: 250,
+        temperature: 0.7,
       },
       { headers: ai21Headers() }
     );
 
-    const rawReply = data?.choices?.[0]?.message?.content?.trim() || 'Lo siento, no entendí la pregunta.';
-    return cleanTextForTTS(rawReply);
+    return (
+      data?.choices?.[0]?.message?.content?.trim() ||
+      'Lo siento, no entendí la pregunta, ¿puedes reformularla?'
+    );
   } catch (error) {
     console.error('Error en el chat público de IA:', error?.message || error);
     return 'Tuve un problema para conectarme con mi cerebro de IA.';

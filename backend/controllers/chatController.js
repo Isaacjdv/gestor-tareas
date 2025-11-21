@@ -1,189 +1,298 @@
+// backend/controllers/chatController.js
 const userModel = require('../models/userModel');
 const folderModel = require('../models/folderModel');
 const fileModel = require('../models/fileModel');
 const aiService = require('../services/aiService');
-const messageModel = require('../models/messageModel'); 
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const messageModel = require('../models/messageModel'); // <-- [LÍNEA AÑADIDA]
 
 const RENDER_URL = process.env.RENDER_EXTERNAL_URL || "https://gestor-tareas-backend-11hi.onrender.com";
 
 exports.handleChatMessage = async (req, res) => {
-  // Recibimos el historial completo del frontend para tener memoria
+  // Recibimos el historial completo del frontend
   const { history } = req.body;
-  const user = req.user; 
+  const user = req.user;
 
-  // Extraemos el último mensaje del usuario para analizar la intención inmediata
-  const latestUserMessage = history && history.length > 0 ? history[history.length - 1].text : "";
+  // En el frontend tu mensaje de usuario viene en .text
+  const latestUserMessage = history.length > 0 ? history[history.length - 1].text : "";
 
   try {
-    // 1. El cerebro detecta la intención (¿Quiere crear carpeta o solo hablar?)
     const interpretation = await aiService.interpretMessage(latestUserMessage);
-    
-    console.log(`🧠 Intención detectada: ${interpretation.intent} | Usuario: ${user.nombre}`);
 
-    // --- LÓGICA DE COMANDOS (ACCIONES REALES) ---
+    // --- LÓGICA DE EJECUCIÓN DE COMANDOS ---
     switch (interpretation.intent) {
-      
-      // 📁 CASO 1: CREAR CARPETA
+      /* ======================
+       * CARPETAS: CRUD
+       * ====================== */
+
       case 'create_folder': {
         const { entity: newFolderName, parent_entity: parentFolderName } = interpretation;
-        if (!newFolderName) return res.json({ reply: "Necesito un nombre para crear la carpeta." });
-        
+
+        if (!newFolderName) {
+          return res.json({ reply: "Dime el nombre de la carpeta a crear 😊" });
+        }
+
         let parentId = null;
+
         if (parentFolderName) {
           const parentFolder = await folderModel.findByNameAndUserId(parentFolderName, user.userId);
-          if (!parentFolder) return res.json({ reply: `No encontré la carpeta padre "${parentFolderName}".`, type: 'error' });
+          if (!parentFolder) {
+            return res.json({
+              reply: `No encontré la carpeta padre "${parentFolderName}". ¿Seguro que se llama así?`,
+              type: 'error',
+            });
+          }
           parentId = parentFolder.id;
         }
-        
+
         await folderModel.create(newFolderName, user.userId, parentId);
         const location = parentFolderName ? ` dentro de "${parentFolderName}"` : '';
-        
-        return res.json({ reply: `¡Listo! Carpeta "${newFolderName}" creada${location}.`, type: 'success' });
+
+        return res.json({
+          reply: `¡Listo! Carpeta "${newFolderName}" creada${location}. ¿Quieres que hagamos algo más con ella?`,
+          type: 'success',
+        });
       }
 
-      // ✏️ CASO 2: RENOMBRAR CARPETA
       case 'edit_folder': {
         const { entity: oldName, new_entity: newName } = interpretation;
-        if (!oldName || !newName) return res.json({ reply: "Dime qué carpeta renombrar y el nuevo nombre." });
-        
+
+        if (!oldName || !newName) {
+          return res.json({
+            reply: "Dime qué carpeta renombrar y el nuevo nombre (ej: *renombra mate a matemáticas*).",
+          });
+        }
+
         const folderToEdit = await folderModel.findByNameAndUserId(oldName, user.userId);
-        if (!folderToEdit) return res.json({ reply: `No encontré la carpeta "${oldName}".`, type: 'error' });
-        
+        if (!folderToEdit) {
+          return res.json({
+            reply: `No encontré la carpeta "${oldName}". Revisa el nombre por fa.`,
+            type: 'error',
+          });
+        }
+
         await folderModel.update(folderToEdit.id, newName);
-        return res.json({ reply: `Carpeta renombrada a "${newName}".`, type: 'success' });
+        return res.json({
+          reply: `Perfecto, la carpeta ahora se llama "${newName}".`,
+          type: 'success',
+        });
       }
 
-      // 🗑️ CASO 3: ELIMINAR CARPETA
       case 'delete_folder': {
         const folderToDeleteName = interpretation.entity;
-        if (!folderToDeleteName) return res.json({ reply: "¿Qué carpeta quieres eliminar?" });
-        
+
+        if (!folderToDeleteName) {
+          return res.json({ reply: "Dime qué carpeta quieres eliminar (ojo, se borrará su contenido)." });
+        }
+
         const folderToDelete = await folderModel.findByNameAndUserId(folderToDeleteName, user.userId);
-        if (!folderToDelete) return res.json({ reply: `No encontré la carpeta "${folderToDeleteName}".`, type: 'error' });
-        
+        if (!folderToDelete) {
+          return res.json({
+            reply: `No encontré la carpeta "${folderToDeleteName}".`,
+            type: 'error',
+          });
+        }
+
         await folderModel.remove(folderToDelete.id);
-        return res.json({ reply: `Carpeta "${folderToDeleteName}" eliminada (incluyendo su contenido).`, type: 'success' });
+
+        return res.json({
+          reply: `Carpeta "${folderToDeleteName}" eliminada (incluyendo su contenido).`,
+          type: 'success',
+        });
       }
 
-      // 👁️ CASO 4: VER CONTENIDO
       case 'view_folder': {
         const folderToViewName = interpretation.entity;
-        if (!folderToViewName) return res.json({ reply: "Dime el nombre de la carpeta que quieres ver." });
-        
+
+        if (!folderToViewName) {
+          return res.json({ reply: "Dime el nombre de la carpeta que quieres ver 👀." });
+        }
+
         const targetFolder = await folderModel.findByNameAndUserId(folderToViewName, user.userId);
-        if (!targetFolder) return res.json({ reply: `No encontré la carpeta "${folderToViewName}".`, type: 'error' });
+        if (!targetFolder) {
+          return res.json({
+            reply: `No encontré la carpeta "${folderToViewName}".`,
+            type: 'error',
+          });
+        }
 
         const subFolders = await folderModel.findByParentId(user.userId, targetFolder.id);
         const filesInFolder = await fileModel.findByFolderId(targetFolder.id);
-        
-        // Construimos una respuesta limpia para el lector de voz
-        let content = `Contenido de "${targetFolder.nombre}": `;
+
+        let content = `*Contenido de "${targetFolder.nombre}":*\n`;
+
         if (subFolders.length === 0 && filesInFolder.length === 0) {
-          content = `La carpeta "${targetFolder.nombre}" está vacía.`;
+          content = `La carpeta "${targetFolder.nombre}" está vacía por ahora.`;
         } else {
-          const folderNames = subFolders.map(f => f.nombre).join(', ');
-          const fileNames = filesInFolder.map(f => f.nombre_original).join(', ');
-          
-          if (folderNames) content += ` Carpetas: ${folderNames}.`;
-          if (fileNames) content += ` Archivos: ${fileNames}.`;
+          if (subFolders.length > 0) {
+            content += `\n*Subcarpetas:*\n` + subFolders.map(f => `📁 ${f.nombre}`).join('\n');
+          }
+          if (filesInFolder.length > 0) {
+            content += `\n\n*Archivos:*\n` +
+              filesInFolder
+                .map(f => `📄 ${f.nombre_original} (Estado: ${f.status || 'pending'})`)
+                .join('\n');
+          }
         }
+
         return res.json({ reply: content.trim() });
       }
 
-      // 📄 CASO 5: GENERAR PDF (ASÍNCRONO)
-      case 'generate_pdf': {
-        const query = interpretation.entity;
-        if (!query) return res.json({ reply: "¿Sobre qué tema quieres el PDF?" });
+      /* ======================
+       * LISTAR CARPETAS
+       * ====================== */
 
-        // Respuesta inmediata al usuario para que no espere
-        res.json({ reply: `Entendido. Estoy escribiendo tu PDF sobre "${query}". Te avisaré cuando esté listo.` });
-        
-        // Proceso en segundo plano (No bloquea la respuesta)
-        (async () => {
-            try {
-              const pdfData = await aiService.generatePdfContent(query, user.nombre);
-              if (!pdfData || !pdfData.textContent) return;
+      case 'list_folders': {
+        const userFolders = await folderModel.findByUserId(user.userId);
 
-              const doc = new PDFDocument();
-              // Nombre de archivo seguro
-              const sanitizedQuery = query.split(' ').slice(0,3).join('_').replace(/[^a-zA-Z0-9_]/g, '');
-              const pdfName = `${sanitizedQuery}_${Date.now()}.pdf`;
+        if (!userFolders || userFolders.length === 0) {
+          return res.json({
+            reply: "Todavía no tienes carpetas creadas. Si quieres, dime un nombre y la creamos ahora mismo 🙌",
+          });
+        }
 
-              // Rutas
-              const uploadsRoot = path.join(__dirname, '..', 'uploads');
-              const userUploadsPath = path.join(uploadsRoot, String(user.userId));
-              if (!fs.existsSync(userUploadsPath)) fs.mkdirSync(userUploadsPath, { recursive: true });
+        const list = userFolders.map(f => `📁 ${f.nombre}`).join('\n');
 
-              const pdfAbsPath = path.join(userUploadsPath, pdfName);
-              const stream = fs.createWriteStream(pdfAbsPath);
-              
-              // Escribir PDF
-              doc.pipe(stream);
-              doc.fontSize(22).text(pdfData.topic, { align: 'center' });
-              doc.moveDown(0.5);
-              doc.fontSize(10).text(`Autor: ${pdfData.userName}`, { align: 'center' });
-              doc.fontSize(10).text(`Fecha: ${pdfData.today}`, { align: 'center' });
-              doc.moveDown(2);
-              doc.fontSize(12).text(pdfData.textContent, { align: 'justify' }); // TextContent ya viene limpio de markdown
-              doc.end();
-              
-              // Esperar a que termine de escribirse
-              await new Promise(resolve => stream.on('finish', resolve));
-              
-              console.log(`✅ PDF Generado: ${pdfName}`);
-              // Aquí podrías emitir un evento de socket si quisieras notificar en tiempo real
-            } catch (pdfError) {
-              console.error("❌ Error generando PDF background:", pdfError);
-            }
-        })();
-        return; 
+        return res.json({
+          reply: `Estas son tus carpetas actuales:\n\n${list}`,
+        });
       }
 
-      case 'clarification_needed':
-        return res.status(200).json({ reply: "No estoy segura de a qué te refieres. ¿Podrías ser más específico con el nombre del archivo o carpeta?" });
-      
-      case 'upload_file': 
-        return res.status(200).json({ reply: "Para subir archivos, por favor usa el botón azul de la interfaz." });
+      /* ======================
+       * GENERAR PDF CON IA
+       * ====================== */
 
-      // 🗣️ CASO DEFAULT: CONVERSACIÓN GENERAL INTELIGENTE
-      // Aquí caen: 'greeting', 'unknown', 'list_folders' y cualquier cosa que no sea un comando exacto.
-      case 'list_folders':
+      case 'generate_pdf': {
+        const query = interpretation.entity;
+
+        if (!query) {
+          return res.json({
+            reply: "Claro, dime sobre qué tema quieres que escriba el PDF 😄",
+          });
+        }
+
+        // Respuesta inmediata al usuario
+        res.json({
+          reply: `Entendido. Estoy generando tu PDF sobre "${query}". Esto puede tomar un momento...`,
+        });
+
+        // Generación asíncrona del PDF
+        try {
+          const pdfData = await aiService.generatePdfContent(query, user.nombre);
+          if (!pdfData || !pdfData.textContent) {
+            return; // ya respondimos arriba
+          }
+
+          const doc = new PDFDocument();
+          const sanitizedQuery = query
+            .split(' ')
+            .slice(0, 3)
+            .join('_')
+            .replace(/[^a-zA-Z0-9_]/g, '');
+          const pdfName = `${sanitizedQuery}_${Date.now()}.pdf`;
+
+          // Carpeta del usuario dentro de /uploads/<userId>
+          const uploadsRoot = path.join(__dirname, '..', 'uploads');
+          const userUploadsPath = path.join(uploadsRoot, String(user.userId));
+          if (!fs.existsSync(userUploadsPath)) {
+            fs.mkdirSync(userUploadsPath, { recursive: true });
+          }
+
+          // Ruta absoluta donde se guardará
+          const pdfAbsPath = path.join(userUploadsPath, pdfName);
+          const stream = fs.createWriteStream(pdfAbsPath);
+
+          doc.pipe(stream);
+
+          // Portada sencilla
+          doc.fontSize(22).text(pdfData.topic, { align: 'center' });
+          doc.moveDown(0.5);
+          doc.fontSize(10).text(`Solicitado por: ${pdfData.userName}`, { align: 'center' });
+          doc.fontSize(10).text(`Fecha: ${pdfData.today}`, { align: 'center' });
+          doc.moveDown(2);
+
+          // Contenido
+          doc.fontSize(12).text(pdfData.textContent, { align: 'justify' });
+
+          doc.end();
+
+          await new Promise(resolve => stream.on('finish', resolve));
+
+          // Ruta pública para servir (uploads/USERID/FILE.pdf)
+          const publicPdfPath = path
+            .join('uploads', String(user.userId), pdfName)
+            .replace(/\\/g, '/');
+
+          const fileUrlPdf = `${RENDER_URL}/${publicPdfPath}`;
+          // Aquí podrías:
+          // - Guardar el archivo en tu tabla de files
+          // - Enviar notificación por WhatsApp con el link
+          // - O simplemente dejarlo disponible en el dashboard
+          console.log('PDF generado y disponible en:', fileUrlPdf);
+        } catch (pdfError) {
+          console.error("Error generando PDF asíncrono:", pdfError);
+        }
+
+        return; // Importante: ya enviamos respuesta inicial
+      }
+
+      /* ======================
+       * ACLARACIÓN / UPLOAD
+       * ====================== */
+
+      case 'clarification_needed':
+        return res.status(200).json({
+          reply:
+            "No estoy seguro de a qué archivo o carpeta te refieres. ¿Podrías ser un poco más específico, por favor?",
+        });
+
+      case 'upload_file': // En el dashboard no gestionamos subidas por texto
+        return res.status(200).json({
+          reply: "Para subir un archivo, por favor usa el formulario en la parte superior de la carpeta 📂",
+        });
+
+      /* ======================
+       * CONVERSACIÓN GENERAL
+       * ====================== */
+
       case 'greeting':
       case 'unknown':
       default: {
-        // 1. Obtenemos el contexto real del usuario
+        // Cargamos datos del usuario para que la IA pueda usarlos si habla de archivos
         const userFolders = await folderModel.findByUserId(user.userId);
         const userFiles = await fileModel.findAllByUserId(user.userId);
 
-        // 2. Preparamos los datos para la IA
-        const contextData = { folders: userFolders, files: userFiles };
-
-        // 3. Llamamos al servicio conversacional (que ahora incluye el System Prompt mejorado)
-        // Le pasamos el 'history' completo para que sepa de qué estábamos hablando
+        // Pasamos el historial completo para mantener la memoria
         const conversationalReply = await aiService.generateConversationalResponse(
-          history, 
-          user.nombre, 
-          contextData
+          history,
+          user.nombre,
+          { folders: userFolders, files: userFiles }
         );
-        
+
         return res.status(200).json({ reply: conversationalReply });
       }
     }
   } catch (error) {
-    console.error("❌ Error crítico en chatController:", error);
-    res.status(500).json({ reply: 'Tuve un pequeño mareo digital. ¿Puedes repetirme eso?' });
+    console.error("Error al procesar el mensaje del chat:", error);
+    res.status(500).json({
+      error: 'Error al procesar el mensaje. Por favor, verifica el estado del servidor de IA.',
+    });
   }
 };
 
-// --- FUNCIONES AUXILIARES (CHAT ENTRE USUARIOS) ---
+// --- HISTORIAL DE CHAT ENTRE USUARIOS ---
+/**
+ * @desc    Obtener el historial de chat con otro usuario
+ * @route   GET /api/chat/history/:otherUserId
+ * @access  Private
+ */
 exports.getChatHistory = async (req, res) => {
   try {
-    const currentUserId = req.user.userId;
-    const { otherUserId } = req.params;
+    const currentUserId = req.user.userId; // ID del usuario logueado
+    const { otherUserId } = req.params;   // ID del amigo
 
     const otherUserIdNum = parseInt(otherUserId, 10);
     if (isNaN(otherUserIdNum)) {
@@ -192,7 +301,6 @@ exports.getChatHistory = async (req, res) => {
 
     const history = await messageModel.getHistory(currentUserId, otherUserIdNum);
     res.status(200).json(history);
-
   } catch (error) {
     console.error("Error en getChatHistory:", error);
     res.status(500).json({ message: 'Error en el servidor al obtener el historial.' });
