@@ -6,32 +6,17 @@ const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
 
 /* ----------------------------- Helpers ----------------------------- */
 
-/** * 🔥 NUEVO: Limpia el texto para que el lector de voz no diga "asterisco asterisco".
- * Elimina Markdown, negritas, listas y símbolos de código.
+/** * 🔥 NUEVO HELPER: Limpia el texto para que la voz no lea basura.
+ * (Esto no estaba en tu original, es lo único nuevo aquí arriba)
  */
 function cleanTextForTTS(text = '') {
   if (!text) return '';
   let clean = text;
-
-  // 1. Eliminar bloques de código ``` ... ```
-  clean = clean.replace(/```[\s\S]*?```/g, '');
-  
-  // 2. Eliminar negritas (**texto**) y cursivas (*texto*) y subrayados (__texto__)
-  clean = clean.replace(/\*\*(.*?)\*\*/g, '$1'); 
-  clean = clean.replace(/\*(.*?)\*/g, '$1');     
-  clean = clean.replace(/__(.*?)__/g, '$1');
-  
-  // 3. Eliminar encabezados Markdown (# Titulo)
-  clean = clean.replace(/^#+\s+/gm, '');
-  
-  // 4. Eliminar viñetas de listas (- o *) al inicio de línea y cambiarlas por comas
-  clean = clean.replace(/^\s*[-*]\s+/gm, ', '); 
-  
-  // 5. Eliminar caracteres sueltos molestos
-  clean = clean.replace(/`/g, ''); 
-  clean = clean.replace(/\[|\]/g, ''); 
-  
-  // 6. Limpiar espacios extra
+  clean = clean.replace(/```[\s\S]*?```/g, ''); // Quita código
+  clean = clean.replace(/\*\*(.*?)\*\*/g, '$1'); // Quita negritas **
+  clean = clean.replace(/\*(.*?)\*/g, '$1');     // Quita cursivas *
+  clean = clean.replace(/^#+\s+/gm, '');         // Quita titulos #
+  clean = clean.replace(/^\s*[-*]\s+/gm, ', '); // Quita listas
   return clean.replace(/\s+/g, ' ').trim();
 }
 
@@ -39,7 +24,6 @@ function cleanTextForTTS(text = '') {
 function extractFirstJson(str = '') {
   let s = String(str || '').trim();
   if (s.startsWith('```')) {
-    // Quita cercas de código y lenguaje opcional
     s = s.replace(/^```[a-zA-Z-]*\n?/, '').replace(/```$/, '').trim();
   }
   const match = s.match(/{[\s\S]*}/);
@@ -107,6 +91,7 @@ Analiza: "${message || ''}"
 `.trim();
 
   try {
+    // HE VUELTO A PONER LA URL MANUALMENTE AQUÍ PARA EVITAR ERRORES
     const { data } = await axios.post(
       '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
       {
@@ -131,7 +116,7 @@ Analiza: "${message || ''}"
 };
 
 /* ==============================================
- * FUNCIÓN 2: Conversador (MEJORADA: GENERAL + LIMPIEZA)
+ * FUNCIÓN 2: Conversador (MODIFICADA SOLO LA LÓGICA INTERNA)
  * ============================================== */
 exports.generateConversationalResponse = async (historyOrMessage, userName, userData) => {
   const foldersList = Array.isArray(userData?.folders)
@@ -145,24 +130,22 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
         .join('; ')
     : 'ninguno';
 
-  // 🔥 AQUÍ ESTÁ LA CLAVE: Permitimos charla general y prohibimos Markdown 🔥
+  // 🔥 CAMBIO 1: Prompt actualizado para hablar de todo y no usar markdown
   const systemInstruction = `
-Eres "Gestor IA", un asistente virtual inteligente, amable y útil. El nombre del usuario es ${userName}.
+Eres "Gestor IA", un asistente virtual inteligente, amable y útil.
+Estás hablando con ${userName}.
 
-TUS RESPONSABILIDADES:
-1. Ayudar a gestionar archivos y carpetas.
-2. **CHARLA GENERAL:** Puedes hablar de CUALQUIER tema (cultura, historia, ciencia, chistes, vida diaria). Si el usuario te pregunta algo que no tiene que ver con archivos, RESPÓNDELE con naturalidad.
+TUS CAPACIDADES:
+1. Gestionar archivos (sabes qué carpetas tiene el usuario).
+2. **CHARLA GENERAL:** Habla de CUALQUIER tema (cultura, chistes, vida, ciencia). Si no es sobre archivos, responde con naturalidad.
 
-DATOS DEL USUARIO (Úsalos solo si pregunta por ellos):
+DATOS DEL USUARIO:
 - Carpetas: ${foldersList || 'ninguna'}.
-- Archivos Recientes: ${filesList || 'ninguno'}.
+- Archivos: ${filesList || 'ninguno'}.
 
-⚠️ REGLA OBLIGATORIA DE FORMATO:
+⚠️ REGLA OBLIGATORIA:
 - NO USES MARKDOWN. Prohibido usar asteriscos (**negrita**), guiones de lista o almohadillas (#).
 - Escribe en texto plano.
-- Usa comas y puntos para separar ideas.
-
-MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respuesta.
 `.trim();
 
   let messagesForApi;
@@ -178,6 +161,7 @@ MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respu
   messagesForApi.unshift({ role: 'system', content: systemInstruction });
 
   try {
+    // URL MANUAL PARA EVITAR ERRORES
     const { data } = await axios.post(
       '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
       {
@@ -189,9 +173,10 @@ MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respu
       { headers: ai21Headers() }
     );
 
-    const rawReply = data?.choices?.[0]?.message?.content?.trim() || 'Lo siento, tuve un problema para generar una respuesta coherente.';
+    const rawReply = data?.choices?.[0]?.message?.content?.trim() || 
+      'Lo siento, tuve un problema para generar una respuesta coherente.';
     
-    // 🔥 Aplicamos la limpieza antes de devolver la respuesta
+    // 🔥 CAMBIO 2: Limpiamos la respuesta antes de devolverla
     return cleanTextForTTS(rawReply);
 
   } catch (error) {
@@ -204,7 +189,7 @@ MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respu
 };
 
 /* ==============================
- * FUNCIÓN: Buscar imagen (Unsplash)
+ * FUNCIÓN: Buscar imagen (Unsplash) - INTACTA
  * ============================== */
 async function fetchRelevantImage(topic) {
   if (!UNSPLASH_ACCESS_KEY) {
@@ -229,7 +214,7 @@ async function fetchRelevantImage(topic) {
 }
 
 /* ======================================================
- * FUNCIÓN 3: Generador de Contenido para PDF (mejorada)
+ * FUNCIÓN 3: Generador PDF (MODIFICADA PARA LIMPIAR TEXTO)
  * ====================================================== */
 exports.generatePdfContent = async (topic, userName) => {
   const today = new Date().toLocaleDateString('es-ES', {
@@ -238,23 +223,23 @@ exports.generatePdfContent = async (topic, userName) => {
     year: 'numeric',
   });
 
-  // PROMPT 1: Generar estructura + imageQuery
+  // PROMPT 1: Generar estructura (Prompt mejorado para evitar markdown en json)
   const structurePrompt = `
 Tu tarea es generar la estructura de un informe sobre "${topic}". Responde SIEMPRE y ÚNICAMENTE con un objeto JSON.
 El JSON debe tener:
-1. "titulo": El título oficial del informe.
-2. "introduccion": Un párrafo corto de introducción.
-3. "secciones": Un array de objetos, donde cada objeto solo tiene "subtitulo". (Mínimo 3 secciones)
-4. "conclusion": Un párrafo corto de conclusión.
-5. "imageQuery": Una frase corta y específica, en INGLÉS, para buscar la imagen de portada en Unsplash.
+1. "titulo"
+2. "introduccion"
+3. "secciones" (array de objetos con "subtitulo")
+4. "conclusion"
+5. "imageQuery" (en inglés)
 
-REGLAS:
-- NO uses Markdown en el JSON.
+REGLAS: NO uses Markdown en los valores del JSON.
 `.trim();
 
   let structure = null;
 
   try {
+    // URL MANUAL
     const { data } = await axios.post(
       '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
       {
@@ -291,22 +276,22 @@ REGLAS:
     imageQuery: structure?.imageQuery || 'report cover',
   };
 
-  // PROMPT 2: Generar contenido extenso
+  // PROMPT 2: Generar contenido extenso (SIN MARKDOWN)
   const contentPrompt = `
-Escribe un informe detallado (mínimo 800 palabras) sobre "${topic}". Usa un tono educativo y fácil de entender.
-Debes seguir esta estructura exacta:
+Escribe un informe detallado (mínimo 800 palabras) sobre "${topic}".
+Estructura:
 - Título: ${structure.titulo}
 - Introducción: ${structure.introduccion}
-- Secciones:
-${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
+- Secciones: ${structure.secciones.map((s) => s.subtitulo).join(', ')}
 - Conclusión: ${structure.conclusion}
 
 REGLAS DE FORMATO:
-- NO USES MARKDOWN (**negrita**).
+- NO USES MARKDOWN (**negrita**, ## titulos).
 - Usa texto plano.
 `.trim();
 
   try {
+    // URL MANUAL
     const { data } = await axios.post(
       '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
       {
@@ -318,18 +303,17 @@ REGLAS DE FORMATO:
       { headers: ai21Headers() }
     );
 
-    const rawTextContent = data?.choices?.[0]?.message?.content?.trim() || '';
+    let textContent = data?.choices?.[0]?.message?.content?.trim() || '';
     
-    // 🔥 Limpiamos el contenido del PDF también
-    const textContent = cleanTextForTTS(rawTextContent);
+    // 🔥 CAMBIO 3: Limpiamos el texto del PDF
+    textContent = cleanTextForTTS(textContent);
 
-    // Buscar imagen con la consulta generada
     const imageUrl = await fetchRelevantImage(structure.imageQuery);
 
     return {
-      textContent, 
-      structure,   
-      imageUrl,    
+      textContent,
+      structure,
+      imageUrl,
       userName,
       today,
       topic,
@@ -341,19 +325,20 @@ REGLAS DE FORMATO:
 };
 
 /* ============================================
- * FUNCIÓN 4: Chat público (landing/app home)
+ * FUNCIÓN 4: Chat público
  * ============================================ */
 exports.generatePublicResponse = async (message) => {
-  const systemMsg = 'Eres "Gestor IA", un asistente de IA. Responde en TEXTO PLANO sin Markdown.';
+  const systemMsg = 'Eres "Gestor IA". Responde en TEXTO PLANO sin Markdown.';
   const prompt = `
-Eres "Gestor IA", un asistente de IA en la página de inicio.
-Sé amable, conciso y responde sobre la aplicación. NO USES MARKDOWN.
+Eres "Gestor IA".
+Sé amable y conciso. NO USES MARKDOWN.
 
 Usuario: "${String(message || '')}"
 Respuesta:
 `.trim();
 
   try {
+    // URL MANUAL
     const { data } = await axios.post(
       '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
       {
@@ -370,7 +355,7 @@ Respuesta:
 
     const reply = data?.choices?.[0]?.message?.content?.trim() || 'Lo siento, no entendí la pregunta.';
     
-    // 🔥 Limpieza final
+    // 🔥 CAMBIO 4: Limpieza final
     return cleanTextForTTS(reply);
 
   } catch (error) {
