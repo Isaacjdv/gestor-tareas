@@ -25,6 +25,11 @@ function ai21Headers() {
   };
 }
 
+/** Quita todos los asteriscos de la respuesta (para evitar Markdown en el chat) */
+function stripAsterisks(str = '') {
+  return String(str || '').replace(/\*/g, '');
+}
+
 /* ===========================
  * FUNCIÓN 1: El Intérprete
  * =========================== */
@@ -116,7 +121,6 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
         .join('; ')
     : 'ninguno';
 
-  // 🔥 PROMPT ACTUALIZADO: permite conversación de cualquier tema, pero usa datos de archivos cuando toque
   const systemInstruction = `
 Eres "Gestor IA", un asistente de IA conversacional y amable. El nombre del usuario es ${userName}.
 
@@ -124,10 +128,15 @@ TU ROL PRINCIPAL:
 1. Mantener una conversación natural, cercana y útil.
 2. Ayudar al usuario a gestionar sus tareas y archivos cuando lo necesite.
 
+IMPORTANTE:
+- No uses formato Markdown. No uses asteriscos (*), ni negritas, ni cursivas.
+- Responde en texto plano.
+- Evita presentarte desde cero en cada mensaje. No repitas "Hola, soy Gestor IA" en cada respuesta.
+
 SI EL USUARIO:
 - Habla de carpetas, archivos, PDFs, resúmenes, WhatsApp, recordatorios o la aplicación:
    - Usa la información disponible para darle contexto.
-   - Propón acciones útiles (por ejemplo: "podemos crear una carpeta para eso", "puedes subir el archivo y luego te hago un resumen", etc.).
+   - Propón acciones útiles (por ejemplo: "podemos crear una carpeta para eso", "puedes subir el archivo y luego te hago un resumen").
 - Habla de otros temas (estudio, trabajo, dudas generales, curiosidades, temas random, problemas personales, etc.):
    - Responde normalmente sobre ese tema.
    - NO digas que solo puedes hablar de archivos o de la aplicación.
@@ -139,20 +148,30 @@ Archivos Recientes: ${filesList || 'ninguno'}.
 
 MANTÉN LA CONVERSACIÓN:
 - Usa el historial anterior para contextualizar tu respuesta.
-- Sé empático y directo, evita respuestas excesivamente largas.
+- Sé empático y directo. Respuestas de 2 a 6 frases son suficientes.
 - No inventes archivos o carpetas que no estén en la lista.
 `.trim();
 
   let messagesForApi;
   if (Array.isArray(historyOrMessage)) {
-    messagesForApi = historyOrMessage.map((msg) => ({
-      role: msg.sender === 'user' ? 'user' : 'assistant',
-      content: String(msg.text ?? ''),
-    }));
+    messagesForApi = historyOrMessage.map((msg) => {
+      const content = String(msg.text ?? msg.content ?? '');
+      // intentamos deducir el rol de manera flexible según lo que mande el frontend
+      const sender = (msg.sender || msg.role || '').toLowerCase();
+      const role =
+        sender === 'user' || sender === 'me'
+          ? 'user'
+          : sender === 'assistant' || sender === 'bot' || sender === 'ai'
+          ? 'assistant'
+          : 'user'; // por defecto, lo tratamos como usuario
+
+      return { role, content };
+    });
   } else {
     messagesForApi = [{ role: 'user', content: String(historyOrMessage ?? '') }];
   }
 
+  // Insertamos el mensaje de sistema al principio
   messagesForApi.unshift({ role: 'system', content: systemInstruction });
 
   try {
@@ -167,10 +186,12 @@ MANTÉN LA CONVERSACIÓN:
       { headers: ai21Headers() }
     );
 
-    return (
+    const raw =
       data?.choices?.[0]?.message?.content?.trim() ||
-      'Lo siento, tuve un problema para generar una respuesta coherente.'
-    );
+      'Lo siento, tuve un problema para generar una respuesta coherente.';
+
+    // Quitamos todos los asteriscos para evitar formato raro en el chat
+    return stripAsterisks(raw);
   } catch (error) {
     console.error(
       'Error en generateConversationalResponse:',
@@ -227,9 +248,9 @@ El JSON debe tener:
 
 REGLAS DE imageQuery:
 - La consulta debe ser ESPECÍFICA al tema.
-- Si el tema es un **dibujo animado** (como 'Ben 10', 'Dragon Ball'), pide por el personaje o el logo. (Ej: "Ben 10 cartoon character", "Dragon Ball Z Goku")
-- Si el tema es un **hecho histórico** (como 'Segunda Guerra Mundial'), pide una foto histórica. (Ej: "World War 2 historical photo")
-- Si el tema es **general** (como 'El Océano'), usa una consulta descriptiva. (Ej: "deep ocean")
+- Si el tema es un dibujo animado (como 'Ben 10', 'Dragon Ball'), pide por el personaje o el logo. (Ej: "Ben 10 cartoon character", "Dragon Ball Z Goku")
+- Si el tema es un hecho histórico (como 'Segunda Guerra Mundial'), pide una foto histórica. (Ej: "World War 2 historical photo")
+- Si el tema es general (como 'El Océano'), usa una consulta descriptiva. (Ej: "deep ocean")
 - NO uses términos abstractos como 'concept' o 'art'.
 `.trim();
 
@@ -302,9 +323,9 @@ ${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
     const imageUrl = await fetchRelevantImage(structure.imageQuery);
 
     return {
-      textContent, // Texto largo del informe
-      structure,   // Objeto con {titulo, introduccion, secciones, conclusion, imageQuery}
-      imageUrl,    // URL de imagen sugerida
+      textContent,
+      structure,
+      imageUrl,
       userName,
       today,
       topic,
@@ -319,7 +340,6 @@ ${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
  * FUNCIÓN 4: Chat público (landing/app home)
  * ============================================ */
 exports.generatePublicResponse = async (message) => {
-  // 🔥 Ahora permite hablar de cualquier tema, pero sigue explicando la app cuando toque
   const systemMsg = `
 Eres "Gestor IA", un asistente de IA en la página de inicio de una aplicación.
 
@@ -329,16 +349,17 @@ La aplicación es un gestor de archivos y tareas que se integra con WhatsApp y p
 - Generar PDFs sobre cualquier tema usando IA.
 - Transcribir audios de WhatsApp a texto.
 
-REGLAS:
-- Si el usuario pregunta por la app, WhatsApp, archivos, carpetas, PDFs, resúmenes, audios, o dice cosas como "¿qué hace esta app?", explícale las funcionalidades de forma sencilla.
-- Si el usuario pregunta por otros temas (por ejemplo: ciencia, estudios, dudas generales, cosas random), responde normalmente sobre ese tema. NO digas que solo puedes hablar de la app.
-- Sé amable, cercano y relativamente conciso (unas 3–6 frases).
+IMPORTANTE:
+- No uses formato Markdown. No uses asteriscos (*), ni negritas, ni cursivas.
+- Responde en texto plano.
 `.trim();
 
   const prompt = `
 Usuario: "${String(message || '')}"
 
-Responde de forma amable y natural, siguiendo las reglas anteriores.
+Responde de forma amable y natural. 
+Si pregunta por la app o funciones, explícalas.
+Si pregunta por otros temas, responde normalmente sobre ese tema.
 `.trim();
 
   try {
@@ -356,10 +377,11 @@ Responde de forma amable y natural, siguiendo las reglas anteriores.
       { headers: ai21Headers() }
     );
 
-    return (
+    const raw =
       data?.choices?.[0]?.message?.content?.trim() ||
-      'Lo siento, no entendí la pregunta, ¿puedes reformularla?'
-    );
+      'Lo siento, no entendí la pregunta, ¿puedes reformularla?';
+
+    return stripAsterisks(raw);
   } catch (error) {
     console.error('Error en el chat público de IA:', error?.message || error);
     return 'Tuve un problema para conectarme con mi cerebro de IA.';

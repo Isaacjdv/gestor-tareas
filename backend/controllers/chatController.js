@@ -7,22 +7,31 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const messageModel = require('../models/messageModel'); // <-- [LÍNEA AÑADIDA]
+const messageModel = require('../models/messageModel');
 
-const RENDER_URL = process.env.RENDER_EXTERNAL_URL || "https://gestor-tareas-backend-11hi.onrender.com";
+const RENDER_URL =
+  process.env.RENDER_EXTERNAL_URL || 'https://gestor-tareas-backend-11hi.onrender.com';
 
 exports.handleChatMessage = async (req, res) => {
-  // Recibimos el historial completo del frontend
   const { history } = req.body;
   const user = req.user;
 
-  // En el frontend tu mensaje de usuario viene en .text
-  const latestUserMessage = history.length > 0 ? history[history.length - 1].text : "";
+  // Buscamos el último mensaje que venga del usuario (por si el historial incluye mensajes del bot)
+  let latestUserMessage = '';
+  if (Array.isArray(history) && history.length > 0) {
+    const lastUserMsg = [...history]
+      .reverse()
+      .find(
+        (m) =>
+          String(m.sender || m.role || '').toLowerCase() === 'user' ||
+          String(m.sender || m.role || '').toLowerCase() === 'me'
+      );
+    latestUserMessage = lastUserMsg ? String(lastUserMsg.text ?? lastUserMsg.content ?? '') : '';
+  }
 
   try {
     const interpretation = await aiService.interpretMessage(latestUserMessage);
 
-    // --- LÓGICA DE EJECUCIÓN DE COMANDOS ---
     switch (interpretation.intent) {
       /* ======================
        * CARPETAS: CRUD
@@ -32,16 +41,19 @@ exports.handleChatMessage = async (req, res) => {
         const { entity: newFolderName, parent_entity: parentFolderName } = interpretation;
 
         if (!newFolderName) {
-          return res.json({ reply: "Dime el nombre de la carpeta a crear 😊" });
+          return res.json({ reply: 'Dime el nombre de la carpeta a crear.' });
         }
 
         let parentId = null;
 
         if (parentFolderName) {
-          const parentFolder = await folderModel.findByNameAndUserId(parentFolderName, user.userId);
+          const parentFolder = await folderModel.findByNameAndUserId(
+            parentFolderName,
+            user.userId
+          );
           if (!parentFolder) {
             return res.json({
-              reply: `No encontré la carpeta padre "${parentFolderName}". ¿Seguro que se llama así?`,
+              reply: `No encontré la carpeta padre "${parentFolderName}".`,
               type: 'error',
             });
           }
@@ -52,7 +64,7 @@ exports.handleChatMessage = async (req, res) => {
         const location = parentFolderName ? ` dentro de "${parentFolderName}"` : '';
 
         return res.json({
-          reply: `¡Listo! Carpeta "${newFolderName}" creada${location}. ¿Quieres que hagamos algo más con ella?`,
+          reply: `Listo, he creado la carpeta "${newFolderName}"${location}.`,
           type: 'success',
         });
       }
@@ -62,21 +74,22 @@ exports.handleChatMessage = async (req, res) => {
 
         if (!oldName || !newName) {
           return res.json({
-            reply: "Dime qué carpeta renombrar y el nuevo nombre (ej: *renombra mate a matemáticas*).",
+            reply:
+              'Dime qué carpeta renombrar y el nuevo nombre. Ejemplo: renombra mate a matemáticas.',
           });
         }
 
         const folderToEdit = await folderModel.findByNameAndUserId(oldName, user.userId);
         if (!folderToEdit) {
           return res.json({
-            reply: `No encontré la carpeta "${oldName}". Revisa el nombre por fa.`,
+            reply: `No encontré la carpeta "${oldName}".`,
             type: 'error',
           });
         }
 
         await folderModel.update(folderToEdit.id, newName);
         return res.json({
-          reply: `Perfecto, la carpeta ahora se llama "${newName}".`,
+          reply: `He renombrado la carpeta a "${newName}".`,
           type: 'success',
         });
       }
@@ -85,10 +98,13 @@ exports.handleChatMessage = async (req, res) => {
         const folderToDeleteName = interpretation.entity;
 
         if (!folderToDeleteName) {
-          return res.json({ reply: "Dime qué carpeta quieres eliminar (ojo, se borrará su contenido)." });
+          return res.json({ reply: 'Dime qué carpeta quieres eliminar.' });
         }
 
-        const folderToDelete = await folderModel.findByNameAndUserId(folderToDeleteName, user.userId);
+        const folderToDelete = await folderModel.findByNameAndUserId(
+          folderToDeleteName,
+          user.userId
+        );
         if (!folderToDelete) {
           return res.json({
             reply: `No encontré la carpeta "${folderToDeleteName}".`,
@@ -99,7 +115,7 @@ exports.handleChatMessage = async (req, res) => {
         await folderModel.remove(folderToDelete.id);
 
         return res.json({
-          reply: `Carpeta "${folderToDeleteName}" eliminada (incluyendo su contenido).`,
+          reply: `He eliminado la carpeta "${folderToDeleteName}" y su contenido.`,
           type: 'success',
         });
       }
@@ -108,10 +124,13 @@ exports.handleChatMessage = async (req, res) => {
         const folderToViewName = interpretation.entity;
 
         if (!folderToViewName) {
-          return res.json({ reply: "Dime el nombre de la carpeta que quieres ver 👀." });
+          return res.json({ reply: 'Dime el nombre de la carpeta que quieres ver.' });
         }
 
-        const targetFolder = await folderModel.findByNameAndUserId(folderToViewName, user.userId);
+        const targetFolder = await folderModel.findByNameAndUserId(
+          folderToViewName,
+          user.userId
+        );
         if (!targetFolder) {
           return res.json({
             reply: `No encontré la carpeta "${folderToViewName}".`,
@@ -122,18 +141,21 @@ exports.handleChatMessage = async (req, res) => {
         const subFolders = await folderModel.findByParentId(user.userId, targetFolder.id);
         const filesInFolder = await fileModel.findByFolderId(targetFolder.id);
 
-        let content = `*Contenido de "${targetFolder.nombre}":*\n`;
+        let content = `Contenido de "${targetFolder.nombre}":\n`;
 
         if (subFolders.length === 0 && filesInFolder.length === 0) {
-          content = `La carpeta "${targetFolder.nombre}" está vacía por ahora.`;
+          content = `La carpeta "${targetFolder.nombre}" está vacía.`;
         } else {
           if (subFolders.length > 0) {
-            content += `\n*Subcarpetas:*\n` + subFolders.map(f => `📁 ${f.nombre}`).join('\n');
+            content += `\nSubcarpetas:\n` + subFolders.map((f) => `📁 ${f.nombre}`).join('\n');
           }
           if (filesInFolder.length > 0) {
-            content += `\n\n*Archivos:*\n` +
+            content +=
+              `\n\nArchivos:\n` +
               filesInFolder
-                .map(f => `📄 ${f.nombre_original} (Estado: ${f.status || 'pending'})`)
+                .map(
+                  (f) => `📄 ${f.nombre_original} (Estado: ${f.status || 'pending'})`
+                )
                 .join('\n');
           }
         }
@@ -150,11 +172,12 @@ exports.handleChatMessage = async (req, res) => {
 
         if (!userFolders || userFolders.length === 0) {
           return res.json({
-            reply: "Todavía no tienes carpetas creadas. Si quieres, dime un nombre y la creamos ahora mismo 🙌",
+            reply:
+              'Todavía no tienes carpetas creadas. Si quieres, dime un nombre y creamos la primera.',
           });
         }
 
-        const list = userFolders.map(f => `📁 ${f.nombre}`).join('\n');
+        const list = userFolders.map((f) => `📁 ${f.nombre}`).join('\n');
 
         return res.json({
           reply: `Estas son tus carpetas actuales:\n\n${list}`,
@@ -170,20 +193,20 @@ exports.handleChatMessage = async (req, res) => {
 
         if (!query) {
           return res.json({
-            reply: "Claro, dime sobre qué tema quieres que escriba el PDF 😄",
+            reply: 'Perfecto, dime sobre qué tema quieres que escriba el PDF.',
           });
         }
 
         // Respuesta inmediata al usuario
         res.json({
-          reply: `Entendido. Estoy generando tu PDF sobre "${query}". Esto puede tomar un momento...`,
+          reply: `Entendido. Estoy generando tu PDF sobre "${query}". Esto puede tardar un poco.`,
         });
 
         // Generación asíncrona del PDF
         try {
           const pdfData = await aiService.generatePdfContent(query, user.nombre);
           if (!pdfData || !pdfData.textContent) {
-            return; // ya respondimos arriba
+            return;
           }
 
           const doc = new PDFDocument();
@@ -194,34 +217,29 @@ exports.handleChatMessage = async (req, res) => {
             .replace(/[^a-zA-Z0-9_]/g, '');
           const pdfName = `${sanitizedQuery}_${Date.now()}.pdf`;
 
-          // Carpeta del usuario dentro de /uploads/<userId>
           const uploadsRoot = path.join(__dirname, '..', 'uploads');
           const userUploadsPath = path.join(uploadsRoot, String(user.userId));
           if (!fs.existsSync(userUploadsPath)) {
             fs.mkdirSync(userUploadsPath, { recursive: true });
           }
 
-          // Ruta absoluta donde se guardará
           const pdfAbsPath = path.join(userUploadsPath, pdfName);
           const stream = fs.createWriteStream(pdfAbsPath);
 
           doc.pipe(stream);
 
-          // Portada sencilla
           doc.fontSize(22).text(pdfData.topic, { align: 'center' });
           doc.moveDown(0.5);
           doc.fontSize(10).text(`Solicitado por: ${pdfData.userName}`, { align: 'center' });
           doc.fontSize(10).text(`Fecha: ${pdfData.today}`, { align: 'center' });
           doc.moveDown(2);
 
-          // Contenido
           doc.fontSize(12).text(pdfData.textContent, { align: 'justify' });
 
           doc.end();
 
-          await new Promise(resolve => stream.on('finish', resolve));
+          await new Promise((resolve) => stream.on('finish', resolve));
 
-          // Ruta pública para servir (uploads/USERID/FILE.pdf)
           const publicPdfPath = path
             .join('uploads', String(user.userId), pdfName)
             .replace(/\\/g, '/');
@@ -229,10 +247,10 @@ exports.handleChatMessage = async (req, res) => {
           const fileUrlPdf = `${RENDER_URL}/${publicPdfPath}`;
           console.log('PDF generado y disponible en:', fileUrlPdf);
         } catch (pdfError) {
-          console.error("Error generando PDF asíncrono:", pdfError);
+          console.error('Error generando PDF asíncrono:', pdfError);
         }
 
-        return; // Importante: ya enviamos respuesta inicial
+        return;
       }
 
       /* ======================
@@ -240,21 +258,19 @@ exports.handleChatMessage = async (req, res) => {
        * ====================== */
 
       case 'clarification_needed': {
-        // 👇 Comprobamos si el mensaje habla de archivos/carpetas
         const textLower = (latestUserMessage || '').toLowerCase();
         const isFileRelated = /(archivo|archivos|carpeta|carpetas|pdf|documento|documentos|sube|subir|guarda|guardar|envía|enviar|mandar)/.test(
           textLower
         );
 
         if (isFileRelated) {
-          // Aquí sí tiene sentido pedir aclaración
           return res.status(200).json({
             reply:
-              "No estoy seguro de a qué archivo o carpeta te refieres. ¿Podrías ser un poco más específico, por favor?",
+              'No estoy seguro de a qué archivo o carpeta te refieres. ¿Podrías ser un poco más específico?',
           });
         }
 
-        // Si NO es de archivos (como "¿quieres jugar un juego?"), lo tratamos como conversación normal
+        // Si no es de archivos, lo tratamos como conversación normal
         const userFolders = await folderModel.findByUserId(user.userId);
         const userFiles = await fileModel.findAllByUserId(user.userId);
 
@@ -267,9 +283,10 @@ exports.handleChatMessage = async (req, res) => {
         return res.status(200).json({ reply: conversationalReply });
       }
 
-      case 'upload_file': // En el dashboard no gestionamos subidas por texto
+      case 'upload_file':
         return res.status(200).json({
-          reply: "Para subir un archivo, por favor usa el formulario en la parte superior de la carpeta 📂",
+          reply:
+            'Para subir un archivo, usa el formulario de subida de archivos en la parte superior de la carpeta.',
         });
 
       /* ======================
@@ -279,11 +296,9 @@ exports.handleChatMessage = async (req, res) => {
       case 'greeting':
       case 'unknown':
       default: {
-        // Cargamos datos del usuario para que la IA pueda usarlos si habla de archivos
         const userFolders = await folderModel.findByUserId(user.userId);
         const userFiles = await fileModel.findAllByUserId(user.userId);
 
-        // Pasamos el historial completo para mantener la memoria
         const conversationalReply = await aiService.generateConversationalResponse(
           history,
           user.nombre,
@@ -294,7 +309,7 @@ exports.handleChatMessage = async (req, res) => {
       }
     }
   } catch (error) {
-    console.error("Error al procesar el mensaje del chat:", error);
+    console.error('Error al procesar el mensaje del chat:', error);
     res.status(500).json({
       error: 'Error al procesar el mensaje. Por favor, verifica el estado del servidor de IA.',
     });
@@ -302,15 +317,10 @@ exports.handleChatMessage = async (req, res) => {
 };
 
 // --- HISTORIAL DE CHAT ENTRE USUARIOS ---
-/**
- * @desc    Obtener el historial de chat con otro usuario
- * @route   GET /api/chat/history/:otherUserId
- * @access  Private
- */
 exports.getChatHistory = async (req, res) => {
   try {
-    const currentUserId = req.user.userId; // ID del usuario logueado
-    const { otherUserId } = req.params;   // ID del amigo
+    const currentUserId = req.user.userId;
+    const { otherUserId } = req.params;
 
     const otherUserIdNum = parseInt(otherUserId, 10);
     if (isNaN(otherUserIdNum)) {
@@ -320,7 +330,7 @@ exports.getChatHistory = async (req, res) => {
     const history = await messageModel.getHistory(currentUserId, otherUserIdNum);
     res.status(200).json(history);
   } catch (error) {
-    console.error("Error en getChatHistory:", error);
+    console.error('Error en getChatHistory:', error);
     res.status(500).json({ message: 'Error en el servidor al obtener el historial.' });
   }
 };
