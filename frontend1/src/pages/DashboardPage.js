@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
-
+import '../styles/ChatComponent.css'; // <--- AGREGA ESTO SI NO ESTÁ
 import folderService from '../services/folderService';
 import fileService from '../services/fileService';
 import authService from '../services/authService';
@@ -13,15 +13,18 @@ import tasksService from '../services/tasksService';
 import { UserContext } from '../App';
 import '../styles/DashboardPage.css';
 
+// 🟢 IMPORTAMOS AMBOS COMPONENTES (CHAT Y VOZ)
 import ChatComponent from '../components/ChatComponent';
+import Gesia from '../components/Gesia'; 
+
 import UserChatWindow from '../components/UserChatWindow';
 import QuickTasksContent from '../components/QuickTasksContent';
 
 // Vistas separadas
 import AnalyticsView from '../components/AnalyticsView';
 import ReportsView from '../components/ReportsView';
-import Lestat from '../components/lestat'; // 👈 NUEVO: importa tu lestat.js
-import Perfil from '../components/Perfil';  // 👈 NUEVO: vista de perfil
+import Lestat from '../components/lestat'; 
+import Perfil from '../components/Perfil'; 
 
 /* ====================== URL BACKEND UNIVERSAL ====================== */
 function getApiBase() {
@@ -116,8 +119,6 @@ const translations = {
     createTasksOk: 'Tareas creadas',
     createTaskOk: 'Tarea creada',
     errorTasks: 'No se pudieron cargar las tareas',
-
-    // ==== NUEVO: perfil ====
     profile: 'Perfil',
     profileUpdated: 'Perfil actualizado',
     errorProfileUpdate: 'No se pudo actualizar el perfil',
@@ -212,8 +213,6 @@ const translations = {
     createTasksOk: 'Tasks created',
     createTaskOk: 'Task created',
     errorTasks: 'Could not load tasks',
-
-    // ==== NEW: profile ====
     profile: 'Profile',
     profileUpdated: 'Profile updated',
     errorProfileUpdate: 'Could not update profile',
@@ -226,7 +225,7 @@ const translations = {
     savePassword: 'Save password',
     uploadNewAvatar: 'Change picture',
     userSince: 'User since',
-    name: 'Name',
+    name: 'Nombre',
     email: 'Email',
     whatsapp: 'WhatsApp',
     saving: 'Saving...',
@@ -348,7 +347,7 @@ const DashboardNavbar = ({
   setSearchFilter,
   hasUnread,
   onToggleNotificationPanel,
-  onOpenProfile, // 👈 NUEVO
+  onOpenProfile,
 }) => {
   const navigate = useNavigate();
   const handleLogout = () => { authService.logout(); navigate('/'); };
@@ -380,7 +379,7 @@ const DashboardNavbar = ({
           type="text"
           placeholder={
             searchFilter === 'files'
-              ? t('searchPlaceholder')       // o un key más específico
+              ? t('searchPlaceholder')
               : searchFilter === 'folders'
               ? t('search_folders')
               : t('search_users')
@@ -547,7 +546,7 @@ const HomePageCards = ({ onNavigate, t, tasks, groupedFiles, fileListHandlers, q
 
   const { completion, trend } = computeMiniAnalytics(tasks);
   const maxTrend = Math.max(1, ...trend);
-  const spark = trend.map(v => '▁▂▃▄▅▆▇'[Math.min(6, Math.round((v/maxTrend)*6))]).join('');
+  const spark = trend.map(v => ' ▂▃▄▅▆▇'[Math.min(6, Math.round((v/maxTrend)*6))]).join('');
 
   const pending = (groupedFiles.pending || []).length;
   const inproc = (groupedFiles.in_process || []).length;
@@ -559,7 +558,7 @@ const HomePageCards = ({ onNavigate, t, tasks, groupedFiles, fileListHandlers, q
       <p className="home-subtitle">{t('welcomeMessage')}</p>
 
      {/* Fila de tarjetas */}
-<div className="home-card-row">
+    <div className="home-card-row">
   {/* Analítica */}
   <div
     className="home-card home-card--analytics"
@@ -789,6 +788,9 @@ const DashboardPage = () => {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
+  
+  // 🟢 ESTADO DEL TOGGLE CHAT/GESIA
+  const [chatTab, setChatTab] = useState('gesia');
 
   const { user } = useContext(UserContext);
 
@@ -803,7 +805,7 @@ const DashboardPage = () => {
     setTimeout(() => setMessage(null), 3000);
   };
 
-  /* -------------------- NOTIFICACIONES: LOCAL + BACKEND -------------------- */
+  /* -------------------- NOTIFICACIONES -------------------- */
   useEffect(() => {
     if (!user?.id) return;
     try {
@@ -842,13 +844,17 @@ const DashboardPage = () => {
   /* ------------------------------ EFECTOS ----------------------------- */
   useEffect(() => {
     if (user) {
-      const folderId = currentFolder ? currentFolder.id : null;
-      loadFolders(folderId);
-      if (folderId) { setAllFiles([]); loadFiles(folderId); }
-      else { setFiles([]); loadAllUserFiles(); }
+      // 🟢 SIEMPRE CARGAR LA RAIZ PARA EL SIDEBAR
+      loadFolders(null);
+      
+      if (currentFolder) {
+         loadFiles(currentFolder.id);
+      } else {
+         loadAllUserFiles();
+         tasksService.listByUser(user.id, { limit: 50 }).then(setTasks).catch(()=>{});
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentFolder, user]);
+  }, [user, currentFolder]);
 
   useEffect(() => {
     if (searchFilter === 'users' && searchTerm.trim() !== '') {
@@ -868,7 +874,7 @@ const DashboardPage = () => {
     socket.emit('join_room', user.id);
 
     const fileListener = () => { currentFolder ? loadFiles(currentFolder.id) : loadAllUserFiles(); };
-    const folderListener = () => loadFolders(currentFolder ? currentFolder.id : null);
+    const folderListener = () => loadFolders(null); // 🟢 Siempre refrescar root
     const tasksListener = async () => {
       try { const data = await tasksService.listByUser(user.id, { limit: 50 }); setTasks(data); }
       catch { /* ignore */ }
@@ -876,26 +882,16 @@ const DashboardPage = () => {
 
     const notificationListener = (data) => {
       const senderId = data.sender?.id ?? data.sender_id;
-
-      // ⛔ No quiero notificaciones de mensajes que YO mismo envié
-      if (!user?.id || senderId === user.id) {
-        return;
-      }
-
+      if (!user?.id || senderId === user.id) return;
       const nombre = data.sender?.nombre || `Usuario ${senderId}`;
       const foto = data.sender?.foto_perfil_url || 'https://placehold.co/50x50/E0E0E0/121212?text=?';
       const lastMessage = {
         contenido: data.message?.contenido ?? data.contenido ?? '',
         created_at: data.message?.created_at ?? new Date().toISOString()
       };
-
       setNotifications(prev => {
         const arr = [
-          {
-            sender: { id: senderId, nombre, foto_perfil_url: foto },
-            message: lastMessage,
-            count: 1
-          },
+          { sender: { id: senderId, nombre, foto_perfil_url: foto }, message: lastMessage, count: 1 },
           ...prev
         ];
         window.localStorage.setItem(`gestoria:notifications:${user.id}`, JSON.stringify(arr));
@@ -943,8 +939,9 @@ const DashboardPage = () => {
 
   /* ------------------------------ HANDLERS ----------------------------- */
   const handleFolderClick = (folder) => {
-    setPath(prev => [...prev.filter(p=>p), currentFolder].filter(Boolean));
+    setPath(prev => [...prev, currentFolder].filter(Boolean));
     setCurrentFolder(folder);
+    setMainView('home');
     setSearchTerm('');
   };
   const handleGoBack = () => {
@@ -957,6 +954,28 @@ const DashboardPage = () => {
     if (folder === null) { setPath([]); setCurrentFolder(null); setMainView('home'); }
     else { const newPath = path.slice(0, index); setPath(newPath); setCurrentFolder(folder); }
   };
+  
+  // 🟢 FUNCIÓN DE VOZ CORREGIDA (PLURAL/SINGULAR)
+  const handleVoiceFolderOpen = (folderName) => {
+    if (!folderName) return;
+    const cleanTarget = folderName.replace(/['".,]/g, '').trim().toLowerCase();
+    const cleanTargetSingular = cleanTarget.endsWith('s') ? cleanTarget.slice(0, -1) : cleanTarget;
+
+    // Buscamos en la lista de carpetas (que ahora siempre está cargada)
+    const target = folders.find(f => {
+       const fName = f.nombre.toLowerCase().trim();
+       const fNameSingular = fName.endsWith('s') ? fName.slice(0, -1) : fName;
+       return fName === cleanTarget || fName === cleanTargetSingular || cleanTarget.includes(fName) || fName.includes(cleanTarget);
+    });
+
+    if (target) {
+        showMessage(`📂 Voz: Abriendo "${target.nombre}"...`, 'success');
+        handleFolderClick(target); 
+    } else {
+        showMessage(`⚠️ No veo la carpeta "${cleanTarget}" aquí.`, 'error');
+    }
+  };
+
   const handleOpenChat = async (userToChat) => {
     if (!openChats.find(c => c.id === userToChat.id)) setOpenChats(prev => [userToChat, ...prev.slice(0,2)]);
     try { if (user?.id) await notificationService.markFromSender(user.id, userToChat.id); } catch {}
@@ -975,30 +994,24 @@ const DashboardPage = () => {
   };
 
   const handleCreateFolder = async (e) => {
-    e.preventDefault();
-    if (!newFolderName.trim()) return;
-    try {
-      const parentId = currentFolder ? currentFolder.id : null;
-      await folderService.createFolder(newFolderName, parentId);
-      setNewFolderName(''); loadFolders(parentId);
-      setMessage({ text: translations.es.folderCreated, type:'success' });
+    e.preventDefault(); if (!newFolderName.trim()) return;
+    try { 
+      await folderService.createFolder(newFolderName, currentFolder?.id); 
+      setNewFolderName(''); 
+      loadFolders(null); // 🟢 Recargamos raíz para que aparezca en sidebar
+      setMessage({ text: translations.es.folderCreated, type:'success' }); 
     } catch { setMessage({ text: translations.es.errorCreateFolder, type:'error' }); }
   };
   const handleStartFolderRename = (folder) => { setEditingFolder(folder); setNewFolderRename(folder.nombre); };
   const handleUpdateFolder = async (e) => {
     e.preventDefault();
     if (!newFolderRename.trim() || !editingFolder || newFolderRename.trim() === editingFolder.nombre) { setEditingFolder(null); return; }
-    try {
-      await folderService.updateFolder(editingFolder.id, newFolderRename);
-      setEditingFolder(null); setNewFolderRename('');
-      loadFolders(currentFolder ? currentFolder.id : null);
-      if (currentFolder && currentFolder.id === editingFolder.id) setCurrentFolder({ ...currentFolder, nombre: newFolderRename });
-      setMessage({ text: translations.es.folderUpdated, type:'success' });
-    } catch { setMessage({ text: translations.es.errorUpdateFolder, type:'error' }); }
+    try { await folderService.updateFolder(editingFolder.id, newFolderRename); setEditingFolder(null); setNewFolderRename(''); loadFolders(null); setMessage({ text: translations.es.folderUpdated, type:'success' }); } 
+    catch { setMessage({ text: translations.es.errorUpdateFolder, type:'error' }); }
   };
   const handleDeleteFolder = (folderId) => setModalState({ isOpen: true, title: translations.es.deleteFolderTitle, message: translations.es.confirmDeleteFolder, onConfirm: () => confirmDeleteFolder(folderId) });
   const confirmDeleteFolder = async (folderId) => {
-    try { await folderService.deleteFolder(folderId); loadFolders(currentFolder ? currentFolder.id : null); setMessage({ text: translations.es.folderDeleted, type:'success' }); }
+    try { await folderService.deleteFolder(folderId); loadFolders(null); setMessage({ text: translations.es.folderDeleted, type:'success' }); }
     catch { setMessage({ text: translations.es.errorDeleteFolder, type:'error' }); }
     setModalState({ isOpen:false });
   };
@@ -1040,7 +1053,7 @@ const DashboardPage = () => {
   };
   const handleSaveNote = (file, noteText) => handleUpdateFileDetails(file, { status:'in_process', nota: noteText });
 
-  /* ------------------- FILTRO Y AGRUPACIÓN ------------------- */
+  /* ------------------- FILTROS ------------------- */
   const filteredFiles = useMemo(() => {
     const sourceFiles = currentFolder ? files : allFiles;
     if (searchFilter !== 'files' || !searchTerm) return sourceFiles;
@@ -1065,10 +1078,7 @@ const DashboardPage = () => {
 
   const globalGroupedFiles = useMemo(() => {
     const pending = [], in_process = [], done = [];
-    const filesToGroup =
-      (searchFilter === 'files' && searchTerm)
-        ? allFiles.filter((file) => file.nombre_original?.toLowerCase().includes(searchTerm.toLowerCase()))
-        : allFiles;
+    const filesToGroup = (searchFilter === 'files' && searchTerm) ? allFiles.filter((file) => file.nombre_original?.toLowerCase().includes(searchTerm.toLowerCase())) : allFiles;
     filesToGroup.forEach((f) => {
       if (f.status === 'done') done.push(f);
       else if (f.status === 'in_process') in_process.push(f);
@@ -1077,14 +1087,14 @@ const DashboardPage = () => {
     return { pending, in_process, done };
   }, [allFiles, searchTerm, searchFilter]);
 
-  const fileListHandlers = {
-    onStatusChange: handleUpdateFileDetails,
-    onNoteClick: setNoteModalFile,
-    editingFile,
-    onUpdateFile: handleUpdateFile,
-    onSetEditingFile: setEditingFile,
-    onDeleteFile: handleDeleteFile,
-    t: (k,p)=>t(k,p),
+  const fileListHandlers = { onStatusChange: handleUpdateFileDetails, onNoteClick: setNoteModalFile, editingFile, onUpdateFile: handleUpdateFile, onSetEditingFile: setEditingFile, onDeleteFile: handleDeleteFile, t: (k,p)=>t(k,p) };
+
+  const quickTasksProps = {
+    userId: user?.id,
+    t: (k)=>t(k),
+    tasks, setTasks,
+    loading: tasksLoading, setLoading: setTasksLoading,
+    onToast: showMessage
   };
 
   /* --------------------------- RENDER -------------------------- */
@@ -1092,53 +1102,25 @@ const DashboardPage = () => {
     <div className="dashboard-layout">
       {message && (
         <div className={`toast-message ${message.type || 'info'}`}>
-          <i className={
-            message.type === 'success' ? 'fas fa-check-circle' :
-            message.type === 'error' ? 'fas fa-exclamation-circle' :
-            'fas fa-info-circle'
-          }></i>
+          <i className={message.type === 'success' ? 'fas fa-check-circle' : message.type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-info-circle'}></i>
           {message.text}
         </div>
       )}
 
-      <ConfirmModal
-        isOpen={modalState.isOpen}
-        title={modalState.title}
-        message={modalState.message}
-        onConfirm={modalState.onConfirm}
-        onClose={() => setModalState({ isOpen:false })}
-        t={(k)=>t(k)}
-      />
+      <ConfirmModal isOpen={modalState.isOpen} title={modalState.title} message={modalState.message} onConfirm={modalState.onConfirm} onClose={() => setModalState({ isOpen:false })} t={(k)=>t(k)} />
+      {noteModalFile && <NoteModal file={noteModalFile} onClose={() => setNoteModalFile(null)} onSave={handleSaveNote} t={(k)=>t(k)} />}
 
-      {noteModalFile && (
-        <NoteModal file={noteModalFile} onClose={() => setNoteModalFile(null)} onSave={handleSaveNote} t={(k)=>t(k)} />
-      )}
-
-      <DashboardNavbar
-        user={user}
-        language={language}
-        setLanguage={setLanguage}
-        t={(k)=>t(k)}
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        searchFilter={searchFilter}
-        setSearchFilter={setSearchFilter}
-        hasUnread={hasUnread}
-        onToggleNotificationPanel={toggleNotificationPanel}
-        onOpenProfile={() => setMainView('profile')}   // 👈 abrir vista perfil
-      />
+      <DashboardNavbar user={user} language={language} setLanguage={setLanguage} t={(k)=>t(k)} searchTerm={searchTerm} setSearchTerm={setSearchTerm} searchFilter={searchFilter} setSearchFilter={setSearchFilter} hasUnread={hasUnread} onToggleNotificationPanel={toggleNotificationPanel} onOpenProfile={() => setMainView('profile')} />
 
       <div className="dashboard-body">
-        {/* Sidebar carpetas */}
+        {/* Sidebar carpetas - 🟢 SIEMPRE MUESTRA RAÍZ */}
         <div className="sidebar">
           <h3>{t('myFolders')}</h3>
-
           {path.length > 0 && (
             <button onClick={handleGoBack} className="back-button">
               <i className="fas fa-arrow-left"></i> {t('goBackTo')} {path[path.length - 1]?.nombre || t('root')}
             </button>
           )}
-
           <form onSubmit={handleCreateFolder} className="folder-form">
             <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder={t('newFolderPlaceholder')} />
             <button type="submit" disabled={!newFolderName.trim()}><i className="fas fa-plus"></i></button>
@@ -1164,9 +1146,7 @@ const DashboardPage = () => {
                 </div>
               </li>
             ))}
-            {folders.length > 0 && filteredFolders.length === 0 && (
-              <div className="empty-state-small"><p>{t('noFoldersFound')}</p></div>
-            )}
+            {folders.length > 0 && filteredFolders.length === 0 && <div className="empty-state-small"><p>{t('noFoldersFound')}</p></div>}
           </ul>
         </div>
 
@@ -1185,13 +1165,10 @@ const DashboardPage = () => {
 
                   <form onSubmit={handleUploadFile} className="upload-form">
                     <label htmlFor="fileInput" className="custom-file-upload">
-                      <i className="fas fa-cloud-upload-alt"></i>
-                      {selectedFile ? selectedFile.name : t('selectFile')}
+                      <i className="fas fa-cloud-upload-alt"></i> {selectedFile ? selectedFile.name : t('selectFile')}
                     </label>
                     <input type="file" id="fileInput" onChange={handleFileChange} />
-                    <button type="submit" disabled={!selectedFile || uploading} className="btn btn-success">
-                      {uploading ? t('uploading') : t('uploadFile')}
-                    </button>
+                    <button type="submit" disabled={!selectedFile || uploading} className="btn btn-success">{uploading ? t('uploading') : t('uploadFile')}</button>
                   </form>
 
                   <FileListGroup title={t('pending')} files={groupedFiles.pending} {...fileListHandlers} />
@@ -1200,111 +1177,38 @@ const DashboardPage = () => {
 
                   {files.length === 0 && !uploading && !searchTerm && (
                     <div className="empty-state">
-                      <i className="fas fa-box-open"></i>
-                      <h3>{t('emptyFolderTitle')}</h3>
-                      <p>{t('emptyFolderMessage')}</p>
+                      <i className="fas fa-box-open"></i><h3>{t('emptyFolderTitle')}</h3><p>{t('emptyFolderMessage')}</p>
                     </div>
                   )}
                 </>
               ) : (
                 <>
                   {mainView === 'home' ? (
-                    <HomePageCards
-                      onNavigate={setMainView}
-                      t={(k)=>t(k)}
-                      tasks={tasks}
-                      groupedFiles={globalGroupedFiles}
-                      fileListHandlers={fileListHandlers}
-                      quickTasksProps={{
-                        userId: user?.id,
-                        t: (k)=>t(k),
-                        tasks, setTasks,
-                        loading: tasksLoading, setLoading: setTasksLoading,
-                        onToast: showMessage
-                      }}
-                    />
+                    <HomePageCards onNavigate={setMainView} t={(k)=>t(k)} tasks={tasks} groupedFiles={globalGroupedFiles} fileListHandlers={fileListHandlers} quickTasksProps={quickTasksProps} />
                   ) : mainView === 'tasks' ? (
                     <div className="apartado-view">
-                      <nav className="breadcrumbs apartado-breadcrumbs">
-                        <span className="crumb" onClick={()=>setMainView('home')}><i className="fas fa-home"></i> {t('root')}</span>
-                        <span className="separator">&gt;</span>
-                        <span className="crumb">{t('tasks')}</span>
-                      </nav>
+                      <nav className="breadcrumbs apartado-breadcrumbs"><span className="crumb" onClick={()=>setMainView('home')}><i className="fas fa-home"></i> {t('root')}</span><span className="separator">&gt;</span><span className="crumb">{t('tasks')}</span></nav>
                       <div className="apartado-content">
                         <h2>{t('tasks')}</h2>
-
                         <h3 className="file-group-header">{t('tasks_pending_title')}</h3>
-                        <QuickTasksContent
-                          t={(k)=>t(k)}
-                          tasks={(tasks||[]).filter(x => (x.status||'pending')==='pending')}
-                          editingId={editingId} editingTitle={editingTitle}
-                          setEditingId={setEditingId} setEditingTitle={setEditingTitle}
-                          onStartEdit={(task)=>{ setEditingId(task.id); setEditingTitle(task.titulo); }}
-                          onSaveEdit={async (e)=>{ e.preventDefault(); if (!editingId) return; try { const updated = await tasksService.update(editingId, { titulo: editingTitle }); setTasks(cur => cur.map(tk => tk.id===updated.id?updated:tk)); setEditingId(null); setEditingTitle(''); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }}
-                          onDelete={async (id)=>{ try { await tasksService.remove(id); setTasks(cur => cur.filter(tk=>tk.id!==id)); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }}
-                          onSetStatus={async (task, status)=>{ try { const updated = await tasksService.update(task.id, { status }); setTasks(cur => cur.map(tk => tk.id===updated.id?updated:tk)); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }}
-                        />
-
+                        <QuickTasksContent t={(k)=>t(k)} tasks={(tasks||[]).filter(x => (x.status||'pending')==='pending')} editingId={editingId} editingTitle={editingTitle} setEditingId={setEditingId} setEditingTitle={setEditingTitle} onStartEdit={(task)=>{ setEditingId(task.id); setEditingTitle(task.titulo); }} onSaveEdit={async (e)=>{ e.preventDefault(); if (!editingId) return; try { const updated = await tasksService.update(editingId, { titulo: editingTitle }); setTasks(cur => cur.map(tk => tk.id===updated.id?updated:tk)); setEditingId(null); setEditingTitle(''); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }} onDelete={async (id)=>{ try { await tasksService.remove(id); setTasks(cur => cur.filter(tk=>tk.id!==id)); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }} onSetStatus={async (task, status)=>{ try { const updated = await tasksService.update(task.id, { status }); setTasks(cur => cur.map(tk => tk.id===updated.id?updated:tk)); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }} />
                         <h3 className="file-group-header" style={{ marginTop:'1rem' }}>{t('tasks_in_process_title')}</h3>
-                        <QuickTasksContent
-                          t={(k)=>t(k)}
-                          tasks={(tasks||[]).filter(x => x.status==='in_process')}
-                          editingId={editingId} editingTitle={editingTitle}
-                          setEditingId={setEditingId} setEditingTitle={setEditingTitle}
-                          onStartEdit={(task)=>{ setEditingId(task.id); setEditingTitle(task.titulo); }}
-                          onSaveEdit={async (e)=>{ e.preventDefault(); if (!editingId) return; try { const updated = await tasksService.update(editingId, { titulo: editingTitle }); setTasks(cur => cur.map(tk => tk.id===updated.id?updated:tk)); setEditingId(null); setEditingTitle(''); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }}
-                          onDelete={async (id)=>{ try { await tasksService.remove(id); setTasks(cur => cur.filter(tk=>tk.id!==id)); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }}
-                          onSetStatus={async (task, status)=>{ try { const updated = await tasksService.update(task.id, { status }); setTasks(cur => cur.map(tk => tk.id===updated.id?updated:tk)); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }}
-                        />
-
+                        <QuickTasksContent t={(k)=>t(k)} tasks={(tasks||[]).filter(x => x.status==='in_process')} editingId={editingId} editingTitle={editingTitle} setEditingId={setEditingId} setEditingTitle={setEditingTitle} onStartEdit={(task)=>{ setEditingId(task.id); setEditingTitle(task.titulo); }} onSaveEdit={async (e)=>{ e.preventDefault(); if (!editingId) return; try { const updated = await tasksService.update(editingId, { titulo: editingTitle }); setTasks(cur => cur.map(tk => tk.id===updated.id?updated:tk)); setEditingId(null); setEditingTitle(''); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }} onDelete={async (id)=>{ try { await tasksService.remove(id); setTasks(cur => cur.filter(tk=>tk.id!==id)); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }} onSetStatus={async (task, status)=>{ try { const updated = await tasksService.update(task.id, { status }); setTasks(cur => cur.map(tk => tk.id===updated.id?updated:tk)); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }} />
                         <h3 className="file-group-header" style={{ marginTop:'1rem' }}>{t('tasks_done_title')}</h3>
-                        <QuickTasksContent
-                          t={(k)=>t(k)}
-                          tasks={(tasks||[]).filter(x => x.status==='done')}
-                          editingId={editingId} editingTitle={editingTitle}
-                          setEditingId={setEditingId} setEditingTitle={setEditingTitle}
-                          onStartEdit={(task)=>{ setEditingId(task.id); setEditingTitle(task.titulo); }}
-                          onSaveEdit={async (e)=>{ e.preventDefault(); if (!editingId) return; try { const updated = await tasksService.update(editingId, { titulo: editingTitle }); setTasks(cur => cur.map(tk => tk.id===updated.id?updated:tk)); setEditingId(null); setEditingTitle(''); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }}
-                          onDelete={async (id)=>{ try { await tasksService.remove(id); setTasks(cur => cur.filter(tk=>tk.id!==id)); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }}
-                          onSetStatus={async (task, status)=>{ try { const updated = await tasksService.update(task.id, { status }); setTasks(cur => cur.map(tk => tk.id===updated.id?updated:tk)); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }}
-                        />
+                        <QuickTasksContent t={(k)=>t(k)} tasks={(tasks||[]).filter(x => x.status==='done')} editingId={editingId} editingTitle={editingTitle} setEditingId={setEditingId} setEditingTitle={setEditingTitle} onStartEdit={(task)=>{ setEditingId(task.id); setEditingTitle(task.titulo); }} onSaveEdit={async (e)=>{ e.preventDefault(); if (!editingId) return; try { const updated = await tasksService.update(editingId, { titulo: editingTitle }); setTasks(cur => cur.map(tk => tk.id===updated.id?updated:tk)); setEditingId(null); setEditingTitle(''); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }} onDelete={async (id)=>{ try { await tasksService.remove(id); setTasks(cur => cur.filter(tk=>tk.id!==id)); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }} onSetStatus={async (task, status)=>{ try { const updated = await tasksService.update(task.id, { status }); setTasks(cur => cur.map(tk => tk.id===updated.id?updated:tk)); socket.emit('tasks_updated',{user_id:user?.id}); } catch {} }} />
                       </div>
                     </div>
                   ) : mainView === 'analytics' ? (
-                    <AnalyticsView
-                      onGoHome={() => setMainView('home')}
-                      t={(k)=>t(k)}
-                      tasks={tasks}
-                      files={allFiles}
-                    />
+                    <AnalyticsView onGoHome={() => setMainView('home')} t={(k)=>t(k)} tasks={tasks} files={allFiles} />
                   ) : mainView === 'reports' ? (
-                    <ReportsView
-                      onGoHome={() => setMainView('home')}
-                      t={(k)=>t(k)}
-                      tasks={tasks}
-                      files={allFiles}
-                      folders={folders}
-                    />
+                    <ReportsView onGoHome={() => setMainView('home')} t={(k)=>t(k)} tasks={tasks} files={allFiles} folders={folders} />
                   ) : mainView === 'workflow' ? (
                     <div className="apartado-view">
-                      <nav className="breadcrumbs apartado-breadcrumbs">
-                        <span className="crumb" onClick={()=>setMainView('home')}>
-                          <i className="fas fa-home"></i> {t('root')}
-                        </span>
-                        <span className="separator">&gt;</span>
-                        <span className="crumb">{t('advantagesTitle')}</span>
-                      </nav>
-                      <div className="apartado-content">
-                        {/* Contenido de lestat.js en el panel central */}
-                        <Lestat t={t} />
-                      </div>
+                      <nav className="breadcrumbs apartado-breadcrumbs"><span className="crumb" onClick={()=>setMainView('home')}><i className="fas fa-home"></i> {t('root')}</span><span className="separator">&gt;</span><span className="crumb">{t('advantagesTitle')}</span></nav>
+                      <div className="apartado-content"><Lestat t={t} /></div>
                     </div>
                   ) : mainView === 'profile' ? (
-                    <Perfil
-                      t={(k)=>t(k)}
-                      user={user}
-                      onGoHome={() => setMainView('home')}
-                    />
+                    <Perfil t={(k)=>t(k)} user={user} onGoHome={() => setMainView('home')} />
                   ) : null}
                 </>
               )}
@@ -1312,16 +1216,50 @@ const DashboardPage = () => {
           )}
         </div>
 
-        {/* Chat de IA */}
-        <div className="chat-sidebar">
-          <ChatComponent
-            onReloadFolders={() => loadFolders(currentFolder ? currentFolder.id : null)}
+       {/* 🟢 CHAT SIDEBAR: LÓGICA CENTRALIZADA EN EL DASHBOARD 🟢 */}
+<div className="chat-sidebar">
+  {/* Usamos la clase 'chat-container' para aprovechar tus estilos existentes */}
+  <div className="chat-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    
+    {/* HEADER DE PESTAÑAS (Controlado por Dashboard) */}
+    <div className="chat-header">
+      <button 
+        className={`tab-button ${chatTab === 'chat' ? 'active' : ''}`} 
+        onClick={() => setChatTab('chat')}
+      >
+        Chat AI
+      </button>
+      <button 
+        className={`tab-button ${chatTab === 'gesia' ? 'active' : ''}`} 
+        onClick={() => setChatTab('gesia')}
+      >
+        Gesia AI
+      </button>
+    </div>
+
+    {/* CUERPO: Renderizado Condicional */}
+    <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+      {chatTab === 'chat' ? (
+        <ChatComponent 
+          onReloadFolders={() => loadFolders(null)}
+          onReloadFiles={() => { currentFolder ? loadFiles(currentFolder.id) : loadAllUserFiles(); }}
+        />
+      ) : (
+        <div className="panel gesia-panel" style={{ height: '100%' }}>
+          <Gesia 
+            onReloadFolders={() => loadFolders(null)}
             onReloadFiles={() => { currentFolder ? loadFiles(currentFolder.id) : loadAllUserFiles(); }}
+            onOpenFolder={handleVoiceFolderOpen}
           />
         </div>
+      )}
+    </div>
+
+  </div>
+</div>
+
       </div>
 
-      {/* Panel de Notificaciones */}
       {isNotificationOpen && (
         <NotificationPanel
           notifications={notifications}
@@ -1330,10 +1268,9 @@ const DashboardPage = () => {
         />
       )}
 
-      {/* Ventanas de chat de Amigos */}
       <div className="chat-dock-container">
         {openChats.map(chatUser => (
-          <UserChatWindow
+          <UserChatWindow 
             key={chatUser.id}
             friend={chatUser}
             onClose={() => setOpenChats(chats => chats.filter(c => c.id !== chatUser.id))}
