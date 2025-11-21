@@ -4,12 +4,10 @@ const axios = require('axios');
 const AI21_API_KEY = process.env.AI21_API_KEY;
 const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
 
-/* ========================================================================
-   🛠️ HELPERS Y UTILIDADES
-   ======================================================================== */
+/* ----------------------------- Helpers ----------------------------- */
 
-/** * Limpia el texto para que el lector de voz (TTS) no lea símbolos raros.
- * Elimina: Markdown, asteriscos, guiones de lista, código, etc.
+/** * 🔥 NUEVO: Limpia el texto para que el lector de voz no diga "asterisco asterisco".
+ * Elimina Markdown, negritas, listas y símbolos de código.
  */
 function cleanTextForTTS(text = '') {
   if (!text) return '';
@@ -18,38 +16,37 @@ function cleanTextForTTS(text = '') {
   // 1. Eliminar bloques de código ``` ... ```
   clean = clean.replace(/```[\s\S]*?```/g, '');
   
-  // 2. Eliminar negritas (**texto** o __texto__) y cursivas (*texto*)
-  clean = clean.replace(/\*\*(.*?)\*\*/g, '$1'); // Quita ** pero deja el texto
-  clean = clean.replace(/\*(.*?)\*/g, '$1');     // Quita * pero deja el texto
+  // 2. Eliminar negritas (**texto**) y cursivas (*texto*) y subrayados (__texto__)
+  clean = clean.replace(/\*\*(.*?)\*\*/g, '$1'); 
+  clean = clean.replace(/\*(.*?)\*/g, '$1');     
   clean = clean.replace(/__(.*?)__/g, '$1');
   
   // 3. Eliminar encabezados Markdown (# Titulo)
   clean = clean.replace(/^#+\s+/gm, '');
   
-  // 4. Eliminar viñetas de listas (- o *) al inicio de línea
-  clean = clean.replace(/^\s*[-*]\s+/gm, ', '); // Las cambia por comas para que la voz haga pausa
+  // 4. Eliminar viñetas de listas (- o *) al inicio de línea y cambiarlas por comas
+  clean = clean.replace(/^\s*[-*]\s+/gm, ', '); 
   
-  // 5. Eliminar caracteres sueltos que molestan al TTS
-  clean = clean.replace(/`/g, ''); // Comillas de código inline
-  clean = clean.replace(/\[|\]/g, ''); // Corchetes
+  // 5. Eliminar caracteres sueltos molestos
+  clean = clean.replace(/`/g, ''); 
+  clean = clean.replace(/\[|\]/g, ''); 
   
   // 6. Limpiar espacios extra
-  clean = clean.replace(/\s+/g, ' ').trim();
-
-  return clean;
+  return clean.replace(/\s+/g, ' ').trim();
 }
 
-/** Extrae JSON seguro de la respuesta de la IA */
+/** Extrae el primer objeto JSON de un string (quita cercas de código si vienen) */
 function extractFirstJson(str = '') {
   let s = String(str || '').trim();
-  // Si viene con bloque de código ```json ... ```
-  if (s.includes('```')) {
-    s = s.replace(/```[a-z]*\n?([\s\S]*?)```/g, '$1');
+  if (s.startsWith('```')) {
+    // Quita cercas de código y lenguaje opcional
+    s = s.replace(/^```[a-zA-Z-]*\n?/, '').replace(/```$/, '').trim();
   }
   const match = s.match(/{[\s\S]*}/);
-  return match ? match[0] : '{}';
+  return match ? match[0] : s;
 }
 
+/** Construye headers estándar para AI21 */
 function ai21Headers() {
   return {
     Authorization: `Bearer ${AI21_API_KEY}`,
@@ -57,34 +54,56 @@ function ai21Headers() {
   };
 }
 
-/* ========================================================================
-   1. INTERPRETADOR DE INTENCIONES (EL CEREBRO)
-   ======================================================================== */
+/* ===========================
+ * FUNCIÓN 1: El Intérprete
+ * =========================== */
 exports.interpretMessage = async (message) => {
   const prompt = `
-Analiza el siguiente mensaje del usuario y devuelve un JSON con su intención.
+Tu trabajo es analizar un mensaje y clasificarlo en una intención. Responde SIEMPRE con un objeto JSON.
 
-INTENCIONES POSIBLES:
-"greeting" (saludos), "list_folders", "view_folder", "create_folder", "edit_folder", "delete_folder",
-"upload_file", "send_latest_file", "generate_pdf", "set_reminder", "clarification_needed", "unknown".
+Las intenciones posibles son:
+"greeting", "list_folders", "view_folder", "create_folder", "edit_folder", "delete_folder",
+"upload_file", "send_file", "send_latest_file", "get_summary", "generate_pdf",
+"confirm_save_yes", "confirm_save_no", "set_reminder", "schedule_file_send",
+"clarification_needed", "unknown".
 
-REGLAS DE EXTRACCIÓN:
-1. "entity": Es el nombre principal (nombre de carpeta, tema del PDF, archivo).
-2. "parent_entity": Si menciona una carpeta padre (ej: "crea X dentro de Y").
-3. "create_folder": Actívalo si dice "crear", "nueva carpeta".
-4. "upload_file": Actívalo si dice "sube esto", "guarda esto", "archiva en X".
-5. "generate_pdf": Extrae el tema EXACTO en "entity".
+REGLAS CRÍTICAS:
+1. Al extraer nombres en "entity", "parent_entity" o "new_entity", sé EXTREMADAMENTE LITERAL. No simplifiques "Base de datos II" a "Base de datos".
+2. Intención "upload_file":
+   - Actívala si el usuario quiere GUARDAR, SUBIR o ARCHIVAR algo (ej: "guarda esto", "sube esto", "archiva esto").
+   - Si menciona una carpeta (ej: "en la carpeta X", "en X", "a X"), extrae "X" como "entity".
+   - Si el usuario solo adjunta un archivo sin texto (mensaje vacío o marcador), devuelve {"intent":"upload_file"} sin "entity".
+3. Para "generate_pdf", extrae el tema en "entity".
+4. Para "confirm_save_yes", si se menciona una carpeta, extráela en "entity".
+5. Para "set_reminder":
+   - "entity": descripción de la actividad.
+   - "time": hora o período (ej: "en 2 horas", "mañana a las 9 am").
+6. Para "schedule_file_send":
+   - "entity": nombre del archivo.
+   - "contact": nombre o número del contacto.
+   - "time": hora o período.
+   - "message": mensaje adicional (opcional).
+7. Si una acción necesita un nombre y no está claro, usa "clarification_needed".
 
-EJEMPLOS:
-- "Hola, ¿qué tal?" -> {"intent": "greeting"}
-- "Crear carpeta 'Proyectos'" -> {"intent": "create_folder", "entity": "Proyectos"}
-- "Elimina la carpeta 'Basura'" -> {"intent": "delete_folder", "entity": "Basura"}
-- "Sube esto a 'Finanzas'" -> {"intent": "upload_file", "entity": "Finanzas"}
-- "Hazme un PDF sobre la Revolución Francesa" -> {"intent": "generate_pdf", "entity": "la Revolución Francesa"}
-- "Quién es el presidente de Ecuador" -> {"intent": "unknown"} (Esto es una pregunta general, no un comando)
+### Ejemplos ###
+- Usuario: "hola" -> {"intent": "greeting"}
+- Usuario: "muéstrame mis carpetas" -> {"intent": "list_folders"}
+- Usuario: "qué hay dentro de la carpeta Base de datos II" -> {"intent": "view_folder", "entity": "Base de datos II"}
+- Usuario: "crea la carpeta 'Impuestos 2025' dentro de 'Facturas'" -> {"intent": "create_folder", "entity": "Impuestos 2025", "parent_entity": "Facturas"}
+- Usuario: "renombra 'mate' a 'matemáticas'" -> {"intent": "edit_folder", "entity": "mate", "new_entity": "matemáticas"}
+- Usuario: "pásame el primer archivo" -> {"intent": "send_latest_file"}
+- Usuario: "pásame el archivo" -> {"intent": "clarification_needed"}
+- Usuario: "haz un resumen de la segunda guerra mundial en pdf" -> {"intent": "generate_pdf", "entity": "la segunda guerra mundial"}
+- Usuario: "recuérdame hacer la compra en 30 minutos" -> {"intent": "set_reminder", "entity": "hacer la compra", "time": "en 30 minutos"}
 
-Mensaje: "${message || ''}"
-JSON:
+--- Nuevos ejemplos de subida ---
+- Usuario: "sube esto en la carpeta deberes" -> {"intent": "upload_file", "entity": "deberes"}
+- Usuario: "Guarda esto en carpetaxd" -> {"intent": "upload_file", "entity": "carpetaxd"}
+- Usuario: "Archiva esto en 'importante'" -> {"intent": "upload_file", "entity": "importante"}
+- Usuario: "[ADJUNTO]" (solo archivo) -> {"intent": "upload_file"}
+- Usuario: "Guárdalo en la carpeta archivos" -> {"intent": "confirm_save_yes", "entity": "archivos"}
+
+Analiza: "${message || ''}"
 `.trim();
 
   try {
@@ -93,65 +112,69 @@ JSON:
       {
         model: 'jamba-large',
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 200,
-        temperature: 0.0, // Cero creatividad para comandos precisos
+        max_tokens: 250,
+        temperature: 0.0,
       },
       { headers: ai21Headers() }
     );
 
-    const jsonStr = extractFirstJson(data?.choices?.[0]?.message?.content);
-    return JSON.parse(jsonStr);
-  } catch (e) {
-    console.error("Error interpretando:", e.message);
-    return { intent: 'unknown' }; // Ante la duda, conversamos
+    const raw = data?.choices?.[0]?.message?.content ?? '';
+    const jsonString = extractFirstJson(raw);
+    try {
+      return JSON.parse(jsonString);
+    } catch {
+      return { intent: 'unknown' };
+    }
+  } catch {
+    return { intent: 'error' };
   }
 };
 
-/* ========================================================================
-   2. GENERADOR DE CONVERSACIÓN (LA PERSONALIDAD SIN ASTERISCOS)
-   ======================================================================== */
+/* ==============================================
+ * FUNCIÓN 2: Conversador (MEJORADA: GENERAL + LIMPIEZA)
+ * ============================================== */
 exports.generateConversationalResponse = async (historyOrMessage, userName, userData) => {
-  // 1. Preparar contexto de datos
-  const foldersStr = Array.isArray(userData?.folders) && userData.folders.length > 0
-    ? userData.folders.map(f => f.nombre).join(', ')
+  const foldersList = Array.isArray(userData?.folders)
+    ? userData.folders.map((f) => f?.nombre).filter(Boolean).join(', ')
     : 'ninguna';
 
-  const filesStr = Array.isArray(userData?.files) && userData.files.length > 0
-    ? userData.files.slice(0, 5).map(f => f.nombre_original).join(', ')
+  const filesList = Array.isArray(userData?.files)
+    ? userData.files
+        .slice(0, 5)
+        .map((f) => `${f?.nombre_original} (Estado: ${f?.status || 'pending'})`)
+        .join('; ')
     : 'ninguno';
 
-  // 2. SYSTEM PROMPT INGENIERO PARA VOZ
+  // 🔥 AQUÍ ESTÁ LA CLAVE: Permitimos charla general y prohibimos Markdown 🔥
   const systemInstruction = `
-Eres Gesia, una asistente virtual profesional, amable y humana. Estás hablando con ${userName}.
+Eres "Gestor IA", un asistente virtual inteligente, amable y útil. El nombre del usuario es ${userName}.
 
-TU CONTEXTO ACTUAL:
-- El usuario tiene estas carpetas: ${foldersStr}.
-- Archivos recientes: ${filesStr}.
+TUS RESPONSABILIDADES:
+1. Ayudar a gestionar archivos y carpetas.
+2. **CHARLA GENERAL:** Puedes hablar de CUALQUIER tema (cultura, historia, ciencia, chistes, vida diaria). Si el usuario te pregunta algo que no tiene que ver con archivos, RESPÓNDELE con naturalidad.
 
-REGLAS OBLIGATORIAS (SISTEMA DE VOZ):
-1. 🚫 PROHIBIDO EL MARKDOWN: No uses asteriscos (*), ni negritas (**), ni guiones (-), ni numerales (#).
-2. ESCRIBE COMO HABLAS: Usa oraciones completas. Usa comas y puntos para marcar las pausas de la voz.
-3. Si vas a listar cosas, sepáralas por comas o puntos, no uses listas verticales.
-4. MEMORIA: Usa el historial de la conversación para saber de qué estábamos hablando. Si el usuario dice "y quién es él", mira el mensaje anterior.
-5. RESPUESTAS GENERALES: Si te preguntan cosas de cultura general (historia, ciencia, etc.), responde con tu conocimiento libremente.
-6. Sé concisa. Respuestas de máximo 3 o 4 oraciones salvo que pidan explicaciones largas.
+DATOS DEL USUARIO (Úsalos solo si pregunta por ellos):
+- Carpetas: ${foldersList || 'ninguna'}.
+- Archivos Recientes: ${filesList || 'ninguno'}.
 
-Ejemplo INCORRECTO: "Aquí tienes: \n- Carpeta A \n- Carpeta B"
-Ejemplo CORRECTO: "Aquí tienes tus carpetas. Veo que tienes la Carpeta A y también la Carpeta B."
+⚠️ REGLA OBLIGATORIA DE FORMATO:
+- NO USES MARKDOWN. Prohibido usar asteriscos (**negrita**), guiones de lista o almohadillas (#).
+- Escribe en texto plano.
+- Usa comas y puntos para separar ideas.
+
+MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respuesta.
 `.trim();
 
-  // 3. Construir historial de mensajes
-  let messagesForApi = [];
+  let messagesForApi;
   if (Array.isArray(historyOrMessage)) {
-    messagesForApi = historyOrMessage.map(msg => ({
+    messagesForApi = historyOrMessage.map((msg) => ({
       role: msg.sender === 'user' ? 'user' : 'assistant',
-      content: String(msg.text || '')
+      content: String(msg.text ?? ''),
     }));
   } else {
-    messagesForApi = [{ role: 'user', content: String(historyOrMessage || '') }];
+    messagesForApi = [{ role: 'user', content: String(historyOrMessage ?? '') }];
   }
 
-  // Insertar System Prompt al inicio
   messagesForApi.unshift({ role: 'system', content: systemInstruction });
 
   try {
@@ -160,39 +183,76 @@ Ejemplo CORRECTO: "Aquí tienes tus carpetas. Veo que tienes la Carpeta A y tamb
       {
         model: 'jamba-large',
         messages: messagesForApi,
-        max_tokens: 400,
-        temperature: 0.7, // Creatividad media para sonar natural
+        max_tokens: 300,
+        temperature: 0.7,
       },
       { headers: ai21Headers() }
     );
 
-    let reply = data?.choices?.[0]?.message?.content?.trim() || 'Lo siento, no te escuché bien.';
+    const rawReply = data?.choices?.[0]?.message?.content?.trim() || 'Lo siento, tuve un problema para generar una respuesta coherente.';
     
-    // 🔥 LIMPIEZA FINAL DE SEGURIDAD 🔥
-    return cleanTextForTTS(reply);
+    // 🔥 Aplicamos la limpieza antes de devolver la respuesta
+    return cleanTextForTTS(rawReply);
 
   } catch (error) {
-    console.error('Error AI Conversación:', error.message);
-    return 'Hubo un error de conexión con mi sistema. ¿Puedes repetirlo?';
+    console.error(
+      'Error en generateConversationalResponse:',
+      error?.response?.data?.detail || error?.message
+    );
+    return 'Tuve un problema para conectarme con mi cerebro de IA. Inténtalo de nuevo.';
   }
 };
 
-/* ========================================================================
-   3. GENERADOR DE PDF (CONTENIDO ACADÉMICO)
-   ======================================================================== */
-exports.generatePdfContent = async (topic, userName) => {
-  const today = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+/* ==============================
+ * FUNCIÓN: Buscar imagen (Unsplash)
+ * ============================== */
+async function fetchRelevantImage(topic) {
+  if (!UNSPLASH_ACCESS_KEY) {
+    console.log('No se ha configurado la API Key de Unsplash.');
+    return null;
+  }
+  try {
+    const { data } = await axios.get('[https://api.unsplash.com/search/photos](https://api.unsplash.com/search/photos)', {
+      params: {
+        query: topic,
+        per_page: 1,
+        orientation: 'landscape',
+        order_by: 'relevant',
+      },
+      headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` },
+    });
+    return data?.results?.[0]?.urls?.regular || null;
+  } catch (error) {
+    console.error('Error al buscar imagen en Unsplash:', error.message);
+    return null;
+  }
+}
 
-  // Paso A: Estructura JSON
+/* ======================================================
+ * FUNCIÓN 3: Generador de Contenido para PDF (mejorada)
+ * ====================================================== */
+exports.generatePdfContent = async (topic, userName) => {
+  const today = new Date().toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  // PROMPT 1: Generar estructura + imageQuery
   const structurePrompt = `
-Genera la estructura para un informe sobre "${topic}". Responde SOLO JSON.
-Campos: "titulo", "introduccion", "secciones" (array objetos {subtitulo}), "conclusion", "imageQuery" (inglés).
-Sin markdown.
+Tu tarea es generar la estructura de un informe sobre "${topic}". Responde SIEMPRE y ÚNICAMENTE con un objeto JSON.
+El JSON debe tener:
+1. "titulo": El título oficial del informe.
+2. "introduccion": Un párrafo corto de introducción.
+3. "secciones": Un array de objetos, donde cada objeto solo tiene "subtitulo". (Mínimo 3 secciones)
+4. "conclusion": Un párrafo corto de conclusión.
+5. "imageQuery": Una frase corta y específica, en INGLÉS, para buscar la imagen de portada en Unsplash.
+
+REGLAS:
+- NO uses Markdown en el JSON.
 `.trim();
 
-  let structure = { 
-    titulo: topic, introduccion: 'Introducción...', secciones: [], conclusion: 'Fin.', imageQuery: 'abstract' 
-  };
+  let structure = null;
 
   try {
     const { data } = await axios.post(
@@ -200,32 +260,50 @@ Sin markdown.
       {
         model: 'jamba-large',
         messages: [{ role: 'user', content: structurePrompt }],
-        max_tokens: 1000,
+        max_tokens: 1500,
         temperature: 0.5,
       },
       { headers: ai21Headers() }
     );
-    const jsonRaw = extractFirstJson(data?.choices?.[0]?.message?.content);
-    const parsed = JSON.parse(jsonRaw);
-    if (parsed.titulo) structure = parsed;
+
+    let content = data?.choices?.[0]?.message?.content?.trim() || '{}';
+    content = extractFirstJson(content);
+
+    try {
+      structure = JSON.parse(content);
+    } catch {
+      structure = null;
+    }
   } catch (e) {
-    console.warn("Usando estructura por defecto PDF.");
+    console.error('Error al generar la ESTRUCTURA del PDF:', e?.message || e);
+    structure = null;
   }
 
-  // Paso B: Contenido Redactado
-  // Aquí también pedimos NO usar markdown para que el PDF salga limpio
+  // Asegurar estructura mínima
+  structure = {
+    titulo: structure?.titulo || String(topic || 'Informe'),
+    introduccion: structure?.introduccion || 'Introducción.',
+    secciones:
+      Array.isArray(structure?.secciones) && structure.secciones.length > 0
+        ? structure.secciones
+        : [{ subtitulo: 'Contexto' }, { subtitulo: 'Desarrollo' }, { subtitulo: 'Aplicaciones' }],
+    conclusion: structure?.conclusion || 'Conclusión.',
+    imageQuery: structure?.imageQuery || 'report cover',
+  };
+
+  // PROMPT 2: Generar contenido extenso
   const contentPrompt = `
-Escribe el contenido completo del informe "${structure.titulo}".
-Estructura:
-1. Introducción: ${structure.introduccion}
-2. Secciones: ${structure.secciones.map(s => s.subtitulo).join(', ')}.
-3. Conclusión: ${structure.conclusion}
+Escribe un informe detallado (mínimo 800 palabras) sobre "${topic}". Usa un tono educativo y fácil de entender.
+Debes seguir esta estructura exacta:
+- Título: ${structure.titulo}
+- Introducción: ${structure.introduccion}
+- Secciones:
+${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
+- Conclusión: ${structure.conclusion}
 
 REGLAS DE FORMATO:
-- Escribe en texto plano.
-- NO USES MARKDOWN (**negritas**, ## titulos).
-- Separa los párrafos con doble salto de línea.
-- Tono: Académico y formal.
+- NO USES MARKDOWN (**negrita**).
+- Usa texto plano.
 `.trim();
 
   try {
@@ -234,41 +312,45 @@ REGLAS DE FORMATO:
       {
         model: 'jamba-large',
         messages: [{ role: 'user', content: contentPrompt }],
-        max_tokens: 3000,
+        max_tokens: 3500,
         temperature: 0.6,
       },
       { headers: ai21Headers() }
     );
 
-    let fullText = data?.choices?.[0]?.message?.content || '';
+    const rawTextContent = data?.choices?.[0]?.message?.content?.trim() || '';
     
-    // Limpiamos el texto del PDF también para evitar asteriscos en el documento
-    fullText = cleanTextForTTS(fullText);
+    // 🔥 Limpiamos el contenido del PDF también
+    const textContent = cleanTextForTTS(rawTextContent);
 
+    // Buscar imagen con la consulta generada
     const imageUrl = await fetchRelevantImage(structure.imageQuery);
 
     return {
-      textContent: fullText,
-      structure,
-      imageUrl,
+      textContent, 
+      structure,   
+      imageUrl,    
       userName,
       today,
-      topic
+      topic,
     };
   } catch (error) {
-    console.error('Error generando PDF:', error.message);
+    console.error('Error al generar contenido para PDF:', error?.message || error);
     return null;
   }
 };
 
-/* ========================================================================
-   4. CHAT PÚBLICO (LANDING)
-   ======================================================================== */
+/* ============================================
+ * FUNCIÓN 4: Chat público (landing/app home)
+ * ============================================ */
 exports.generatePublicResponse = async (message) => {
-  const systemMsg = `
-Eres Gestor IA, el asistente de la portada de la app.
-Responde en TEXTO PLANO (sin markdown, sin negritas).
-Explica que sirves para gestionar archivos, carpetas y crear PDFs.
+  const systemMsg = 'Eres "Gestor IA", un asistente de IA. Responde en TEXTO PLANO sin Markdown.';
+  const prompt = `
+Eres "Gestor IA", un asistente de IA en la página de inicio.
+Sé amable, conciso y responde sobre la aplicación. NO USES MARKDOWN.
+
+Usuario: "${String(message || '')}"
+Respuesta:
 `.trim();
 
   try {
@@ -278,34 +360,21 @@ Explica que sirves para gestionar archivos, carpetas y crear PDFs.
         model: 'jamba-large',
         messages: [
           { role: 'system', content: systemMsg },
-          { role: 'user', content: message }
+          { role: 'user', content: prompt },
         ],
         max_tokens: 150,
         temperature: 0.5,
       },
       { headers: ai21Headers() }
     );
+
+    const reply = data?.choices?.[0]?.message?.content?.trim() || 'Lo siento, no entendí la pregunta.';
     
-    const reply = data?.choices?.[0]?.message?.content || '';
+    // 🔥 Limpieza final
     return cleanTextForTTS(reply);
-    
-  } catch (e) {
-    return "Error de conexión.";
+
+  } catch (error) {
+    console.error('Error en el chat público de IA:', error?.message || error);
+    return 'Tuve un problema para conectarme con mi cerebro de IA.';
   }
 };
-
-/* ========================================================================
-   5. UTILIDAD IMAGEN (UNSPLASH)
-   ======================================================================== */
-async function fetchRelevantImage(topic) {
-  if (!UNSPLASH_ACCESS_KEY) return null;
-  try {
-    const { data } = await axios.get('[https://api.unsplash.com/search/photos](https://api.unsplash.com/search/photos)', {
-      params: { query: topic, per_page: 1, orientation: 'landscape', order_by: 'relevant' },
-      headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` },
-    });
-    return data?.results?.[0]?.urls?.regular || null;
-  } catch {
-    return null;
-  }
-}
