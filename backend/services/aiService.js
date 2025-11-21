@@ -6,8 +6,7 @@ const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
 
 /* ----------------------------- Helpers ----------------------------- */
 
-/** * 🔥 NUEVO: Limpia el texto para que la voz no lea "asterisco asterisco".
- * Elimina Markdown, negritas, listas y símbolos de código.
+/** * Limpia el texto para que la voz no lea "asterisco asterisco".
  */
 function cleanTextForTTS(text = '') {
   if (!text) return '';
@@ -31,7 +30,6 @@ function cleanTextForTTS(text = '') {
 function extractFirstJson(str = '') {
   let s = String(str || '').trim();
   if (s.startsWith('```')) {
-    // Quita cercas de código y lenguaje opcional
     s = s.replace(/^```[a-zA-Z-]*\n?/, '').replace(/```$/, '').trim();
   }
   const match = s.match(/{[\s\S]*}/);
@@ -47,7 +45,7 @@ function ai21Headers() {
 }
 
 /* ===========================
- * FUNCIÓN 1: El Intérprete (INTACTA)
+ * FUNCIÓN 1: El Intérprete
  * =========================== */
 exports.interpretMessage = async (message) => {
   const prompt = `
@@ -61,39 +59,8 @@ Las intenciones posibles son:
 
 REGLAS CRÍTICAS:
 1. Al extraer nombres en "entity", "parent_entity" o "new_entity", sé EXTREMADAMENTE LITERAL. No simplifiques "Base de datos II" a "Base de datos".
-2. Intención "upload_file":
-   - Actívala si el usuario quiere GUARDAR, SUBIR o ARCHIVAR algo (ej: "guarda esto", "sube esto", "archiva esto").
-   - Si menciona una carpeta (ej: "en la carpeta X", "en X", "a X"), extrae "X" como "entity".
-   - Si el usuario solo adjunta un archivo sin texto (mensaje vacío o marcador), devuelve {"intent":"upload_file"} sin "entity".
+2. Intención "upload_file": Actívala si el usuario quiere GUARDAR, SUBIR o ARCHIVAR algo.
 3. Para "generate_pdf", extrae el tema en "entity".
-4. Para "confirm_save_yes", si se menciona una carpeta, extráela en "entity".
-5. Para "set_reminder":
-   - "entity": descripción de la actividad.
-   - "time": hora o período (ej: "en 2 horas", "mañana a las 9 am").
-6. Para "schedule_file_send":
-   - "entity": nombre del archivo.
-   - "contact": nombre o número del contacto.
-   - "time": hora o período.
-   - "message": mensaje adicional (opcional).
-7. Si una acción necesita un nombre y no está claro, usa "clarification_needed".
-
-### Ejemplos ###
-- Usuario: "hola" -> {"intent": "greeting"}
-- Usuario: "muéstrame mis carpetas" -> {"intent": "list_folders"}
-- Usuario: "qué hay dentro de la carpeta Base de datos II" -> {"intent": "view_folder", "entity": "Base de datos II"}
-- Usuario: "crea la carpeta 'Impuestos 2025' dentro de 'Facturas'" -> {"intent": "create_folder", "entity": "Impuestos 2025", "parent_entity": "Facturas"}
-- Usuario: "renombra 'mate' a 'matemáticas'" -> {"intent": "edit_folder", "entity": "mate", "new_entity": "matemáticas"}
-- Usuario: "pásame el primer archivo" -> {"intent": "send_latest_file"}
-- Usuario: "pásame el archivo" -> {"intent": "clarification_needed"}
-- Usuario: "haz un resumen de la segunda guerra mundial en pdf" -> {"intent": "generate_pdf", "entity": "la segunda guerra mundial"}
-- Usuario: "recuérdame hacer la compra en 30 minutos" -> {"intent": "set_reminder", "entity": "hacer la compra", "time": "en 30 minutos"}
-
---- Nuevos ejemplos de subida ---
-- Usuario: "sube esto en la carpeta deberes" -> {"intent": "upload_file", "entity": "deberes"}
-- Usuario: "Guarda esto en carpetaxd" -> {"intent": "upload_file", "entity": "carpetaxd"}
-- Usuario: "Archiva esto en 'importante'" -> {"intent": "upload_file", "entity": "importante"}
-- Usuario: "[ADJUNTO]" (solo archivo) -> {"intent": "upload_file"}
-- Usuario: "Guárdalo en la carpeta archivos" -> {"intent": "confirm_save_yes", "entity": "archivos"}
 
 Analiza: "${message || ''}"
 `.trim();
@@ -137,14 +104,12 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
         .join('; ')
     : 'ninguno';
 
-  // 🔥 SYSTEM INSTRUCTION MODIFICADO: Ahora permite hablar de CUALQUIER TEMA
   const systemInstruction = `
 Eres "Gestor IA", un asistente virtual inteligente, amable y útil. El nombre del usuario es ${userName}.
-Tu trabajo es responder a la conversación y ayudar al usuario a gestionar sus tareas y archivos.
 
-TUS CAPACIDADES:
-1. Gestionar archivos y carpetas.
-2. **CHARLA GENERAL:** Responde preguntas sobre CUALQUIER tema (cultura, historia, ciencia, vida diaria) con naturalidad.
+TUS RESPONSABILIDADES:
+1. Ayudar a gestionar archivos y carpetas.
+2. **CHARLA GENERAL:** Responde preguntas sobre CUALQUIER tema con naturalidad.
 
 DATOS DEL USUARIO:
 - Carpetas: ${foldersList || 'ninguna'}.
@@ -184,7 +149,6 @@ MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respu
     const rawReply = data?.choices?.[0]?.message?.content?.trim() ||
       'Lo siento, tuve un problema para generar una respuesta coherente.';
     
-    // 🔥 APLICAMOS LIMPIEZA DE VOZ
     return cleanTextForTTS(rawReply);
 
   } catch (error) {
@@ -197,7 +161,7 @@ MANTÉN LA CONVERSACIÓN: Usa el historial anterior para contextualizar tu respu
 };
 
 /* ==============================
- * FUNCIÓN: Buscar imagen (Unsplash) - INTACTA
+ * FUNCIÓN: Buscar imagen (Unsplash)
  * ============================== */
 async function fetchRelevantImage(topic) {
   if (!UNSPLASH_ACCESS_KEY) {
@@ -231,16 +195,10 @@ exports.generatePdfContent = async (topic, userName) => {
     year: 'numeric',
   });
 
-  // PROMPT 1: Generar estructura (Instrucción para evitar markdown en JSON)
+  // PROMPT 1: Generar estructura (Se pide evitar Markdown)
   const structurePrompt = `
 Tu tarea es generar la estructura de un informe sobre "${topic}". Responde SIEMPRE y ÚNICAMENTE con un objeto JSON.
-El JSON debe tener:
-1. "titulo": El título oficial del informe.
-2. "introduccion": Un párrafo corto de introducción.
-3. "secciones": Un array de objetos, donde cada objeto solo tiene "subtitulo". (Mínimo 3 secciones)
-4. "conclusion": Un párrafo corto de conclusión.
-5. "imageQuery": Una frase corta y específica, en INGLÉS, para buscar la imagen de portada en Unsplash.
-
+El JSON debe tener: "titulo", "introduccion", "secciones" (array de objetos con "subtitulo"), "conclusion", "imageQuery" (en inglés).
 REGLAS: NO USES MARKDOWN.
 `.trim();
 
@@ -283,19 +241,17 @@ REGLAS: NO USES MARKDOWN.
     imageQuery: structure?.imageQuery || 'report cover',
   };
 
-  // PROMPT 2: Generar contenido extenso (Instrucción para evitar markdown en el texto)
+  // PROMPT 2: Generar contenido extenso (Se pide evitar Markdown)
   const contentPrompt = `
-Escribe un informe detallado (mínimo 800 palabras) sobre "${topic}". Usa un tono educativo y fácil de entender.
-Debes seguir esta estructura exacta (desarrolla cada punto):
+Escribe un informe detallado (mínimo 800 palabras) sobre "${topic}".
+Debes seguir esta estructura exacta:
 - Título: ${structure.titulo}
 - Introducción: ${structure.introduccion}
-- Secciones (desarrolla cada uno de estos subtítulos):
-${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
+- Secciones: ${structure.secciones.map((s) => s.subtitulo).join('\n')}
 - Conclusión: ${structure.conclusion}
 - Bibliografía: (Añade una sección de 3 a 5 fuentes realistas o ficticias sobre el tema)
 
-REGLAS DE FORMATO:
-- NO USES MARKDOWN (**negrita**, ## titulos). Usa texto plano.
+REGLAS DE FORMATO: NO USES MARKDOWN (**negrita**, ## titulos). Usa texto plano.
 `.trim();
 
   try {
@@ -319,9 +275,9 @@ REGLAS DE FORMATO:
     const imageUrl = await fetchRelevantImage(structure.imageQuery);
 
     return {
-      textContent, // Texto largo del informe
-      structure,   // Objeto con {titulo, introduccion, secciones, conclusion, imageQuery}
-      imageUrl,    // URL de imagen sugerida
+      textContent,
+      structure,
+      imageUrl,
       userName,
       today,
       topic,
@@ -361,13 +317,9 @@ Respuesta:
     );
 
     const rawReply = data?.choices?.[0]?.message?.content?.trim() || 'Lo siento, no entendí la pregunta.';
-    
-    // Aplicamos limpieza de voz
     return cleanTextForTTS(rawReply);
-
   } catch (error) {
     console.error('Error en el chat público de IA:', error?.message || error);
     return 'Tuve un problema para conectarme con mi cerebro de IA.';
   }
 };
-````
