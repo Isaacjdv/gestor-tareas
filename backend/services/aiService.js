@@ -106,8 +106,8 @@ Analiza: "${message || ''}"
 };
 
 /* ==============================================
- * FUNCIÓN 2: Conversador (string o array)
- * ============================================== */
+ * FUNCIÓN 2: Conversador (string o array)
+ * ============================================== */
 exports.generateConversationalResponse = async (historyOrMessage, userName, userData) => {
   const foldersList = Array.isArray(userData?.folders)
     ? userData.folders.map((f) => f?.nombre).filter(Boolean).join(', ')
@@ -120,25 +120,25 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
         .join('; ')
     : 'ninguno';
 
-  // 💡 INICIO DE LÓGICA DE OCR (REFORZADA)
+  // 💡 INICIO DE LÓGICA DE OCR (Comando Secreto)
   let customInstruction = '';
   let isOcrCommand = false;
 
-  // Obtenemos el último mensaje para la detección
+  // 1. Obtenemos el último mensaje para la detección
   let lastMessage = Array.isArray(historyOrMessage) 
       ? historyOrMessage[historyOrMessage.length - 1] 
       : { text: String(historyOrMessage) };
 
-  // Priorizamos la clave 'text' que usa tu frontend, luego 'content' (si lo usara)
   let lastMessageText = lastMessage?.text || lastMessage?.content || String(lastMessage);
 
+  // 2. Intentamos detectar el comando secreto
   const commandMatch = lastMessageText.match(/^AI_CMD_PROCESS_TEXT: (.*)/s);
 
   if (commandMatch) {
       isOcrCommand = true;
       const ocrContent = commandMatch[1];
       
-      // 🚨 INSTRUCCIÓN ESTRICTA para evitar que la IA decida generar PDFs o acciones no solicitadas
+      // 3. Instrucción Específica y Estricta para la IA
       customInstruction = `
       **PRIORIDAD MÁXIMA:** El usuario acaba de subir una imagen cuyo texto extraído es: "${ocrContent}".
 
@@ -151,12 +151,10 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
       6.  Tu respuesta debe ser CONVERSACIONAL y AMABLE.
       `.trim();
 
-      // Reemplazamos el mensaje "oculto" con la versión corta en el historial.
+      // 4. Reemplazamos el mensaje largo por el mensaje corto en el historial para la IA
       if (Array.isArray(historyOrMessage)) {
-          // Aseguramos que el reemplazo mantenga la estructura de 'sender' y 'text' esperada por el Frontend/Backend
           historyOrMessage[historyOrMessage.length - 1] = { sender: 'user', text: `Acabo de subir una imagen/archivo para que lo analices.` };
       } else {
-          // Si historyOrMessage fuera un string
           historyOrMessage = `Acabo de subir una imagen/archivo para que lo analices.`;
       }
   }
