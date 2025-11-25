@@ -107,10 +107,9 @@ Analiza: "${message || ''}"
 };
 
 /* ==============================================
- * FUNCIÓN 2: Conversador (string o array)
- * ============================================== */
+ * FUNCIÓN 2: Conversador (string o array)
+ * ============================================== */
 exports.generateConversationalResponse = async (historyOrMessage, userName, userData) => {
-  // **1. PREPARACIÓN DE CONTEXTO Y DATOS DE USUARIO**
   const foldersList = Array.isArray(userData?.folders)
     ? userData.folders.map((f) => f?.nombre).filter(Boolean).join(', ')
     : 'ninguna';
@@ -122,12 +121,12 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
         .join('; ')
     : 'ninguno';
 
-  // **2. LÓGICA DE DETECCIÓN Y MANEJO DEL COMANDO SECRETO OCR**
+  // 💡 INICIO DE LÓGICA DE OCR (Comando Secreto)
   let customInstruction = '';
   let isOcrCommand = false;
   let historyToProcess = Array.isArray(historyOrMessage) ? [...historyOrMessage] : [{ text: String(historyOrMessage) }];
 
-  // Obtenemos el último mensaje para revisar el comando secreto
+  // 1. Obtenemos el último mensaje de forma segura
   const lastMessage = historyToProcess[historyToProcess.length - 1];
 
   let lastMessageText = '';
@@ -135,16 +134,16 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
     lastMessageText = lastMessage?.text || lastMessage?.content || '';
   }
 
-  // Intentamos detectar el comando secreto (AI_CMD_PROCESS_TEXT:)
+  // 2. Intentamos detectar el comando secreto
   const commandMatch = lastMessageText.match(/^AI_CMD_PROCESS_TEXT: (.*)/s);
 
   if (commandMatch) {
       isOcrCommand = true;
       const ocrContent = commandMatch[1];
       
-      // Instrucción Específica y Estricta para la IA (Resumen Conciso y Pregunta de Gestión)
+      // 3. Instrucción Específica y Estricta para la IA (Punto 3: Análisis Conciso)
       customInstruction = `
-      PRIORIDAD MÁXIMA: El usuario acaba de subir un archivo/imagen cuyo texto extraído es: "${ocrContent}".
+      PRIORIDAD MÁXIMA: El usuario acaba de subir un archivo cuyo texto extraído es: "${ocrContent}".
 
       Tu ÚNICA tarea es:
       1.  Analizar el contenido.
@@ -154,13 +153,13 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
       5.  Tu respuesta debe ser CONVERSACIONAL, AMABLE y en texto plano.
       `;
 
-      // Reemplazamos el mensaje largo por un mensaje corto en el historial para la IA
+      // 4. Reemplazamos el mensaje largo por el mensaje corto en el historial para la IA
       if (historyToProcess.length > 0) {
           historyToProcess[historyToProcess.length - 1] = { sender: 'user', text: `Acabo de subir un archivo para que lo analices.` };
       }
   }
-
-  // **3. CONSTRUCCIÓN DE LA INSTRUCCIÓN DE SISTEMA**
+  // 💡 FIN DE LÓGICA DE OCR
+  
   const systemInstruction = `
 Eres "Gestor IA", un asistente de IA conversacional y amable. El nombre del usuario es ${userName}.
 
@@ -175,7 +174,7 @@ IMPORTANTE:
 - No uses formato Markdown. No uses asteriscos (*), ni negritas, ni cursivas.
 - Responde en texto plano.
 
-DIRECTRIZ DE GESTIÓN (Preguntar ubicación):
+DIRECTRIZ DE GESTIÓN (Punto 2: Preguntar ubicación):
 Si el usuario te pide **guardar** o **subir** un archivo, pero NO especifica la carpeta, DEBES preguntar: "¿En qué carpeta quieres que lo guarde? Si no tienes una, ¿quieres que creemos una nueva?".
 Ejemplo de respuesta: "Perfecto. ¿En qué carpeta lo quieres guardar? Tienes las carpetas: ${foldersList}. O dime si prefieres crear una nueva."
 
@@ -189,19 +188,61 @@ Archivos Recientes: ${filesList || 'ninguno'}.
 ` : ''}
 `.trim();
 
-  // **4. LLAMADA AL SERVICIO DE IA (Asumiendo que es una API local o externa)**
+  let messagesForApi = [];
+  // Mapeo del historial, asegurando que el contenido sea `content` y el rol `user/assistant`
+  messagesForApi = historyToProcess.map((msg) => {
+    const content = String(msg.text ?? msg.content ?? '');
+    const sender = (msg.sender || msg.role || '').toLowerCase();
+    const role =
+      sender === 'user' || sender === 'me'
+        ? 'user'
+        : sender === 'assistant' || sender === 'bot' || sender === 'ai'
+        ? 'assistant'
+        : 'user'; // Por defecto, tratamos mensajes desconocidos como de usuario
+
+    return { role, content };
+  });
+
+  // **INSERCIÓN CRÍTICA:** Insertamos el mensaje de sistema al principio.
+  // Esto es crucial para que la IA siga las instrucciones de OCR o gestión.
+  messagesForApi.unshift({ role: 'system', content: systemInstruction });
+
   try {
-    // ⚠️ IMPORTANTE: Asegúrate de que esta URL apunte correctamente a tu servicio de IA
-    const response = await axios.post(
-      'http://localhost:3000/api/ai/converse', 
-      { history: historyToProcess, systemInstruction }
+    // Asegúrate de que ai21Headers() esté definido e importado correctamente
+    const { data } = await axios.post(
+      'https://api.ai21.com/studio/v1/chat/completions',
+      {
+        model: 'jamba-large',
+        messages: messagesForApi,
+        max_tokens: 300,
+        temperature: 0.7,
+      },
+      { headers: ai21Headers() } // Asegúrate de que esta función exista
     );
-    return response.data.reply;
+
+    const raw =
+      data?.choices?.[0]?.message?.content?.trim() ||
+      'Lo siento, tuve un problema para generar una respuesta coherente.';
+
+    // Quitamos todos los asteriscos para evitar formato raro en el chat
+    return stripAsterisks(raw); // Asegúrate de que stripAsterisks(raw) exista
   } catch (error) {
+    // Manejo de errores más detallado
     console.error('Error al generar respuesta conversacional:', error.message);
-    return 'Lo siento, hay un error de comunicación con el servicio de IA. Intenta de nuevo más tarde.';
+    
+    // Muestra más detalles del error HTTP si existen (importante para debugging)
+    if (error.response) {
+        console.error('Código de estado HTTP:', error.response.status);
+        console.error('Datos del error (Respuesta de la API):', error.response.data);
+    } else if (error.request) {
+        console.error('No se recibió respuesta de la API (problema de red/timeout).');
+    }
+    
+    return 'Tuve un problema para conectarme con mi cerebro de IA. Inténtalo de nuevo.';
   }
 };
+
+// ... (El resto de las funciones, como fetchRelevantImage y las auxiliares, van aquí)
 /* ======================================================
  * FUNCIÓN 3: Generador de Contenido para PDF (mejorada)
  * ====================================================== */
