@@ -107,8 +107,8 @@ Analiza: "${message || ''}"
 };
 
 /* ==============================================
- * FUNCIÓN 2: Conversador (string o array)
- * ============================================== */
+ * FUNCIÓN 2: Conversador (string o array)
+ * ============================================== */
 exports.generateConversationalResponse = async (historyOrMessage, userName, userData) => {
   const foldersList = Array.isArray(userData?.folders)
     ? userData.folders.map((f) => f?.nombre).filter(Boolean).join(', ')
@@ -121,53 +121,51 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
         .join('; ')
     : 'ninguno';
 
-  // 💡 INICIO DE LÓGICA DE OCR (Comando Secreto)
-  let customInstruction = '';
-  let isOcrCommand = false;
-  let historyToProcess = Array.isArray(historyOrMessage) ? [...historyOrMessage] : [{ text: String(historyOrMessage) }];
+  // 💡 INICIO DE LÓGICA DE OCR (Comando Secreto)
+  let customInstruction = '';
+  let isOcrCommand = false;
+  let historyToProcess = Array.isArray(historyOrMessage) ? [...historyOrMessage] : [{ text: String(historyOrMessage) }];
 
-  // 1. Obtenemos el último mensaje de forma segura
-  const lastMessage = historyToProcess[historyToProcess.length - 1];
+  // 1. Obtenemos el último mensaje de forma segura
+  const lastMessage = historyToProcess[historyToProcess.length - 1];
 
-  let lastMessageText = '';
-  if (lastMessage) {
-    lastMessageText = lastMessage?.text || lastMessage?.content || '';
-  }
+  let lastMessageText = '';
+  if (lastMessage) {
+    lastMessageText = lastMessage?.text || lastMessage?.content || '';
+  }
 
-  // 2. Intentamos detectar el comando secreto
-  const commandMatch = lastMessageText.match(/^AI_CMD_PROCESS_TEXT: (.*)/s);
+  // 2. Intentamos detectar el comando secreto
+  const commandMatch = lastMessageText.match(/^AI_CMD_PROCESS_TEXT: (.*)/s);
 
-  if (commandMatch) {
-      isOcrCommand = true;
-      const ocrContent = commandMatch[1];
-      
-      // 3. Instrucción Específica y Estricta para la IA
-      customInstruction = `
-      PRIORIDAD MÁXIMA: El usuario acaba de subir una imagen cuyo texto extraído es: "${ocrContent}".
+  if (commandMatch) {
+      isOcrCommand = true;
+      const ocrContent = commandMatch[1];
+      
+      // 3. Instrucción Específica y Estricta para la IA (Punto 3: Análisis Conciso)
+      customInstruction = `
+      PRIORIDAD MÁXIMA: El usuario acaba de subir un archivo cuyo texto extraído es: "${ocrContent}".
 
-      Tu ÚNICA tarea es:
-      1.  Analizar el contenido extraído.
-      2.  Responder al usuario con un RESUMEN MUY CORTO (1-3 frases) o la idea principal de qué trata el contenido del archivo.
-      3.  Después del resumen, DEBES preguntar al usuario: "¿Cómo te gustaría que gestionara este contenido?" o "¿Cómo te puedo ayudar con esto?".
-      4.  NO INICIES ninguna acción (como generar PDFs, guardar archivos, etc.) por tu cuenta. Solo ofrece un resumen y espera las instrucciones del usuario.
-      5.  NO MENCIONES el comando "AI_CMD_PROCESS_TEXT" ni el texto OCR crudo en tu respuesta.
-      6.  Tu respuesta debe ser CONVERSACIONAL y AMABLE.
-      `;
+      Tu ÚNICA tarea es:
+      1.  Analizar el contenido.
+      2.  Responder con un **ANÁLISIS MUY CONCISO (1-2 frases)** de lo que trata el archivo.
+      3.  Después del resumen, **DEBES** preguntar al usuario: "¿Cómo te gustaría que gestionara este archivo? (ej: guardarlo, resumirlo, eliminarlo)".
+      4.  NO MENCIONES el comando "AI_CMD_PROCESS_TEXT" ni el texto OCR crudo.
+      5.  Tu respuesta debe ser CONVERSACIONAL, AMABLE y en texto plano.
+      `;
 
-      // 4. Reemplazamos el mensaje largo por el mensaje corto en el historial para la IA
-      // Usamos historyToProcess que es una copia del array
-      if (historyToProcess.length > 0) {
-          historyToProcess[historyToProcess.length - 1] = { sender: 'user', text: `Acabo de subir una imagen/archivo para que lo analices.` };
-      }
-  }
-  // 💡 FIN DE LÓGICA DE OCR
-  
+      // 4. Reemplazamos el mensaje largo por el mensaje corto en el historial para la IA
+      if (historyToProcess.length > 0) {
+          historyToProcess[historyToProcess.length - 1] = { sender: 'user', text: `Acabo de subir un archivo para que lo analices.` };
+      }
+  }
+  // 💡 FIN DE LÓGICA DE OCR
+  
   const systemInstruction = `
 Eres "Gestor IA", un asistente de IA conversacional y amable. El nombre del usuario es ${userName}.
 
 TU ROL PRINCIPAL:
 1. Mantener una conversación natural, cercana y útil.
-2. Ayudar al usuario a gestionar sus tareas y archivos cuando lo necesite.
+2. Ayudar al usuario a gestionar sus tareas y archivos.
 
 ${customInstruction.trim() || ''} 
 
@@ -175,25 +173,18 @@ ${!isOcrCommand ? `
 IMPORTANTE:
 - No uses formato Markdown. No uses asteriscos (*), ni negritas, ni cursivas.
 - Responde en texto plano.
-- Evita presentarte desde cero en cada mensaje. No repitas "Hola, soy Gestor IA" en cada respuesta.
+
+DIRECTRIZ DE GESTIÓN (Punto 2: Preguntar ubicación):
+Si el usuario te pide **guardar** o **subir** un archivo, pero NO especifica la carpeta, DEBES preguntar: "¿En qué carpeta quieres que lo guarde? Si no tienes una, ¿quieres que creemos una nueva?".
+Ejemplo de respuesta: "Perfecto. ¿En qué carpeta lo quieres guardar? Tienes las carpetas: ${foldersList}. O dime si prefieres crear una nueva."
 
 SI EL USUARIO:
-- Habla de carpetas, archivos, PDFs, resúmenes, WhatsApp, recordatorios o la aplicación:
-   - Usa la información disponible para darle contexto.
-   - Propón acciones útiles (por ejemplo: "podemos crear una carpeta para eso", "puedes subir el archivo y luego te hago un resumen").
-- Habla de otros temas (estudio, trabajo, dudas generales, curiosidades, temas random, problemas personales, etc.):
-   - Responde normalmente sobre ese tema.
-   - NO digas que solo puedes hablar de archivos o de la aplicación.
-   - Puedes hacer preguntas de seguimiento cortas para mantener la conversación.
+- Habla de otros temas, responde normalmente.
+- Habla de funciones de la app (archivos, PDFs, etc.), responde con contexto y sugiere acciones.
 
 DATOS DEL USUARIO:
 Carpetas: ${foldersList || 'ninguna'}.
 Archivos Recientes: ${filesList || 'ninguno'}.
-
-MANTÉN LA CONVERSACIÓN:
-- Usa el historial anterior para contextualizar tu respuesta.
-- Sé empático y directo. Respuestas de 2 a 6 frases son suficientes.
-- No inventes archivos o carpetas que no estén en la lista.
 ` : ''}
 `.trim();
 

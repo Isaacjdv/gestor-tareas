@@ -1,4 +1,3 @@
-// backend/controllers/chatController.js
 const userModel = require('../models/userModel');
 const folderModel = require('../models/folderModel');
 const fileModel = require('../models/fileModel');
@@ -12,11 +11,15 @@ const messageModel = require('../models/messageModel');
 const RENDER_URL =
   process.env.RENDER_EXTERNAL_URL || 'https://gestor-tareas-backend-11hi.onrender.com';
 
+/**
+ * Maneja los mensajes de chat, incluyendo comandos CRUD de carpetas,
+ * generación de PDF, y lógica de procesamiento de archivos (OCR).
+ */
 exports.handleChatMessage = async (req, res) => {
   const { history } = req.body;
   const user = req.user;
 
-  // Buscamos el último mensaje que venga del usuario (por si el historial incluye mensajes del bot)
+  // Buscamos el último mensaje que venga del usuario
   let latestUserMessage = '';
   if (Array.isArray(history) && history.length > 0) {
     const lastUserMsg = [...history]
@@ -29,28 +32,38 @@ exports.handleChatMessage = async (req, res) => {
     latestUserMessage = lastUserMsg ? String(lastUserMsg.text ?? lastUserMsg.content ?? '') : '';
   }
 
-  // 💡 LÓGICA AGREGADA: VERIFICAR COMANDO OCR PRIMERO 💡
-  // Si el mensaje contiene el comando secreto, evitamos la interpretación normal
+  // 💡 LÓGICA DE COMANDO SECRETO OCR: Ejecución Asíncrona Inmediata 💡
+  // Si se detecta el comando secreto, procesamos inmediatamente el resumen y la pregunta
+  // y EVITAMOS la interpretación de intenciones normal para que la respuesta llegue en un solo mensaje.
   const isOcrCommand = latestUserMessage.includes('AI_CMD_PROCESS_TEXT:');
   
   if (isOcrCommand) {
-    // Si se detecta el comando, saltamos a generar la respuesta conversacional.
-    // El 'aiService.generateConversationalResponse' es donde la IA resumirá el texto.
-    const userFolders = await folderModel.findByUserId(user.userId);
-    const userFiles = await fileModel.findAllByUserId(user.userId);
+    // ⚠️ Importante: Eliminamos el mensaje de "estoy procesando" para que el resumen
+    // llegue en el primer y único mensaje de respuesta. Esto resuelve el problema
+    // de la respuesta asíncrona.
+    
+    try {
+        const userFolders = await folderModel.findByUserId(user.userId);
+        const userFiles = await fileModel.findAllByUserId(user.userId);
 
-    const conversationalReply = await aiService.generateConversationalResponse(
-      history,
-      user.nombre,
-      { folders: userFolders, files: userFiles }
-    );
+        // Llama a aiService para obtener el resumen conciso y la pregunta de gestión.
+        const conversationalReply = await aiService.generateConversationalResponse(
+            history,
+            user.nombre,
+            { folders: userFolders, files: userFiles }
+        );
 
-    // Devolvemos la respuesta y TERMINAMOS la función.
-    return res.status(200).json({ reply: conversationalReply });
+        return res.status(200).json({ reply: conversationalReply });
+    } catch (error) {
+        console.error('Error al procesar el comando OCR:', error);
+        return res.status(500).json({ reply: 'Lo siento, tuve un error al analizar el archivo. ¿Puedes intentarlo de nuevo?' });
+    }
   }
   // 💡 FIN LÓGICA OCR 💡
 
+
   try {
+    // Si no es comando secreto, procedemos con la interpretación de intenciones normal
     const interpretation = await aiService.interpretMessage(latestUserMessage);
 
     switch (interpretation.intent) {
@@ -218,12 +231,12 @@ exports.handleChatMessage = async (req, res) => {
           });
         }
 
-        // Respuesta inmediata al usuario
+        // Respuesta inmediata al usuario para que sepa que el proceso inició
         res.json({
           reply: `Entendido. Estoy generando tu PDF sobre "${query}". Esto puede tardar un poco.`,
         });
 
-        // Generación asíncrona del PDF
+        // Generación asíncrona del PDF (No se envía una segunda respuesta HTTP)
         try {
           const pdfData = await aiService.generatePdfContent(query, user.nombre);
           if (!pdfData || !pdfData.textContent) {
@@ -275,18 +288,18 @@ exports.handleChatMessage = async (req, res) => {
       }
 
       /* ======================
-       * ACLARACIÓN / UPLOAD
+       * ACLARACIÓN / UPLOAD (Mejora: Maneja mensajes de subida automática)
        * ====================== */
 
       case 'clarification_needed':
       case 'upload_file': {
-        // 💡 NUEVA LÓGICA: Detección de mensajes automáticos de subida 💡
-        const uploadPattern = /adjunt(é|o) un archivo|qué hago con él|sub(í|o) un archivo|guarda esto/i;
+        // 💡 LÓGICA AGREGADA: Detección de mensajes automáticos de subida 💡
+        const uploadPattern = /adjunt(é|o) un archivo|qué hago con él|sub(í|o) un archivo|guarda esto|archivo adjunto/i;
         const textLower = (latestUserMessage || '').toLowerCase();
 
+        // Si el mensaje parece ser la confirmación de una subida (PDF/Word)
         if (uploadPattern.test(textLower)) {
-          // Si detectamos que el usuario acaba de subir un archivo y está preguntando qué hacer,
-          // generamos una respuesta conversacional que le pida instrucciones.
+          // Lo tratamos como una conversación normal para que la IA pregunte qué hacer
           const userFolders = await folderModel.findByUserId(user.userId);
           const userFiles = await fileModel.findAllByUserId(user.userId);
 
@@ -325,6 +338,7 @@ exports.handleChatMessage = async (req, res) => {
 
         return res.status(200).json({ reply: conversationalReply });
       }
+
       /* ======================
        * CONVERSACIÓN GENERAL
        * ====================== */
@@ -352,7 +366,7 @@ exports.handleChatMessage = async (req, res) => {
   }
 };
 
-// --- HISTORIAL DE CHAT ENTRE USUARIOS ---
+// --- HISTORIAL DE CHAT ENTRE USUARIOS (No modificado) ---
 exports.getChatHistory = async (req, res) => {
   try {
     const currentUserId = req.user.userId;
@@ -369,4 +383,4 @@ exports.getChatHistory = async (req, res) => {
     console.error('Error en getChatHistory:', error);
     res.status(500).json({ message: 'Error en el servidor al obtener el historial.' });
   }
-};  
+};
