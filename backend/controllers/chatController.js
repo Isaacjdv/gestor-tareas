@@ -278,9 +278,31 @@ exports.handleChatMessage = async (req, res) => {
        * ACLARACIÓN / UPLOAD
        * ====================== */
 
-      case 'clarification_needed': {
+      case 'clarification_needed':
+      case 'upload_file': {
+        // 💡 NUEVA LÓGICA: Detección de mensajes automáticos de subida 💡
+        const uploadPattern = /adjunt(é|o) un archivo|qué hago con él|sub(í|o) un archivo|guarda esto/i;
         const textLower = (latestUserMessage || '').toLowerCase();
-        const isFileRelated = /(archivo|archivos|carpeta|carpetas|pdf|documento|documentos|sube|subir|guarda|guardar|envía|enviar|mandar)/.test(
+
+        if (uploadPattern.test(textLower)) {
+          // Si detectamos que el usuario acaba de subir un archivo y está preguntando qué hacer,
+          // generamos una respuesta conversacional que le pida instrucciones.
+          const userFolders = await folderModel.findByUserId(user.userId);
+          const userFiles = await fileModel.findAllByUserId(user.userId);
+
+          const conversationalReply = await aiService.generateConversationalResponse(
+            history,
+            user.nombre,
+            { folders: userFolders, files: userFiles }
+          );
+
+          return res.status(200).json({ 
+            reply: conversationalReply
+          });
+        }
+
+        // Lógica de aclaración genérica (si el mensaje es solo 'archivo' sin acción)
+        const isFileRelated = /(archivo|archivos|carpeta|carpetas|pdf|documento|documentos)/.test(
           textLower
         );
 
@@ -290,8 +312,8 @@ exports.handleChatMessage = async (req, res) => {
               'No estoy seguro de a qué archivo o carpeta te refieres. ¿Podrías ser un poco más específico?',
           });
         }
-
-        // Si no es de archivos, lo tratamos como conversación normal
+        
+        // Si no es de archivos ni de subida, lo tratamos como conversación normal
         const userFolders = await folderModel.findByUserId(user.userId);
         const userFiles = await fileModel.findAllByUserId(user.userId);
 
@@ -303,13 +325,6 @@ exports.handleChatMessage = async (req, res) => {
 
         return res.status(200).json({ reply: conversationalReply });
       }
-
-      case 'upload_file':
-        return res.status(200).json({
-          reply:
-            'Para subir un archivo, usa el formulario de subida de archivos en la parte superior de la carpeta.',
-        });
-
       /* ======================
        * CONVERSACIÓN GENERAL
        * ====================== */
@@ -354,4 +369,4 @@ exports.getChatHistory = async (req, res) => {
     console.error('Error en getChatHistory:', error);
     res.status(500).json({ message: 'Error en el servidor al obtener el historial.' });
   }
-};
+};  
