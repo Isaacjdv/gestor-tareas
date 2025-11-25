@@ -1,3 +1,4 @@
+// backend/services/aiService.js
 const axios = require('axios');
 
 const AI21_API_KEY = process.env.AI21_API_KEY;
@@ -7,33 +8,33 @@ const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
 
 /** Extrae el primer objeto JSON de un string (quita cercas de código si vienen) */
 function extractFirstJson(str = '') {
-  let s = String(str || '').trim();
-  if (s.startsWith('```')) {
-    // Quita cercas de código y lenguaje opcional
-    s = s.replace(/^```[a-zA-Z-]*\n?/, '').replace(/```$/, '').trim();
-  }
-  const match = s.match(/{[\s\S]*}/);
-  return match ? match[0] : s;
+  let s = String(str || '').trim();
+  if (s.startsWith('```')) {
+    // Quita cercas de código y lenguaje opcional
+    s = s.replace(/^```[a-zA-Z-]*\n?/, '').replace(/```$/, '').trim();
+  }
+  const match = s.match(/{[\s\S]*}/);
+  return match ? match[0] : s;
 }
 
 /** Construye headers estándar para AI21 */
 function ai21Headers() {
-  return {
-    Authorization: `Bearer ${AI21_API_KEY}`,
-    'Content-Type': 'application/json',
-  };
+  return {
+    Authorization: `Bearer ${AI21_API_KEY}`,
+    'Content-Type': 'application/json',
+  };
 }
 
 /** Quita todos los asteriscos de la respuesta (para evitar Markdown en el chat) */
 function stripAsterisks(str = '') {
-  return String(str || '').replace(/\*/g, '');
+  return String(str || '').replace(/\*/g, '');
 }
 
 /* ===========================
- * FUNCIÓN 1: El Intérprete
- * =========================== */
+ * FUNCIÓN 1: El Intérprete
+ * =========================== */
 exports.interpretMessage = async (message) => {
-  const prompt = `
+  const prompt = `
 Tu trabajo es analizar un mensaje y clasificarlo en una intención. Responde SIEMPRE con un objeto JSON.
 
 Las intenciones posibles son:
@@ -45,19 +46,19 @@ Las intenciones posibles son:
 REGLAS CRÍTICAS:
 1. Al extraer nombres en "entity", "parent_entity" o "new_entity", sé EXTREMADAMENTE LITERAL. No simplifiques "Base de datos II" a "Base de datos".
 2. Intención "upload_file":
-   - Actívala si el usuario quiere GUARDAR, SUBIR o ARCHIVAR algo (ej: "guarda esto", "sube esto", "archiva esto").
-   - Si menciona una carpeta (ej: "en la carpeta X", "en X", "a X"), extrae "X" como "entity".
-   - Si el usuario solo adjunta un archivo sin texto (mensaje vacío o marcador), devuelve {"intent":"upload_file"} sin "entity".
+   - Actívala si el usuario quiere GUARDAR, SUBIR o ARCHIVAR algo (ej: "guarda esto", "sube esto", "archiva esto").
+   - Si menciona una carpeta (ej: "en la carpeta X", "en X", "a X"), extrae "X" como "entity".
+   - Si el usuario solo adjunta un archivo sin texto (mensaje vacío o marcador), devuelve {"intent":"upload_file"} sin "entity".
 3. Para "generate_pdf", extrae el tema en "entity".
 4. Para "confirm_save_yes", si se menciona una carpeta, extráela en "entity".
 5. Para "set_reminder":
-   - "entity": descripción de la actividad.
-   - "time": hora o período (ej: "en 2 horas", "mañana a las 9 am").
+   - "entity": descripción de la actividad.
+   - "time": hora o período (ej: "en 2 horas", "mañana a las 9 am").
 6. Para "schedule_file_send":
-   - "entity": nombre del archivo.
-   - "contact": nombre o número del contacto.
-   - "time": hora o período.
-   - "message": mensaje adicional (opcional).
+   - "entity": nombre del archivo.
+   - "contact": nombre o número del contacto.
+   - "time": hora o período.
+   - "message": mensaje adicional (opcional).
 7. Si una acción necesita un nombre y no está claro, usa "clarification_needed".
 
 ### Ejemplos ###
@@ -81,33 +82,33 @@ REGLAS CRÍTICAS:
 Analiza: "${message || ''}"
 `.trim();
 
-  try {
-    const { data } = await axios.post(
-      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
-      {
-        model: 'jamba-large',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 250,
-        temperature: 0.0,
-      },
-      { headers: ai21Headers() }
-    );
+  try {
+    const { data } = await axios.post(
+      'https://api.ai21.com/studio/v1/chat/completions',
+      {
+        model: 'jamba-large',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 250,
+        temperature: 0.0,
+      },
+      { headers: ai21Headers() }
+    );
 
-    const raw = data?.choices?.[0]?.message?.content ?? '';
-    const jsonString = extractFirstJson(raw);
-    try {
-      return JSON.parse(jsonString);
-    } catch {
-      return { intent: 'unknown' };
-    }
-  } catch {
-    return { intent: 'error' };
-  }
+    const raw = data?.choices?.[0]?.message?.content ?? '';
+    const jsonString = extractFirstJson(raw);
+    try {
+      return JSON.parse(jsonString);
+    } catch {
+      return { intent: 'unknown' };
+    }
+  } catch {
+    return { intent: 'error' };
+  }
 };
 
 /* ==============================================
- * FUNCIÓN 2: Conversador (string o array)
- * ============================================== */
+ * FUNCIÓN 2: Conversador (string o array)
+ * ============================================== */
 exports.generateConversationalResponse = async (historyOrMessage, userName, userData) => {
   const foldersList = Array.isArray(userData?.folders)
     ? userData.folders.map((f) => f?.nombre).filter(Boolean).join(', ')
@@ -120,7 +121,7 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
         .join('; ')
     : 'ninguno';
 
-  // 💡 DETECCIÓN DEL COMANDO OCULTO DEL FRONTEND
+  // 💡 INICIO DE LÓGICA DE OCR
   let customInstruction = '';
   let isOcrCommand = false;
 
@@ -134,7 +135,7 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
       isOcrCommand = true;
       const ocrContent = commandMatch[1];
       
-      // 💡 Instrucción específica para la IA
+      // Instrucción específica para la IA
       customInstruction = `
       **PRIORIDAD:** Acabas de recibir un texto extraído de una imagen/documento (OCR/Archivo). Tu ÚNICA tarea es:
       1. Analizar el contenido: "${ocrContent}".
@@ -143,15 +144,17 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
       4. NO MENCIONES el comando "AI_CMD_PROCESS_TEXT" ni el texto OCR crudo en tu respuesta.
       `.trim();
 
-      // 💡 Reemplazamos el mensaje "oculto" por un mensaje de usuario simple en el historial para la IA
+      // Reemplazamos el mensaje "oculto" por un mensaje de usuario simple en el historial para la IA
       if (Array.isArray(historyOrMessage)) {
-          historyOrMessage[historyOrMessage.length - 1] = { role: 'user', content: `Acabo de subir una imagen/archivo para que lo analices.` };
+          // Asume que el historial enviado por el frontend tiene 'text'
+          historyOrMessage[historyOrMessage.length - 1] = { sender: 'user', text: `Acabo de subir una imagen/archivo para que lo analices.` };
       } else {
+          // Si historyOrMessage es un string (no debería pasar con el frontend actual, pero por seguridad)
           historyOrMessage = `Acabo de subir una imagen/archivo para que lo analices.`;
       }
   }
-// ----------------------------------------------------
-
+  // 💡 FIN DE LÓGICA DE OCR
+  
   const systemInstruction = `
 Eres "Gestor IA", un asistente de IA conversacional y amable. El nombre del usuario es ${userName}.
 
@@ -211,7 +214,7 @@ MANTÉN LA CONVERSACIÓN:
 
   try {
     const { data } = await axios.post(
-      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
+      'https://api.ai21.com/studio/v1/chat/completions',
       {
         model: 'jamba-large',
         messages: messagesForApi,
@@ -237,42 +240,42 @@ MANTÉN LA CONVERSACIÓN:
 };
 
 /* ==============================
- * FUNCIÓN: Buscar imagen (Unsplash)
- * ============================== */
+ * FUNCIÓN: Buscar imagen (Unsplash)
+ * ============================== */
 async function fetchRelevantImage(topic) {
-  if (!UNSPLASH_ACCESS_KEY) {
-    console.log('No se ha configurado la API Key de Unsplash.');
-    return null;
-  }
-  try {
-    const { data } = await axios.get('[https://api.unsplash.com/search/photos](https://api.unsplash.com/search/photos)', {
-      params: {
-        query: topic,
-        per_page: 1,
-        orientation: 'landscape',
-        order_by: 'relevant',
-      },
-      headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` },
-    });
-    return data?.results?.[0]?.urls?.regular || null;
-  } catch (error) {
-    console.error('Error al buscar imagen en Unsplash:', error.message);
-    return null;
-  }
+  if (!UNSPLASH_ACCESS_KEY) {
+    console.log('No se ha configurado la API Key de Unsplash.');
+    return null;
+  }
+  try {
+    const { data } = await axios.get('https://api.unsplash.com/search/photos', {
+      params: {
+        query: topic,
+        per_page: 1,
+        orientation: 'landscape',
+        order_by: 'relevant',
+      },
+      headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` },
+    });
+    return data?.results?.[0]?.urls?.regular || null;
+  } catch (error) {
+    console.error('Error al buscar imagen en Unsplash:', error.message);
+    return null;
+  }
 }
 
 /* ======================================================
- * FUNCIÓN 3: Generador de Contenido para PDF (mejorada)
- * ====================================================== */
+ * FUNCIÓN 3: Generador de Contenido para PDF (mejorada)
+ * ====================================================== */
 exports.generatePdfContent = async (topic, userName) => {
-  const today = new Date().toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
+  const today = new Date().toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
 
-  // PROMPT 1: Generar estructura + imageQuery
-  const structurePrompt = `
+  // PROMPT 1: Generar estructura + imageQuery
+  const structurePrompt = `
 Tu tarea es generar la estructura de un informe sobre "${topic}". Responde SIEMPRE y ÚNICAMENTE con un objeto JSON.
 El JSON debe tener:
 1. "titulo": El título oficial del informe.
@@ -289,93 +292,93 @@ REGLAS DE imageQuery:
 - NO uses términos abstractos como 'concept' o 'art'.
 `.trim();
 
-  let structure = null;
+  let structure = null;
 
-  try {
-    const { data } = await axios.post(
-      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
-      {
-        model: 'jamba-large',
-        messages: [{ role: 'user', content: structurePrompt }],
-        max_tokens: 1500,
-        temperature: 0.5,
-      },
-      { headers: ai21Headers() }
-    );
+  try {
+    const { data } = await axios.post(
+      'https://api.ai21.com/studio/v1/chat/completions',
+      {
+        model: 'jamba-large',
+        messages: [{ role: 'user', content: structurePrompt }],
+        max_tokens: 1500,
+        temperature: 0.5,
+      },
+      { headers: ai21Headers() }
+    );
 
-    let content = data?.choices?.[0]?.message?.content?.trim() || '{}';
-    content = extractFirstJson(content);
+    let content = data?.choices?.[0]?.message?.content?.trim() || '{}';
+    content = extractFirstJson(content);
 
-    try {
-      structure = JSON.parse(content);
-    } catch {
-      structure = null;
-    }
-  } catch (e) {
-    console.error('Error al generar la ESTRUCTURA del PDF:', e?.message || e);
-    structure = null;
-  }
+    try {
+      structure = JSON.parse(content);
+    } catch {
+      structure = null;
+    }
+  } catch (e) {
+    console.error('Error al generar la ESTRUCTURA del PDF:', e?.message || e);
+    structure = null;
+  }
 
-  // Asegurar estructura mínima
-  structure = {
-    titulo: structure?.titulo || String(topic || 'Informe'),
-    introduccion: structure?.introduccion || 'Introducción.',
-    secciones:
-      Array.isArray(structure?.secciones) && structure.secciones.length > 0
-        ? structure.secciones
-        : [{ subtitulo: 'Contexto' }, { subtitulo: 'Desarrollo' }, { subtitulo: 'Aplicaciones' }],
-    conclusion: structure?.conclusion || 'Conclusión.',
-    imageQuery: structure?.imageQuery || 'report cover',
-  };
+  // Asegurar estructura mínima
+  structure = {
+    titulo: structure?.titulo || String(topic || 'Informe'),
+    introduccion: structure?.introduccion || 'Introducción.',
+    secciones:
+      Array.isArray(structure?.secciones) && structure.secciones.length > 0
+        ? structure.secciones
+        : [{ subtitulo: 'Contexto' }, { subtitulo: 'Desarrollo' }, { subtitulo: 'Aplicaciones' }],
+    conclusion: structure?.conclusion || 'Conclusión.',
+    imageQuery: structure?.imageQuery || 'report cover',
+  };
 
-  // PROMPT 2: Generar contenido extenso
-  const contentPrompt = `
+  // PROMPT 2: Generar contenido extenso
+  const contentPrompt = `
 Escribe un informe detallado (mínimo 800 palabras) sobre "${topic}". Usa un tono educativo y fácil de entender.
 Debes seguir esta estructura exacta (desarrolla cada punto):
 - Título: ${structure.titulo}
 - Introducción: ${structure.introduccion}
 - Secciones (desarrolla cada uno de estos subtítulos):
-${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
+${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
 - Conclusión: ${structure.conclusion}
 - Bibliografía: (Añade una sección de 3 a 5 fuentes realistas o ficticias sobre el tema)
 `.trim();
 
-  try {
-    const { data } = await axios.post(
-      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
-      {
-        model: 'jamba-large',
-        messages: [{ role: 'user', content: contentPrompt }],
-        max_tokens: 3500,
-        temperature: 0.6,
-      },
-      { headers: ai21Headers() }
-    );
+  try {
+    const { data } = await axios.post(
+      'https://api.ai21.com/studio/v1/chat/completions',
+      {
+        model: 'jamba-large',
+        messages: [{ role: 'user', content: contentPrompt }],
+        max_tokens: 3500,
+        temperature: 0.6,
+      },
+      { headers: ai21Headers() }
+    );
 
-    const textContent = data?.choices?.[0]?.message?.content?.trim() || '';
+    const textContent = data?.choices?.[0]?.message?.content?.trim() || '';
 
-    // Buscar imagen con la consulta generada
-    const imageUrl = await fetchRelevantImage(structure.imageQuery);
+    // Buscar imagen con la consulta generada
+    const imageUrl = await fetchRelevantImage(structure.imageQuery);
 
-    return {
-      textContent,
-      structure,
-      imageUrl,
-      userName,
-      today,
-      topic,
-    };
-  } catch (error) {
-    console.error('Error al generar contenido para PDF:', error?.message || error);
-    return null;
-  }
+    return {
+      textContent,
+      structure,
+      imageUrl,
+      userName,
+      today,
+      topic,
+    };
+  } catch (error) {
+    console.error('Error al generar contenido para PDF:', error?.message || error);
+    return null;
+  }
 };
 
 /* ============================================
- * FUNCIÓN 4: Chat público (landing/app home)
- * ============================================ */
+ * FUNCIÓN 4: Chat público (landing/app home)
+ * ============================================ */
 exports.generatePublicResponse = async (message) => {
-  const systemMsg = `
+  const systemMsg = `
 Eres "Gestor IA", un asistente de IA en la página de inicio de una aplicación.
 
 La aplicación es un gestor de archivos y tareas que se integra con WhatsApp y permite:
@@ -389,7 +392,7 @@ IMPORTANTE:
 - Responde en texto plano.
 `.trim();
 
-  const prompt = `
+  const prompt = `
 Usuario: "${String(message || '')}"
 
 Responde de forma amable y natural. 
@@ -397,28 +400,28 @@ Si pregunta por la app o funciones, explícalas.
 Si pregunta por otros temas, responde normalmente sobre ese tema.
 `.trim();
 
-  try {
-    const { data } = await axios.post(
-      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
-      {
-        model: 'jamba-large',
-        messages: [
-          { role: 'system', content: systemMsg },
-          { role: 'user', content: prompt },
-        ],
-        max_tokens: 250,
-        temperature: 0.7,
-      },
-      { headers: ai21Headers() }
-    );
+  try {
+    const { data } = await axios.post(
+      'https://api.ai21.com/studio/v1/chat/completions',
+      {
+        model: 'jamba-large',
+        messages: [
+          { role: 'system', content: systemMsg },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 250,
+        temperature: 0.7,
+      },
+      { headers: ai21Headers() }
+    );
 
-    const raw =
-      data?.choices?.[0]?.message?.content?.trim() ||
-      'Lo siento, no entendí la pregunta, ¿puedes reformularla?';
+    const raw =
+      data?.choices?.[0]?.message?.content?.trim() ||
+      'Lo siento, no entendí la pregunta, ¿puedes reformularla?';
 
-    return stripAsterisks(raw);
-  } catch (error) {
-    console.error('Error en el chat público de IA:', error?.message || error);
-    return 'Tuve un problema para conectarme con mi cerebro de IA.';
-  }
+    return stripAsterisks(raw);
+  } catch (error) {
+    console.error('Error en el chat público de IA:', error?.message || error);
+    return 'Tuve un problema para conectarme con mi cerebro de IA.';
+  }
 };
