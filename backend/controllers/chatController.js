@@ -400,7 +400,7 @@ Usuario: "${String(message || '')}"
 
 Responde de forma amable y natural. 
 Si pregunta por la app o funciones, explícalas.
-Si pregunta por otros temas, responde normalmente sobre ese tema.
+If pregunta por otros temas, responde normalmente sobre ese tema.
 `.trim();
 
   try {
