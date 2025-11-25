@@ -11,15 +11,11 @@ const messageModel = require('../models/messageModel');
 const RENDER_URL =
   process.env.RENDER_EXTERNAL_URL || 'https://gestor-tareas-backend-11hi.onrender.com';
 
-/**
- * Maneja los mensajes de chat, incluyendo comandos CRUD de carpetas,
- * generación de PDF, y lógica de procesamiento de archivos (OCR).
- */
 exports.handleChatMessage = async (req, res) => {
   const { history } = req.body;
   const user = req.user;
 
-  // Buscamos el último mensaje que venga del usuario
+  // 1. Buscar el último mensaje del usuario
   let latestUserMessage = '';
   if (Array.isArray(history) && history.length > 0) {
     const lastUserMsg = [...history]
@@ -32,45 +28,38 @@ exports.handleChatMessage = async (req, res) => {
     latestUserMessage = lastUserMsg ? String(lastUserMsg.text ?? lastUserMsg.content ?? '') : '';
   }
 
-  // 💡 LÓGICA DE COMANDO SECRETO OCR: Ejecución Asíncrona Inmediata 💡
-  // Si se detecta el comando secreto, procesamos inmediatamente el resumen y la pregunta
-  // y EVITAMOS la interpretación de intenciones normal para que la respuesta llegue en un solo mensaje.
+  // 2. 💡 LÓGICA DE COMANDO SECRETO OCR (IMAGEN): Prioridad Máxima 💡
+  // Si se detecta el comando secreto, procesamos inmediatamente el resumen/pregunta
   const isOcrCommand = latestUserMessage.includes('AI_CMD_PROCESS_TEXT:');
   
   if (isOcrCommand) {
-    // ⚠️ Importante: Eliminamos el mensaje de "estoy procesando" para que el resumen
-    // llegue en el primer y único mensaje de respuesta. Esto resuelve el problema
-    // de la respuesta asíncrona.
-    
     try {
         const userFolders = await folderModel.findByUserId(user.userId);
         const userFiles = await fileModel.findAllByUserId(user.userId);
 
-        // Llama a aiService para obtener el resumen conciso y la pregunta de gestión.
         const conversationalReply = await aiService.generateConversationalResponse(
             history,
             user.nombre,
             { folders: userFolders, files: userFiles }
         );
 
+        // Respuesta ÚNICA y FINAL para el OCR
         return res.status(200).json({ reply: conversationalReply });
     } catch (error) {
         console.error('Error al procesar el comando OCR:', error);
-        return res.status(500).json({ reply: 'Lo siento, tuve un error al analizar el archivo. ¿Puedes intentarlo de nuevo?' });
+        return res.status(500).json({ reply: 'Lo siento, tuve un error al analizar la imagen. ¿Puedes intentarlo de nuevo?' });
     }
   }
-  // 💡 FIN LÓGICA OCR 💡
-
 
   try {
-    // Si no es comando secreto, procedemos con la interpretación de intenciones normal
+    // 3. Interpretación normal de intenciones
     const interpretation = await aiService.interpretMessage(latestUserMessage);
 
     switch (interpretation.intent) {
       /* ======================
-       * CARPETAS: CRUD
+       * CASOS CRUD CARPETAS ... (Mantenemos la lógica de carpetas igual)
        * ====================== */
-
+      
       case 'create_folder': {
         const { entity: newFolderName, parent_entity: parentFolderName } = interpretation;
 
@@ -197,10 +186,6 @@ exports.handleChatMessage = async (req, res) => {
         return res.json({ reply: content.trim() });
       }
 
-      /* ======================
-       * LISTAR CARPETAS
-       * ====================== */
-
       case 'list_folders': {
         const userFolders = await folderModel.findByUserId(user.userId);
 
@@ -218,10 +203,6 @@ exports.handleChatMessage = async (req, res) => {
         });
       }
 
-      /* ======================
-       * GENERAR PDF CON IA
-       * ====================== */
-
       case 'generate_pdf': {
         const query = interpretation.entity;
 
@@ -231,12 +212,12 @@ exports.handleChatMessage = async (req, res) => {
           });
         }
 
-        // Respuesta inmediata al usuario para que sepa que el proceso inició
+        // Respuesta inmediata al usuario
         res.json({
           reply: `Entendido. Estoy generando tu PDF sobre "${query}". Esto puede tardar un poco.`,
         });
 
-        // Generación asíncrona del PDF (No se envía una segunda respuesta HTTP)
+        // Generación asíncrona del PDF
         try {
           const pdfData = await aiService.generatePdfContent(query, user.nombre);
           if (!pdfData || !pdfData.textContent) {
@@ -288,18 +269,19 @@ exports.handleChatMessage = async (req, res) => {
       }
 
       /* ======================
-       * ACLARACIÓN / UPLOAD (Mejora: Maneja mensajes de subida automática)
+       * ACLARACIÓN / UPLOAD (MEJORA: Forzamos la pregunta de guardado/gestión)
        * ====================== */
 
       case 'clarification_needed':
       case 'upload_file': {
-        // 💡 LÓGICA AGREGADA: Detección de mensajes automáticos de subida 💡
-        const uploadPattern = /adjunt(é|o) un archivo|qué hago con él|sub(í|o) un archivo|guarda esto|archivo adjunto/i;
+        // 💡 LÓGICA REFORZADA: Detección de subida automática o pregunta de archivo 💡
+        // Incluye el patrón de la imagen enviada [IMAGEN ENVIADA...]
+        const uploadPattern = /adjunt(é|o) un archivo|qué hago con él|sub(í|o) un archivo|guarda esto|archivo adjunto|imagen enviada/i;
         const textLower = (latestUserMessage || '').toLowerCase();
 
-        // Si el mensaje parece ser la confirmación de una subida (PDF/Word)
-        if (uploadPattern.test(textLower)) {
-          // Lo tratamos como una conversación normal para que la IA pregunte qué hacer
+        // Si el mensaje parece ser una subida (PDF, Word, o la etiqueta de imagen)
+        if (uploadPattern.test(textLower) || interpretation.intent === 'upload_file') {
+          // Forzamos la respuesta conversacional para que la IA pregunte por la carpeta
           const userFolders = await folderModel.findByUserId(user.userId);
           const userFiles = await fileModel.findAllByUserId(user.userId);
 
@@ -310,11 +292,12 @@ exports.handleChatMessage = async (req, res) => {
           );
 
           return res.status(200).json({ 
+            // Devolvemos la respuesta de la IA (que debe preguntar por la carpeta)
             reply: conversationalReply
           });
         }
-
-        // Lógica de aclaración genérica (si el mensaje es solo 'archivo' sin acción)
+        
+        // Si la IA detecta que está preguntando por un archivo/carpeta pero de forma vaga
         const isFileRelated = /(archivo|archivos|carpeta|carpetas|pdf|documento|documentos)/.test(
           textLower
         );
@@ -326,7 +309,7 @@ exports.handleChatMessage = async (req, res) => {
           });
         }
         
-        // Si no es de archivos ni de subida, lo tratamos como conversación normal
+        // Caída de nuevo a conversación general si no hay nada claro
         const userFolders = await folderModel.findByUserId(user.userId);
         const userFiles = await fileModel.findAllByUserId(user.userId);
 
@@ -366,7 +349,7 @@ exports.handleChatMessage = async (req, res) => {
   }
 };
 
-// --- HISTORIAL DE CHAT ENTRE USUARIOS (No modificado) ---
+// --- HISTORIAL DE CHAT ENTRE USUARIOS (Mantenemos igual) ---
 exports.getChatHistory = async (req, res) => {
   try {
     const currentUserId = req.user.userId;

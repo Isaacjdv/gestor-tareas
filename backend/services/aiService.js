@@ -30,6 +30,40 @@ function stripAsterisks(str = '') {
   return String(str || '').replace(/\*/g, '');
 }
 
+/** Busca una imagen en Unsplash o devuelve un placeholder si falla */
+async function fetchRelevantImage(query) {
+  try {
+    // 1. Si no hay API Key, usar placeholder directo
+    if (!UNSPLASH_ACCESS_KEY) {
+      console.log('Falta UNSPLASH_ACCESS_KEY, usando imagen genérica.');
+      return `https://placehold.co/600x400?text=${encodeURIComponent(query)}`;
+    }
+
+    // 2. Intentar buscar en Unsplash
+    const response = await axios.get('https://api.unsplash.com/search/photos', {
+      params: { 
+        query: query, 
+        per_page: 1, 
+        orientation: 'landscape' 
+      },
+      headers: { 
+        Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` 
+      }
+    });
+
+    if (response.data && response.data.results && response.data.results.length > 0) {
+      return response.data.results[0].urls.regular;
+    }
+    
+    // 3. Si Unsplash no devuelve nada
+    return `https://placehold.co/600x400?text=${encodeURIComponent(query)}`;
+
+  } catch (error) {
+    console.error('Error buscando imagen (usando fallback):', error.message);
+    // 4. Si falla la petición (ej: límite de cuota o error de red)
+    return `https://placehold.co/600x400?text=${encodeURIComponent(query)}`;
+  }
+}
 /* ===========================
  * FUNCIÓN 1: El Intérprete
  * =========================== */
@@ -242,7 +276,6 @@ Archivos Recientes: ${filesList || 'ninguno'}.
   }
 };
 
-// ... (El resto de las funciones, como fetchRelevantImage y las auxiliares, van aquí)
 /* ======================================================
  * FUNCIÓN 3: Generador de Contenido para PDF (mejorada)
  * ====================================================== */
