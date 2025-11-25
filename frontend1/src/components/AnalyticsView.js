@@ -1,26 +1,21 @@
 import React, { useMemo, useState } from 'react';
 import '../styles/AnalyticsView.css';
 
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+
 /**
  * AnalyticsView
  * Props:
  *  - onGoHome: () => void
  *  - t: (key: string, params?: object) => string
  *  - tasks: Array<{ id, titulo, status, created_at, updated_at }>
- *
- * Funcionalidad:
- *  - Filtros (fecha desde/hasta, búsqueda por texto)
- *  - KPIs: Total, Sin hacer, En proceso, Realizadas, % completadas
- *  - Tiempo promedio de finalización (si hay updated_at en done)
- *  - Tendencia últimos 14 días (creadas y completadas) con SVG sparkline
- *  - Descargar CSV (de los datos FILTRADOS)
  */
 
 const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
   // Idioma simple
   const isES = (t('homeCardAnalyticsTitle') || '').toLowerCase().includes('anal');
 
-  // Textos (fallbacks robustos)
   const TT = {
     title: isES ? 'Analítica' : 'Analytics',
     from: isES ? 'Desde' : 'From',
@@ -35,7 +30,7 @@ const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
     kpi_done: isES ? 'Realizadas' : 'Done',
     kpi_completed_rate: isES ? '% Completadas' : 'Completed %',
     kpi_avg_time: isES ? 'Tiempo prom. finalización' : 'Avg. completion time',
-    download: isES ? 'Descargar CSV' : 'Download CSV',
+    download: isES ? 'Descargar Excel' : 'Download Excel',
     created_series: isES ? 'Creadas (últ. 14 días)' : 'Created (last 14 days)',
     done_series: isES ? 'Completadas (últ. 14 días)' : 'Completed (last 14 days)',
     no_data: isES ? 'Sin datos para mostrar.' : 'No data to show.',
@@ -71,7 +66,7 @@ const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
     return true;
   };
 
-  // Lista filtrada por fecha + texto (sin filtrar por estado aquí)
+  // Lista filtrada por fecha + texto
   const filtered = useMemo(() => {
     const q = (query || '').trim().toLowerCase();
     return (tasks || []).filter((tk) => {
@@ -84,7 +79,9 @@ const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
   // KPIs
   const kpis = useMemo(() => {
     const total = filtered.length;
-    let pending = 0, in_process = 0, done = 0;
+    let pending = 0;
+    let in_process = 0;
+    let done = 0;
 
     filtered.forEach((tk) => {
       const st = tk.status || 'pending';
@@ -95,35 +92,40 @@ const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
 
     const completedRate = total > 0 ? Math.round((done / total) * 100) : 0;
 
-    // Tiempo promedio de finalización: para tareas done con updated_at > created_at
     const durations = filtered
-      .filter(tk => (tk.status === 'done') && tk.created_at && tk.updated_at)
-      .map(tk => {
+      .filter((tk) => tk.status === 'done' && tk.created_at && tk.updated_at)
+      .map((tk) => {
         const c = new Date(tk.created_at).getTime();
         const u = new Date(tk.updated_at).getTime();
-        return (u > c) ? (u - c) : null;
+        return u > c ? u - c : null;
       })
-      .filter(x => x != null);
+      .filter((x) => x != null);
 
-    const avgMs = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+    const avgMs = durations.length
+      ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+      : 0;
 
     const humanizeMs = (ms) => {
       if (!ms) return isES ? '—' : '—';
-      const days = Math.floor(ms / (24*60*60*1000));
-      const hours = Math.floor((ms % (24*60*60*1000)) / (60*60*1000));
-      const mins = Math.floor((ms % (60*60*1000)) / (60*1000));
+      const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+      const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+      const mins = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
       if (days > 0) return `${days}d ${hours}h`;
       if (hours > 0) return `${hours}h ${mins}m`;
       return `${mins}m`;
     };
 
     return {
-      total, pending, in_process, done, completedRate,
+      total,
+      pending,
+      in_process,
+      done,
+      completedRate,
       avgTimeText: humanizeMs(avgMs),
     };
   }, [filtered, isES]);
 
-  // Serie últimos 14 días (creadas por día vs. completadas por día)
+  // Serie últimos 14 días
   const lastDays = 14;
   const daysWindow = useMemo(() => {
     const arr = [];
@@ -138,11 +140,13 @@ const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
   }, []);
 
   const dailySeries = useMemo(() => {
-    const createdMap = new Map(daysWindow.map(d => [d.key, 0]));
-    const doneMap = new Map(daysWindow.map(d => [d.key, 0]));
+    const createdMap = new Map(daysWindow.map((d) => [d.key, 0]));
+    const doneMap = new Map(daysWindow.map((d) => [d.key, 0]));
 
-    filtered.forEach(tk => {
-      const cKey = (tk.created_at ? new Date(tk.created_at) : new Date()).toISOString().slice(0, 10);
+    filtered.forEach((tk) => {
+      const cKey = (tk.created_at ? new Date(tk.created_at) : new Date())
+        .toISOString()
+        .slice(0, 10);
       if (createdMap.has(cKey)) createdMap.set(cKey, createdMap.get(cKey) + 1);
 
       if (tk.status === 'done' && tk.updated_at) {
@@ -151,9 +155,9 @@ const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
       }
     });
 
-    const created = daysWindow.map(d => createdMap.get(d.key));
-    const completed = daysWindow.map(d => doneMap.get(d.key));
-    return { created, completed, categories: daysWindow.map(d => d.key) };
+    const created = daysWindow.map((d) => createdMap.get(d.key));
+    const completed = daysWindow.map((d) => doneMap.get(d.key));
+    return { created, completed, categories: daysWindow.map((d) => d.key) };
   }, [filtered, daysWindow]);
 
   // Small sparkline SVG
@@ -162,11 +166,13 @@ const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
     const pad = 6;
     const max = Math.max(...data, 1);
     const stepX = (width - pad * 2) / (data.length - 1 || 1);
-    const points = data.map((v, i) => {
-      const x = pad + i * stepX;
-      const y = height - pad - (v / max) * (height - pad * 2);
-      return `${x},${y}`;
-    }).join(' ');
+    const points = data
+      .map((v, i) => {
+        const x = pad + i * stepX;
+        const y = height - pad - (v / max) * (height - pad * 2);
+        return `${x},${y}`;
+      })
+      .join(' ');
 
     return (
       <div className="chart-card" role="img" aria-label={label}>
@@ -178,41 +184,70 @@ const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
     );
   };
 
-  // Descargar CSV (de lo FILTRADO)
-  const handleDownloadCSV = () => {
-    const header = [TT.col_id, TT.col_title, TT.col_status, TT.col_created, TT.col_updated];
-    const rows = filtered.map((tk) => [
-      tk.id,
-      (tk.titulo || '').replace(/\r?\n/g, ' ').trim(),
-      (tk.status || 'pending'),
-      new Date(tk.created_at || Date.now()).toLocaleString(),
-      tk.updated_at ? new Date(tk.updated_at).toLocaleString() : '',
-    ]);
-
-    const escapeCSV = (val) => {
-      const s = String(val ?? '');
-      if (/[",\n;]/.test(s)) {
-        return `"${s.replace(/"/g, '""')}"`;
+  // Descargar Excel – SOLO escribe en hoja "Datos" de la plantilla
+  const handleDownloadExcel = async () => {
+    try {
+      const response = await fetch('/formatos/dashboard-tareas.xlsx');
+      if (!response.ok) {
+        console.error('Error al cargar la plantilla', response.status);
+        alert('No se pudo cargar la plantilla de Excel.');
+        return;
       }
-      return s;
-    };
 
-    const csv = [header, ...rows].map(r => r.map(escapeCSV).join(',')).join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
+      const arrayBuffer = await response.arrayBuffer();
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(arrayBuffer);
 
-    const link = document.createElement('a');
-    const date = new Date().toISOString().slice(0, 10);
-    link.href = url;
-    link.download = `analitica_tareas_${date}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+      const sheet = workbook.getWorksheet('Datos');
+      if (!sheet) {
+        alert('No se encontró la hoja "Datos" en la plantilla.');
+        return;
+      }
+
+      // 1) Limpiar A2:E500
+      for (let rowIndex = 2; rowIndex <= 500; rowIndex += 1) {
+        const row = sheet.getRow(rowIndex);
+        for (let col = 1; col <= 5; col += 1) {
+          row.getCell(col).value = null;
+        }
+        row.commit();
+      }
+
+      // 2) Escribir datos filtrados
+      (filtered || []).forEach((tk, index) => {
+        const rowIndex = 2 + index;
+        const row = sheet.getRow(rowIndex);
+        row.getCell(1).value = tk.id;
+        row.getCell(2).value = tk.titulo || '';
+        row.getCell(3).value = tk.status || 'pending';
+        row.getCell(4).value = tk.created_at ? new Date(tk.created_at) : '';
+        row.getCell(5).value = tk.updated_at ? new Date(tk.updated_at) : '';
+        row.commit();
+      });
+
+      // 3) Generar y descargar
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+
+      const date = new Date().toISOString().slice(0, 10);
+      saveAs(blob, `dashboard_tareas_${date}.xlsx`);
+    } catch (err) {
+      console.error('Error en handleDownloadExcel', err);
+      alert('Ocurrió un error al generar el Excel.');
+    }
   };
 
-  const handleApply = () => {/* filtros son reactivos, conservamos botón por UX */};
-  const handleClear = () => { setFromDate(''); setToDate(''); setQuery(''); };
+  const handleApply = () => {
+    // filtros son reactivos, el botón es solo UX
+  };
+
+  const handleClear = () => {
+    setFromDate('');
+    setToDate('');
+    setQuery('');
+  };
 
   return (
     <div className="apartado-view analytics-view">
@@ -233,7 +268,7 @@ const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
         <button
           type="button"
           className="btn btn-download"
-          onClick={handleDownloadCSV}
+          onClick={handleDownloadExcel}
           title={TT.download}
           aria-label={TT.download}
         >
@@ -244,7 +279,9 @@ const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
       {/* Barra filtros */}
       <div className="analytics-toolbar">
         <div className="an-field">
-          <label htmlFor="fromDate" className="an-label">{TT.from}</label>
+          <label htmlFor="fromDate" className="an-label">
+            {TT.from}
+          </label>
           <input
             id="fromDate"
             type="date"
@@ -255,7 +292,9 @@ const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
         </div>
 
         <div className="an-field">
-          <label htmlFor="toDate" className="an-label">{TT.to}</label>
+          <label htmlFor="toDate" className="an-label">
+            {TT.to}
+          </label>
           <input
             id="toDate"
             type="date"
@@ -266,7 +305,9 @@ const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
         </div>
 
         <div className="an-field an-search">
-          <label htmlFor="q" className="an-label">{TT.search}</label>
+          <label htmlFor="q" className="an-label">
+            {TT.search}
+          </label>
           <input
             id="q"
             type="text"
@@ -338,7 +379,7 @@ const AnalyticsView = ({ onGoHome, t, tasks = [] }) => {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(tk => (
+              {filtered.map((tk) => (
                 <tr key={tk.id}>
                   <td>{tk.id}</td>
                   <td className="cell-title">{tk.titulo}</td>

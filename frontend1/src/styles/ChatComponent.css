@@ -296,3 +296,59 @@
 ::-webkit-scrollbar-track { background: #0f0f0f; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #0066ff; }
+/* --- Estilos para el botón de Subir Archivo --- */
+
+.file-upload-button {
+    /* Diseño base */
+    background-color: #4CAF50; /* Un color verde amigable */
+    color: white;
+    border: none;
+    border-radius: 25px; /* Bordes redondeados */
+    padding: 10px 15px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.1s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    
+    /* Asegurar que el texto y el ícono estén centrados */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px; /* Espacio entre el ícono y el texto */
+}
+
+/* Estado al pasar el mouse (hover) */
+.file-upload-button:hover {
+    background-color: #45a049; /* Verde un poco más oscuro */
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Estado al hacer clic (active) */
+.file-upload-button:active {
+    transform: scale(0.98);
+}
+
+/* Estado deshabilitado (cuando está enviando o procesando) */
+.file-upload-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* --- Ajuste para el contenedor de botones --- */
+
+/* Es importante asegurarse de que .gesia-cta permita que los botones estén lado a lado */
+.gesia-cta {
+    display: flex;
+    justify-content: center; /* Centrar los botones horizontalmente */
+    align-items: center;
+    margin-bottom: 15px; /* Espacio debajo de los botones */
+}
+
+/* Asegurar que el botón de voz también se ajuste bien en el flex */
+.voice-button {
+    /* ... (asegúrate de que tu voz-button tenga estilos consistentes) ... */
+    /* Si necesitas que el botón de voz sea más pequeño: */
+    /* padding: 10px 20px; */
+}
