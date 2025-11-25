@@ -107,9 +107,10 @@ Analiza: "${message || ''}"
 };
 
 /* ==============================================
- * FUNCIÓN 2: Conversador (string o array)
- * ============================================== */
+ * FUNCIÓN 2: Conversador (string o array)
+ * ============================================== */
 exports.generateConversationalResponse = async (historyOrMessage, userName, userData) => {
+  // **1. PREPARACIÓN DE CONTEXTO Y DATOS DE USUARIO**
   const foldersList = Array.isArray(userData?.folders)
     ? userData.folders.map((f) => f?.nombre).filter(Boolean).join(', ')
     : 'ninguna';
@@ -121,12 +122,12 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
         .join('; ')
     : 'ninguno';
 
-  // 💡 INICIO DE LÓGICA DE OCR (Comando Secreto)
+  // **2. LÓGICA DE DETECCIÓN Y MANEJO DEL COMANDO SECRETO OCR**
   let customInstruction = '';
   let isOcrCommand = false;
   let historyToProcess = Array.isArray(historyOrMessage) ? [...historyOrMessage] : [{ text: String(historyOrMessage) }];
 
-  // 1. Obtenemos el último mensaje de forma segura
+  // Obtenemos el último mensaje para revisar el comando secreto
   const lastMessage = historyToProcess[historyToProcess.length - 1];
 
   let lastMessageText = '';
@@ -134,16 +135,16 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
     lastMessageText = lastMessage?.text || lastMessage?.content || '';
   }
 
-  // 2. Intentamos detectar el comando secreto
+  // Intentamos detectar el comando secreto (AI_CMD_PROCESS_TEXT:)
   const commandMatch = lastMessageText.match(/^AI_CMD_PROCESS_TEXT: (.*)/s);
 
   if (commandMatch) {
       isOcrCommand = true;
       const ocrContent = commandMatch[1];
       
-      // 3. Instrucción Específica y Estricta para la IA (Punto 3: Análisis Conciso)
+      // Instrucción Específica y Estricta para la IA (Resumen Conciso y Pregunta de Gestión)
       customInstruction = `
-      PRIORIDAD MÁXIMA: El usuario acaba de subir un archivo cuyo texto extraído es: "${ocrContent}".
+      PRIORIDAD MÁXIMA: El usuario acaba de subir un archivo/imagen cuyo texto extraído es: "${ocrContent}".
 
       Tu ÚNICA tarea es:
       1.  Analizar el contenido.
@@ -153,13 +154,13 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
       5.  Tu respuesta debe ser CONVERSACIONAL, AMABLE y en texto plano.
       `;
 
-      // 4. Reemplazamos el mensaje largo por el mensaje corto en el historial para la IA
+      // Reemplazamos el mensaje largo por un mensaje corto en el historial para la IA
       if (historyToProcess.length > 0) {
           historyToProcess[historyToProcess.length - 1] = { sender: 'user', text: `Acabo de subir un archivo para que lo analices.` };
       }
   }
-  // 💡 FIN DE LÓGICA DE OCR
-  
+
+  // **3. CONSTRUCCIÓN DE LA INSTRUCCIÓN DE SISTEMA**
   const systemInstruction = `
 Eres "Gestor IA", un asistente de IA conversacional y amable. El nombre del usuario es ${userName}.
 
@@ -174,7 +175,7 @@ IMPORTANTE:
 - No uses formato Markdown. No uses asteriscos (*), ni negritas, ni cursivas.
 - Responde en texto plano.
 
-DIRECTRIZ DE GESTIÓN (Punto 2: Preguntar ubicación):
+DIRECTRIZ DE GESTIÓN (Preguntar ubicación):
 Si el usuario te pide **guardar** o **subir** un archivo, pero NO especifica la carpeta, DEBES preguntar: "¿En qué carpeta quieres que lo guarde? Si no tienes una, ¿quieres que creemos una nueva?".
 Ejemplo de respuesta: "Perfecto. ¿En qué carpeta lo quieres guardar? Tienes las carpetas: ${foldersList}. O dime si prefieres crear una nueva."
 
@@ -188,75 +189,19 @@ Archivos Recientes: ${filesList || 'ninguno'}.
 ` : ''}
 `.trim();
 
-  let messagesForApi;
-  // Usamos la copia 'historyToProcess' que tiene el mensaje de OCR reemplazado si aplica
-  messagesForApi = historyToProcess.map((msg) => {
-    const content = String(msg.text ?? msg.content ?? '');
-    const sender = (msg.sender || msg.role || '').toLowerCase();
-    const role =
-      sender === 'user' || sender === 'me'
-        ? 'user'
-        : sender === 'assistant' || sender === 'bot' || sender === 'ai'
-        ? 'assistant'
-        : 'user'; 
-
-    return { role, content };
-  });
-
-  // Insertamos el mensaje de sistema al principio
-  messagesForApi.unshift({ role: 'system', content: systemInstruction });
-
+  // **4. LLAMADA AL SERVICIO DE IA (Asumiendo que es una API local o externa)**
   try {
-    const { data } = await axios.post(
-      'https://api.ai21.com/studio/v1/chat/completions',
-      {
-        model: 'jamba-large',
-        messages: messagesForApi,
-        max_tokens: 300,
-        temperature: 0.7,
-      },
-      { headers: ai21Headers() }
+    // ⚠️ IMPORTANTE: Asegúrate de que esta URL apunte correctamente a tu servicio de IA
+    const response = await axios.post(
+      'http://localhost:3000/api/ai/converse', 
+      { history: historyToProcess, systemInstruction }
     );
-
-    const raw =
-      data?.choices?.[0]?.message?.content?.trim() ||
-      'Lo siento, tuve un problema para generar una respuesta coherente.';
-
-    // Quitamos todos los asteriscos para evitar formato raro en el chat
-    return stripAsterisks(raw);
+    return response.data.reply;
   } catch (error) {
-    console.error(
-      'Error en generateConversationalResponse:',
-      error?.response?.data?.detail || error?.message
-    );
-    return 'Tuve un problema para conectarme con mi cerebro de IA. Inténtalo de nuevo.';
+    console.error('Error al generar respuesta conversacional:', error.message);
+    return 'Lo siento, hay un error de comunicación con el servicio de IA. Intenta de nuevo más tarde.';
   }
 };
-/* ==============================
- * FUNCIÓN: Buscar imagen (Unsplash)
- * ============================== */
-async function fetchRelevantImage(topic) {
-  if (!UNSPLASH_ACCESS_KEY) {
-    console.log('No se ha configurado la API Key de Unsplash.');
-    return null;
-  }
-  try {
-    const { data } = await axios.get('https://api.unsplash.com/search/photos', {
-      params: {
-        query: topic,
-        per_page: 1,
-        orientation: 'landscape',
-        order_by: 'relevant',
-      },
-      headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` },
-    });
-    return data?.results?.[0]?.urls?.regular || null;
-  } catch (error) {
-    console.error('Error al buscar imagen en Unsplash:', error.message);
-    return null;
-  }
-}
-
 /* ======================================================
  * FUNCIÓN 3: Generador de Contenido para PDF (mejorada)
  * ====================================================== */
