@@ -131,10 +131,15 @@ const Gesia = ({ onReloadFolders, onReloadFiles, onOpenFolder }) => {
     if (finalText && !isProcessingFile) await sendMessageToBackend(finalText); 
   }
 
+  // 🚨 FUNCIÓN CRÍTICA CORREGIDA: No imprime el comando secreto en el chat
   async function sendMessageToBackend(text) {
     const token = localStorage.getItem('user_token');
     const userMessage = { sender: 'user', text };
-
+    
+    // 💡 Detectar si es el comando oculto de OCR
+    const isOcrCommand = text.startsWith('AI_CMD_PROCESS_TEXT:');
+    
+    // Añadimos el mensaje original (incluyendo el comando oculto) al historial COMPLETO para el backend.
     fullHistoryRef.current = [...fullHistoryRef.current, userMessage];
 
     const historyForBackend = fullHistoryRef.current.map(m => ({
@@ -142,7 +147,12 @@ const Gesia = ({ onReloadFolders, onReloadFiles, onOpenFolder }) => {
       text: m.text,
     }));
 
-    setMessages(prev => [...prev, userMessage].slice(-2));
+    // 💡 CRÍTICO: SOLO actualizamos el chat visible si NO es el comando oculto.
+    // El mensaje de '[IMAGEN ENVIADA]' ya fue añadido en processImageWithOcr.
+    if (!isOcrCommand) {
+        setMessages(prev => [...prev, userMessage].slice(-2));
+    }
+    
     setIsSending(true);
 
     try {
@@ -155,9 +165,9 @@ const Gesia = ({ onReloadFolders, onReloadFiles, onOpenFolder }) => {
       const replyText = response.data.reply || '...';
       const replyType = response.data.type;
 
-      // --- LÓGICA DE DETECCIÓN DE CARPETAS SEGURA ---
+      // --- LÓGICA DE DETECCIÓN DE CARPETAS SEGURA --- (sin cambios)
       const folderMatch = replyText.match(
-        /(?:abriendo|entrar|ir|mostrar|ver|carpeta|folder|contenido de)\s+(?:a\s+|en\s+|la\s+|el\s+)?(?:carpeta|folder)?\s*["'*]*([a-zA-Z0-Z0-9_ áéíóúñ]+)["'*]*[:.]?/i
+        /(?:abriendo|entrar|ir|mostrar|ver|carpeta|folder|contenido de)\s+(?:a\s+|en\s+|la\s+|el\s+)?(?:carpeta|folder)?\s*["'*]*([a-zA-Z0-9_ áéíóúñ]+)["'*]*[:.]?/i
       );
 
       if (folderMatch && folderMatch[1]) {
@@ -195,7 +205,7 @@ const Gesia = ({ onReloadFolders, onReloadFiles, onOpenFolder }) => {
     }
   }
 
-  // 🟢 3. LÓGICA DE VOZ (TTS)
+  // 🟢 3. LÓGICA DE VOZ (TTS) (sin cambios)
   function speakText(text) {
     if (!('speechSynthesis' in window)) return;
     
@@ -232,7 +242,7 @@ const Gesia = ({ onReloadFolders, onReloadFiles, onOpenFolder }) => {
     window.speechSynthesis.speak(utterance);
   }
 
-  // 💡 4. NUEVA FUNCIÓN: PROCESAMIENTO DE IMAGEN CON TESSERACT
+  // 💡 4. PROCESAMIENTO DE IMAGEN CON TESSERACT
   async function processImageWithOcr(file) {
     if (!file || !file.type.startsWith('image/')) return;
 
@@ -254,10 +264,11 @@ const Gesia = ({ onReloadFolders, onReloadFiles, onOpenFolder }) => {
             // 2. Comando oculto para la IA
             const commandForAI = `AI_CMD_PROCESS_TEXT: El usuario acaba de subir una imagen cuyo texto extraído es: "${ocrText}". Por favor, analiza este texto, haz un resumen o conclusión breve y responde al usuario sobre qué se trata y cómo puedes ayudarle a gestionarlo.`;
             
-            // 3. Enviar el comando al backend
+            // 3. Enviar el comando al backend (sendMessageToBackend NO lo mostrará)
             await sendMessageToBackend(commandForAI);
 
         } else {
+            // Si no hay texto, la IA informará al usuario
             await sendMessageToBackend("No pude extraer texto legible de la imagen. ¿Es una imagen clara?");
         }
 
@@ -282,7 +293,7 @@ const Gesia = ({ onReloadFolders, onReloadFiles, onOpenFolder }) => {
         // Si es una imagen, usamos Tesseract en el Frontend
         processImageWithOcr(file);
     } else {
-        // Si es PDF o Word (u otro), enviamos una notificación al backend (requiere backend actualizado)
+        // Si es PDF o Word (u otro), enviamos una notificación simple al backend
         const userMessage = { sender: 'user', text: `Adjunté el archivo: ${file.name}. ¿Qué quieres que haga con él?` };
         setMessages(prev => [...prev, userMessage].slice(-2));
         sendMessageToBackend(`Adjunté un archivo (${file.name}). ¿Qué hago con él?`);

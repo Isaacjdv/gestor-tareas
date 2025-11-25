@@ -121,13 +121,17 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
         .join('; ')
     : 'ninguno';
 
-  // 💡 INICIO DE LÓGICA DE OCR
+  // 💡 INICIO DE LÓGICA DE OCR (REFORZADA)
   let customInstruction = '';
   let isOcrCommand = false;
 
-  let lastMessageText = Array.isArray(historyOrMessage) 
-      ? historyOrMessage[historyOrMessage.length - 1]?.text || historyOrMessage[historyOrMessage.length - 1]?.content || ''
-      : String(historyOrMessage);
+  // Obtenemos el último mensaje para la detección
+  let lastMessage = Array.isArray(historyOrMessage) 
+      ? historyOrMessage[historyOrMessage.length - 1] 
+      : { text: String(historyOrMessage) };
+
+  // Priorizamos la clave 'text' que usa tu frontend, luego 'content' (si lo usara)
+  let lastMessageText = lastMessage?.text || lastMessage?.content || String(lastMessage);
 
   const commandMatch = lastMessageText.match(/^AI_CMD_PROCESS_TEXT: (.*)/s);
 
@@ -144,12 +148,12 @@ exports.generateConversationalResponse = async (historyOrMessage, userName, user
       4. NO MENCIONES el comando "AI_CMD_PROCESS_TEXT" ni el texto OCR crudo en tu respuesta.
       `.trim();
 
-      // Reemplazamos el mensaje "oculto" por un mensaje de usuario simple en el historial para la IA
+      // Reemplazamos el mensaje "oculto" con la versión corta en el historial.
       if (Array.isArray(historyOrMessage)) {
-          // Asume que el historial enviado por el frontend tiene 'text'
+          // Aseguramos que el reemplazo mantenga la estructura de 'sender' y 'text' esperada por el Frontend/Backend
           historyOrMessage[historyOrMessage.length - 1] = { sender: 'user', text: `Acabo de subir una imagen/archivo para que lo analices.` };
       } else {
-          // Si historyOrMessage es un string (no debería pasar con el frontend actual, pero por seguridad)
+          // Si historyOrMessage fuera un string (caso de un solo mensaje)
           historyOrMessage = `Acabo de subir una imagen/archivo para que lo analices.`;
       }
   }
@@ -238,7 +242,6 @@ MANTÉN LA CONVERSACIÓN:
     return 'Tuve un problema para conectarme con mi cerebro de IA. Inténtalo de nuevo.';
   }
 };
-
 /* ==============================
  * FUNCIÓN: Buscar imagen (Unsplash)
  * ============================== */
