@@ -1,336 +1,430 @@
-// backend/controllers/chatController.js
-const userModel = require('../models/userModel');
-const folderModel = require('../models/folderModel');
-const fileModel = require('../models/fileModel');
-const aiService = require('../services/aiService');
-const PDFDocument = require('pdfkit');
-const fs = require('fs');
-const path = require('path');
+// backend/services/aiService.js
 const axios = require('axios');
-const messageModel = require('../models/messageModel');
 
-const RENDER_URL =
-  process.env.RENDER_EXTERNAL_URL || 'https://gestor-tareas-backend-11hi.onrender.com';
+const AI21_API_KEY = process.env.AI21_API_KEY;
+const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
 
-exports.handleChatMessage = async (req, res) => {
-  const { history } = req.body;
-  const user = req.user;
+/* ----------------------------- Helpers ----------------------------- */
 
-  // Buscamos el último mensaje que venga del usuario (por si el historial incluye mensajes del bot)
-  let latestUserMessage = '';
-  if (Array.isArray(history) && history.length > 0) {
-    const lastUserMsg = [...history]
-      .reverse()
-      .find(
-        (m) =>
-          String(m.sender || m.role || '').toLowerCase() === 'user' ||
-          String(m.sender || m.role || '').toLowerCase() === 'me'
-      );
-    latestUserMessage = lastUserMsg ? String(lastUserMsg.text ?? lastUserMsg.content ?? '') : '';
-  }
+/** Extrae el primer objeto JSON de un string (quita cercas de código si vienen) */
+function extractFirstJson(str = '') {
+  let s = String(str || '').trim();
+  if (s.startsWith('```')) {
+    // Quita cercas de código y lenguaje opcional
+    s = s.replace(/^```[a-zA-Z-]*\n?/, '').replace(/```$/, '').trim();
+  }
+  const match = s.match(/{[\s\S]*}/);
+  return match ? match[0] : s;
+}
 
-  try {
-    const interpretation = await aiService.interpretMessage(latestUserMessage);
+/** Construye headers estándar para AI21 */
+function ai21Headers() {
+  return {
+    Authorization: `Bearer ${AI21_API_KEY}`,
+    'Content-Type': 'application/json',
+  };
+}
 
-    switch (interpretation.intent) {
-      /* ======================
-       * CARPETAS: CRUD
-       * ====================== */
+/** Quita todos los asteriscos de la respuesta (para evitar Markdown en el chat) */
+function stripAsterisks(str = '') {
+  return String(str || '').replace(/\*/g, '');
+}
 
-      case 'create_folder': {
-        const { entity: newFolderName, parent_entity: parentFolderName } = interpretation;
+/* ===========================
+ * FUNCIÓN 1: El Intérprete
+ * =========================== */
+exports.interpretMessage = async (message) => {
+  const prompt = `
+Tu trabajo es analizar un mensaje y clasificarlo en una intención. Responde SIEMPRE con un objeto JSON.
 
-        if (!newFolderName) {
-          return res.json({ reply: 'Dime el nombre de la carpeta a crear.' });
-        }
+Las intenciones posibles son:
+"greeting", "list_folders", "view_folder", "create_folder", "edit_folder", "delete_folder",
+"upload_file", "send_file", "send_latest_file", "get_summary", "generate_pdf",
+"confirm_save_yes", "confirm_save_no", "set_reminder", "schedule_file_send",
+"clarification_needed", "unknown".
 
-        let parentId = null;
+REGLAS CRÍTICAS:
+1. Al extraer nombres en "entity", "parent_entity" o "new_entity", sé EXTREMADAMENTE LITERAL. No simplifiques "Base de datos II" a "Base de datos".
+2. Intención "upload_file":
+   - Actívala si el usuario quiere GUARDAR, SUBIR o ARCHIVAR algo (ej: "guarda esto", "sube esto", "archiva esto").
+   - Si menciona una carpeta (ej: "en la carpeta X", "en X", "a X"), extrae "X" como "entity".
+   - Si el usuario solo adjunta un archivo sin texto (mensaje vacío o marcador), devuelve {"intent":"upload_file"} sin "entity".
+3. Para "generate_pdf", extrae el tema en "entity".
+4. Para "confirm_save_yes", si se menciona una carpeta, extráela en "entity".
+5. Para "set_reminder":
+   - "entity": descripción de la actividad.
+   - "time": hora o período (ej: "en 2 horas", "mañana a las 9 am").
+6. Para "schedule_file_send":
+   - "entity": nombre del archivo.
+   - "contact": nombre o número del contacto.
+   - "time": hora o período.
+   - "message": mensaje adicional (opcional).
+7. Si una acción necesita un nombre y no está claro, usa "clarification_needed".
 
-        if (parentFolderName) {
-          const parentFolder = await folderModel.findByNameAndUserId(
-            parentFolderName,
-            user.userId
-          );
-          if (!parentFolder) {
-            return res.json({
-              reply: `No encontré la carpeta padre "${parentFolderName}".`,
-              type: 'error',
-            });
-          }
-          parentId = parentFolder.id;
-        }
+### Ejemplos ###
+- Usuario: "hola" -> {"intent": "greeting"}
+- Usuario: "muéstrame mis carpetas" -> {"intent": "list_folders"}
+- Usuario: "qué hay dentro de la carpeta Base de datos II" -> {"intent": "view_folder", "entity": "Base de datos II"}
+- Usuario: "crea la carpeta 'Impuestos 2025' dentro de 'Facturas'" -> {"intent": "create_folder", "entity": "Impuestos 2025", "parent_entity": "Facturas"}
+- Usuario: "renombra 'mate' a 'matemáticas'" -> {"intent": "edit_folder", "entity": "mate", "new_entity": "matemáticas"}
+- Usuario: "pásame el primer archivo" -> {"intent": "send_latest_file"}
+- Usuario: "pásame el archivo" -> {"intent": "clarification_needed"}
+- Usuario: "haz un resumen de la segunda guerra mundial en pdf" -> {"intent": "generate_pdf", "entity": "la segunda guerra mundial"}
+- Usuario: "recuérdame hacer la compra en 30 minutos" -> {"intent": "set_reminder", "entity": "hacer la compra", "time": "en 30 minutos"}
 
-        await folderModel.create(newFolderName, user.userId, parentId);
-        const location = parentFolderName ? ` dentro de "${parentFolderName}"` : '';
+--- Nuevos ejemplos de subida ---
+- Usuario: "sube esto en la carpeta deberes" -> {"intent": "upload_file", "entity": "deberes"}
+- Usuario: "Guarda esto en carpetaxd" -> {"intent": "upload_file", "entity": "carpetaxd"}
+- Usuario: "Archiva esto en 'importante'" -> {"intent": "upload_file", "entity": "importante"}
+- Usuario: "[ADJUNTO]" (solo archivo) -> {"intent": "upload_file"}
+- Usuario: "Guárdalo en la carpeta archivos" -> {"intent": "confirm_save_yes", "entity": "archivos"}
 
-        return res.json({
-          reply: `Listo, he creado la carpeta "${newFolderName}"${location}.`,
-          type: 'success',
-        });
-      }
+Analiza: "${message || ''}"
+`.trim();
 
-      case 'edit_folder': {
-        const { entity: oldName, new_entity: newName } = interpretation;
+  try {
+    const { data } = await axios.post(
+      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
+      {
+        model: 'jamba-large',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 250,
+        temperature: 0.0,
+      },
+      { headers: ai21Headers() }
+    );
 
-        if (!oldName || !newName) {
-          return res.json({
-            reply:
-              'Dime qué carpeta renombrar y el nuevo nombre. Ejemplo: renombra mate a matemáticas.',
-          });
-        }
-
-        const folderToEdit = await folderModel.findByNameAndUserId(oldName, user.userId);
-        if (!folderToEdit) {
-          return res.json({
-            reply: `No encontré la carpeta "${oldName}".`,
-            type: 'error',
-          });
-        }
-
-        await folderModel.update(folderToEdit.id, newName);
-        return res.json({
-          reply: `He renombrado la carpeta a "${newName}".`,
-          type: 'success',
-        });
-      }
-
-      case 'delete_folder': {
-        const folderToDeleteName = interpretation.entity;
-
-        if (!folderToDeleteName) {
-          return res.json({ reply: 'Dime qué carpeta quieres eliminar.' });
-        }
-
-        const folderToDelete = await folderModel.findByNameAndUserId(
-          folderToDeleteName,
-          user.userId
-        );
-        if (!folderToDelete) {
-          return res.json({
-            reply: `No encontré la carpeta "${folderToDeleteName}".`,
-            type: 'error',
-          });
-        }
-
-        await folderModel.remove(folderToDelete.id);
-
-        return res.json({
-          reply: `He eliminado la carpeta "${folderToDeleteName}" y su contenido.`,
-          type: 'success',
-        });
-      }
-
-      case 'view_folder': {
-        const folderToViewName = interpretation.entity;
-
-        if (!folderToViewName) {
-          return res.json({ reply: 'Dime el nombre de la carpeta que quieres ver.' });
-        }
-
-        const targetFolder = await folderModel.findByNameAndUserId(
-          folderToViewName,
-          user.userId
-        );
-        if (!targetFolder) {
-          return res.json({
-            reply: `No encontré la carpeta "${folderToViewName}".`,
-            type: 'error',
-          });
-        }
-
-        const subFolders = await folderModel.findByParentId(user.userId, targetFolder.id);
-        const filesInFolder = await fileModel.findByFolderId(targetFolder.id);
-
-        let content = `Contenido de "${targetFolder.nombre}":\n`;
-
-        if (subFolders.length === 0 && filesInFolder.length === 0) {
-          content = `La carpeta "${targetFolder.nombre}" está vacía.`;
-        } else {
-          if (subFolders.length > 0) {
-            content += `\nSubcarpetas:\n` + subFolders.map((f) => `📁 ${f.nombre}`).join('\n');
-          }
-          if (filesInFolder.length > 0) {
-            content +=
-              `\n\nArchivos:\n` +
-              filesInFolder
-                .map(
-                  (f) => `📄 ${f.nombre_original} (Estado: ${f.status || 'pending'})`
-                )
-                .join('\n');
-          }
-        }
-
-        return res.json({ reply: content.trim() });
-      }
-
-      /* ======================
-       * LISTAR CARPETAS
-       * ====================== */
-
-      case 'list_folders': {
-        const userFolders = await folderModel.findByUserId(user.userId);
-
-        if (!userFolders || userFolders.length === 0) {
-          return res.json({
-            reply:
-              'Todavía no tienes carpetas creadas. Si quieres, dime un nombre y creamos la primera.',
-          });
-        }
-
-        const list = userFolders.map((f) => `📁 ${f.nombre}`).join('\n');
-
-        return res.json({
-          reply: `Estas son tus carpetas actuales:\n\n${list}`,
-        });
-      }
-
-      /* ======================
-       * GENERAR PDF CON IA
-       * ====================== */
-
-      case 'generate_pdf': {
-        const query = interpretation.entity;
-
-        if (!query) {
-          return res.json({
-            reply: 'Perfecto, dime sobre qué tema quieres que escriba el PDF.',
-          });
-        }
-
-        // Respuesta inmediata al usuario
-        res.json({
-          reply: `Entendido. Estoy generando tu PDF sobre "${query}". Esto puede tardar un poco.`,
-        });
-
-        // Generación asíncrona del PDF
-        try {
-          const pdfData = await aiService.generatePdfContent(query, user.nombre);
-          if (!pdfData || !pdfData.textContent) {
-            return;
-          }
-
-          const doc = new PDFDocument();
-          const sanitizedQuery = query
-            .split(' ')
-            .slice(0, 3)
-            .join('_')
-            .replace(/[^a-zA-Z0-9_]/g, '');
-          const pdfName = `${sanitizedQuery}_${Date.now()}.pdf`;
-
-          const uploadsRoot = path.join(__dirname, '..', 'uploads');
-          const userUploadsPath = path.join(uploadsRoot, String(user.userId));
-          if (!fs.existsSync(userUploadsPath)) {
-            fs.mkdirSync(userUploadsPath, { recursive: true });
-          }
-
-          const pdfAbsPath = path.join(userUploadsPath, pdfName);
-          const stream = fs.createWriteStream(pdfAbsPath);
-
-          doc.pipe(stream);
-
-          doc.fontSize(22).text(pdfData.topic, { align: 'center' });
-          doc.moveDown(0.5);
-          doc.fontSize(10).text(`Solicitado por: ${pdfData.userName}`, { align: 'center' });
-          doc.fontSize(10).text(`Fecha: ${pdfData.today}`, { align: 'center' });
-          doc.moveDown(2);
-
-          doc.fontSize(12).text(pdfData.textContent, { align: 'justify' });
-
-          doc.end();
-
-          await new Promise((resolve) => stream.on('finish', resolve));
-
-          const publicPdfPath = path
-            .join('uploads', String(user.userId), pdfName)
-            .replace(/\\/g, '/');
-
-          const fileUrlPdf = `${RENDER_URL}/${publicPdfPath}`;
-          console.log('PDF generado y disponible en:', fileUrlPdf);
-        } catch (pdfError) {
-          console.error('Error generando PDF asíncrono:', pdfError);
-        }
-
-        return;
-      }
-
-      /* ======================
-       * ACLARACIÓN / UPLOAD
-       * ====================== */
-
-      case 'clarification_needed': {
-        const textLower = (latestUserMessage || '').toLowerCase();
-        const isFileRelated = /(archivo|archivos|carpeta|carpetas|pdf|documento|documentos|sube|subir|guarda|guardar|envía|enviar|mandar)/.test(
-          textLower
-        );
-
-        if (isFileRelated) {
-          return res.status(200).json({
-            reply:
-              'No estoy seguro de a qué archivo o carpeta te refieres. ¿Podrías ser un poco más específico?',
-          });
-        }
-
-        // Si no es de archivos, lo tratamos como conversación normal
-        const userFolders = await folderModel.findByUserId(user.userId);
-        const userFiles = await fileModel.findAllByUserId(user.userId);
-
-        const conversationalReply = await aiService.generateConversationalResponse(
-          history,
-          user.nombre,
-          { folders: userFolders, files: userFiles }
-        );
-
-        return res.status(200).json({ reply: conversationalReply });
-      }
-
-      case 'upload_file':
-        return res.status(200).json({
-          reply:
-            'Para subir un archivo, usa el formulario de subida de archivos en la parte superior de la carpeta.',
-        });
-
-      /* ======================
-       * CONVERSACIÓN GENERAL
-       * ====================== */
-
-      case 'greeting':
-      case 'unknown':
-      default: {
-        const userFolders = await folderModel.findByUserId(user.userId);
-        const userFiles = await fileModel.findAllByUserId(user.userId);
-
-        const conversationalReply = await aiService.generateConversationalResponse(
-          history,
-          user.nombre,
-          { folders: userFolders, files: userFiles }
-        );
-
-        return res.status(200).json({ reply: conversationalReply });
-      }
-    }
-  } catch (error) {
-    console.error('Error al procesar el mensaje del chat:', error);
-    res.status(500).json({
-      error: 'Error al procesar el mensaje. Por favor, verifica el estado del servidor de IA.',
-    });
-  }
+    const raw = data?.choices?.[0]?.message?.content ?? '';
+    const jsonString = extractFirstJson(raw);
+    try {
+      return JSON.parse(jsonString);
+    } catch {
+      return { intent: 'unknown' };
+    }
+  } catch {
+    return { intent: 'error' };
+  }
 };
 
-// --- HISTORIAL DE CHAT ENTRE USUARIOS ---
-exports.getChatHistory = async (req, res) => {
-  try {
-    const currentUserId = req.user.userId;
-    const { otherUserId } = req.params;
+/* ==============================================
+ * FUNCIÓN 2: Conversador (string o array)
+ * ============================================== */
+exports.generateConversationalResponse = async (historyOrMessage, userName, userData) => {
+  const foldersList = Array.isArray(userData?.folders)
+    ? userData.folders.map((f) => f?.nombre).filter(Boolean).join(', ')
+    : 'ninguna';
 
-    const otherUserIdNum = parseInt(otherUserId, 10);
-    if (isNaN(otherUserIdNum)) {
-      return res.status(400).json({ message: 'ID de usuario inválido.' });
-    }
+  const filesList = Array.isArray(userData?.files)
+    ? userData.files
+        .slice(0, 5)
+        .map((f) => `${f?.nombre_original} (Estado: ${f?.status || 'pending'})`)
+        .join('; ')
+    : 'ninguno';
 
-    const history = await messageModel.getHistory(currentUserId, otherUserIdNum);
-    res.status(200).json(history);
-  } catch (error) {
-    console.error('Error en getChatHistory:', error);
-    res.status(500).json({ message: 'Error en el servidor al obtener el historial.' });
-  }
+  // 💡 INICIO DE LÓGICA DE OCR (Comando Secreto)
+  let customInstruction = '';
+  let isOcrCommand = false;
+  let historyToProcess = Array.isArray(historyOrMessage) ? [...historyOrMessage] : [{ text: String(historyOrMessage) }];
+
+  // 1. Obtenemos el último mensaje de forma segura
+  const lastMessage = historyToProcess[historyToProcess.length - 1];
+
+  let lastMessageText = '';
+  if (lastMessage) {
+    lastMessageText = lastMessage?.text || lastMessage?.content || '';
+  }
+
+  // 2. Intentamos detectar el comando secreto
+  const commandMatch = lastMessageText.match(/^AI_CMD_PROCESS_TEXT: (.*)/s);
+
+  if (commandMatch) {
+      isOcrCommand = true;
+      const ocrContent = commandMatch[1];
+      
+      // 3. Instrucción Específica y Estricta para la IA
+      customInstruction = `
+      PRIORIDAD MÁXIMA: El usuario acaba de subir una imagen cuyo texto extraído es: "${ocrContent}".
+
+      Tu ÚNICA tarea es:
+      1.  Analizar el contenido extraído.
+      2.  Responder al usuario con un RESUMEN MUY CORTO (1-3 frases) o la idea principal de qué trata el contenido del archivo.
+      3.  Después del resumen, DEBES preguntar al usuario: "¿Cómo te gustaría que gestionara este contenido?" o "¿Cómo te puedo ayudar con esto?".
+      4.  NO INICIES ninguna acción (como generar PDFs, guardar archivos, etc.) por tu cuenta. Solo ofrece un resumen y espera las instrucciones del usuario.
+      5.  NO MENCIONES el comando "AI_CMD_PROCESS_TEXT" ni el texto OCR crudo en tu respuesta.
+      6.  Tu respuesta debe ser CONVERSACIONAL y AMABLE.
+      `;
+
+      // 4. Reemplazamos el mensaje largo por el mensaje corto en el historial para la IA
+      // Usamos historyToProcess que es una copia del array
+      if (historyToProcess.length > 0) {
+          historyToProcess[historyToProcess.length - 1] = { sender: 'user', text: `Acabo de subir una imagen/archivo para que lo analices.` };
+      }
+  }
+  // 💡 FIN DE LÓGICA DE OCR
+  
+  const systemInstruction = `
+Eres "Gestor IA", un asistente de IA conversacional y amable. El nombre del usuario es ${userName}.
+
+TU ROL PRINCIPAL:
+1. Mantener una conversación natural, cercana y útil.
+2. Ayudar al usuario a gestionar sus tareas y archivos cuando lo necesite.
+
+${customInstruction.trim() || ''} 
+
+${!isOcrCommand ? `
+IMPORTANTE:
+- No uses formato Markdown. No uses asteriscos (*), ni negritas, ni cursivas.
+- Responde en texto plano.
+- Evita presentarte desde cero en cada mensaje. No repitas "Hola, soy Gestor IA" en cada respuesta.
+
+SI EL USUARIO:
+- Habla de carpetas, archivos, PDFs, resúmenes, WhatsApp, recordatorios o la aplicación:
+   - Usa la información disponible para darle contexto.
+   - Propón acciones útiles (por ejemplo: "podemos crear una carpeta para eso", "puedes subir el archivo y luego te hago un resumen").
+- Habla de otros temas (estudio, trabajo, dudas generales, curiosidades, temas random, problemas personales, etc.):
+   - Responde normalmente sobre ese tema.
+   - NO digas que solo puedes hablar de archivos o de la aplicación.
+   - Puedes hacer preguntas de seguimiento cortas para mantener la conversación.
+
+DATOS DEL USUARIO:
+Carpetas: ${foldersList || 'ninguna'}.
+Archivos Recientes: ${filesList || 'ninguno'}.
+
+MANTÉN LA CONVERSACIÓN:
+- Usa el historial anterior para contextualizar tu respuesta.
+- Sé empático y directo. Respuestas de 2 a 6 frases son suficientes.
+- No inventes archivos o carpetas que no estén en la lista.
+` : ''}
+`.trim();
+
+  let messagesForApi;
+  // Usamos la copia 'historyToProcess' que tiene el mensaje de OCR reemplazado si aplica
+  messagesForApi = historyToProcess.map((msg) => {
+    const content = String(msg.text ?? msg.content ?? '');
+    const sender = (msg.sender || msg.role || '').toLowerCase();
+    const role =
+      sender === 'user' || sender === 'me'
+        ? 'user'
+        : sender === 'assistant' || sender === 'bot' || sender === 'ai'
+        ? 'assistant'
+        : 'user'; 
+
+    return { role, content };
+  });
+
+  // Insertamos el mensaje de sistema al principio
+  messagesForApi.unshift({ role: 'system', content: systemInstruction });
+
+  try {
+    const { data } = await axios.post(
+      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
+      {
+        model: 'jamba-large',
+        messages: messagesForApi,
+        max_tokens: 300,
+        temperature: 0.7,
+      },
+      { headers: ai21Headers() }
+    );
+
+    const raw =
+      data?.choices?.[0]?.message?.content?.trim() ||
+      'Lo siento, tuve un problema para generar una respuesta coherente.';
+
+    // Quitamos todos los asteriscos para evitar formato raro en el chat
+    return stripAsterisks(raw);
+  } catch (error) {
+    console.error(
+      'Error en generateConversationalResponse:',
+      error?.response?.data?.detail || error?.message
+    );
+    return 'Tuve un problema para conectarme con mi cerebro de IA. Inténtalo de nuevo.';
+  }
+};
+
+/* ==============================
+ * FUNCIÓN: Buscar imagen (Unsplash)
+ * ============================== */
+async function fetchRelevantImage(topic) {
+  if (!UNSPLASH_ACCESS_KEY) {
+    console.log('No se ha configurado la API Key de Unsplash.');
+    return null;
+  }
+  try {
+    const { data } = await axios.get('[https://api.unsplash.com/search/photos](https://api.unsplash.com/search/photos)', {
+      params: {
+        query: topic,
+        per_page: 1,
+        orientation: 'landscape',
+        order_by: 'relevant',
+      },
+      headers: { Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}` },
+    });
+    return data?.results?.[0]?.urls?.regular || null;
+  } catch (error) {
+    console.error('Error al buscar imagen en Unsplash:', error.message);
+    return null;
+  }
+}
+
+/* ======================================================
+ * FUNCIÓN 3: Generador de Contenido para PDF (mejorada)
+ * ====================================================== */
+exports.generatePdfContent = async (topic, userName) => {
+  const today = new Date().toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  // PROMPT 1: Generar estructura + imageQuery
+  const structurePrompt = `
+Tu tarea es generar la estructura de un informe sobre "${topic}". Responde SIEMPRE y ÚNICAMENTE con un objeto JSON.
+El JSON debe tener:
+1. "titulo": El título oficial del informe.
+2. "introduccion": Un párrafo corto de introducción.
+3. "secciones": Un array de objetos, donde cada objeto solo tiene "subtitulo". (Mínimo 3 secciones)
+4. "conclusion": Un párrafo corto de conclusión.
+5. "imageQuery": Una frase corta y específica, en INGLÉS, para buscar la imagen de portada en Unsplash.
+
+REGLAS DE imageQuery:
+- La consulta debe ser ESPECÍFICA al tema.
+- Si el tema es un dibujo animado (como 'Ben 10', 'Dragon Ball'), pide por el personaje o el logo. (Ej: "Ben 10 cartoon character", "Dragon Ball Z Goku")
+- Si el tema es un hecho histórico (como 'Segunda Guerra Mundial'), pide una foto histórica. (Ej: "World War 2 historical photo")
+- Si el tema es general (como 'El Océano'), usa una consulta descriptiva. (Ej: "deep ocean")
+- NO uses términos abstractos como 'concept' o 'art'.
+`.trim();
+
+  let structure = null;
+
+  try {
+    const { data } = await axios.post(
+      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
+      {
+        model: 'jamba-large',
+        messages: [{ role: 'user', content: structurePrompt }],
+        max_tokens: 1500,
+        temperature: 0.5,
+      },
+      { headers: ai21Headers() }
+    );
+
+    let content = data?.choices?.[0]?.message?.content?.trim() || '{}';
+    content = extractFirstJson(content);
+
+    try {
+      structure = JSON.parse(content);
+    } catch {
+      structure = null;
+    }
+  } catch (e) {
+    console.error('Error al generar la ESTRUCTURA del PDF:', e?.message || e);
+    structure = null;
+  }
+
+  // Asegurar estructura mínima
+  structure = {
+    titulo: structure?.titulo || String(topic || 'Informe'),
+    introduccion: structure?.introduccion || 'Introducción.',
+    secciones:
+      Array.isArray(structure?.secciones) && structure.secciones.length > 0
+        ? structure.secciones
+        : [{ subtitulo: 'Contexto' }, { subtitulo: 'Desarrollo' }, { subtitulo: 'Aplicaciones' }],
+    conclusion: structure?.conclusion || 'Conclusión.',
+    imageQuery: structure?.imageQuery || 'report cover',
+  };
+
+  // PROMPT 2: Generar contenido extenso
+  const contentPrompt = `
+Escribe un informe detallado (mínimo 800 palabras) sobre "${topic}". Usa un tono educativo y fácil de entender.
+Debes seguir esta estructura exacta (desarrolla cada punto):
+- Título: ${structure.titulo}
+- Introducción: ${structure.introduccion}
+- Secciones (desarrolla cada uno de estos subtítulos):
+${structure.secciones.map((s) => `  - ${s.subtitulo}`).join('\n')}
+- Conclusión: ${structure.conclusion}
+- Bibliografía: (Añade una sección de 3 a 5 fuentes realistas o ficticias sobre el tema)
+`.trim();
+
+  try {
+    const { data } = await axios.post(
+      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
+      {
+        model: 'jamba-large',
+        messages: [{ role: 'user', content: contentPrompt }],
+        max_tokens: 3500,
+        temperature: 0.6,
+      },
+      { headers: ai21Headers() }
+    );
+
+    const textContent = data?.choices?.[0]?.message?.content?.trim() || '';
+
+    // Buscar imagen con la consulta generada
+    const imageUrl = await fetchRelevantImage(structure.imageQuery);
+
+    return {
+      textContent,
+      structure,
+      imageUrl,
+      userName,
+      today,
+      topic,
+    };
+  } catch (error) {
+    console.error('Error al generar contenido para PDF:', error?.message || error);
+    return null;
+  }
+};
+
+/* ============================================
+ * FUNCIÓN 4: Chat público (landing/app home)
+ * ============================================ */
+exports.generatePublicResponse = async (message) => {
+  const systemMsg = `
+Eres "Gestor IA", un asistente de IA en la página de inicio de una aplicación.
+
+La aplicación es un gestor de archivos y tareas que se integra con WhatsApp y permite:
+- Subir y organizar archivos (PDFs, imágenes, etc.) en carpetas y subcarpetas.
+- Interactuar con un bot de WhatsApp para crear carpetas, subir archivos y pedir resúmenes.
+- Generar PDFs sobre cualquier tema usando IA.
+- Transcribir audios de WhatsApp a texto.
+
+IMPORTANTE:
+- No uses formato Markdown. No uses asteriscos (*), ni negritas, ni cursivas.
+- Responde en texto plano.
+`.trim();
+
+  const prompt = `
+Usuario: "${String(message || '')}"
+
+Responde de forma amable y natural. 
+Si pregunta por la app o funciones, explícalas.
+Si pregunta por otros temas, responde normalmente sobre ese tema.
+`.trim();
+
+  try {
+    const { data } = await axios.post(
+      '[https://api.ai21.com/studio/v1/chat/completions](https://api.ai21.com/studio/v1/chat/completions)',
+      {
+        model: 'jamba-large',
+        messages: [
+          { role: 'system', content: systemMsg },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 250,
+        temperature: 0.7,
+      },
+      { headers: ai21Headers() }
+    );
+
+    const raw =
+      data?.choices?.[0]?.message?.content?.trim() ||
+      'Lo siento, no entendí la pregunta, ¿puedes reformularla?';
+
+    return stripAsterisks(raw);
+  } catch (error) {
+    console.error('Error en el chat público de IA:', error?.message || error);
+    return 'Tuve un problema para conectarme con mi cerebro de IA.';
+  }
 };
