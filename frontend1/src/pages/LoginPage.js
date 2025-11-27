@@ -1,119 +1,184 @@
+/* eslint-disable react/prop-types */
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import authService from '../services/authService';
 import { UserContext } from '../App';
-import '../styles/AuthForm.css';
+import '../styles/AuthForm.css'; 
 import axios from 'axios';
 
-// URL del backend para el chat público
-const RENDER_BACKEND_URL = 'https://gestor-tareas-backend-11hi.onrender.com'; // Asegúrate de que esta URL es correcta
+// URL del backend
+const RENDER_BACKEND_URL = 'https://gestor-tareas-backend-11hi.onrender.com';
 const CHAT_API_URL = `${RENDER_BACKEND_URL}/api/public-chat`;
 
-// --- Componente NavBar (USADO EN LOGIN PAGE) ---
+/* =========================================
+   NAVBAR (CON HAMBURGUESA FUNCIONAL)
+   ========================================= */
 const NavBar = ({ scrollToLogin }) => {
   const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => {
-      const isScrolled = window.scrollY > 50;
-      if (isScrolled !== scrolled) {
-        setScrolled(isScrolled);
-      }
-    };
-
+    const handleScroll = () => setScrolled(window.scrollY > 50);
     document.addEventListener('scroll', handleScroll, { passive: true });
-    return () => {
-      document.removeEventListener('scroll', handleScroll);
-    };
-  }, [scrolled]);
+    return () => document.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const toggleMenu = () => setMobileMenuOpen(!mobileMenuOpen);
+  const closeMenu = () => setMobileMenuOpen(false);
 
   return (
-    <nav className={`landing-navbar ${scrolled ? 'scrolled' : ''}`}>
-      <div className="navbar-logo">
-        <Link to="/">
-          <img
-            src="https://i.ibb.co/G4JcrC0v/852ae06c-511e-4480-8441-afd340897585.png"
-            alt="Gesia AI"
-            className="navbar-logo-img"
-          />
-        </Link>
-      </div>
+    <>
+      <div className={`nav-overlay ${mobileMenuOpen ? 'open' : ''}`} onClick={closeMenu} />
+      
+      <nav className={`landing-navbar ${scrolled ? 'scrolled' : ''}`}>
+        <div className="navbar-logo">
+          <Link to="/" onClick={closeMenu}>
+            <img src="https://i.ibb.co/G4JcrC0v/852ae06c-511e-4480-8441-afd340897585.png" alt="Gesia AI" className="navbar-logo-img" />
+          </Link>
+        </div>
 
-      <ul className="navbar-links">
-        {/* SUBMENÚ SOBRE NOSOTROS (APUNTA AL ABOUT) */}
-        <li className="has-submenu">
-          <span className="submenu-label">
-            Sobre Nosotros ▾
-          </span>
-          <ul className="submenu">
-            <li>
-              <Link to="/about#about">Visión general</Link>
-            </li>
-            <li>
-              <Link to="/about#vision">Misión & Visión</Link>
-            </li>
-            <li>
-              <Link to="/about#timeline">Historia</Link>
-            </li>
-            <li>
-              <Link to="/about#team">Comunidad</Link>
-            </li>
-            <li>
-              <Link to="/about#faq">FAQ</Link>
-            </li>
-          </ul>
-        </li>
+        {/* Botón Hamburguesa */}
+        <button className={`mobile-toggle ${mobileMenuOpen ? 'open' : ''}`} onClick={toggleMenu} aria-label="Menu">
+          <span></span><span></span><span></span>
+        </button>
 
-        <li>
-          <a href="#whatsapp">Características</a>
-        </li>
-
-        {/* Scroll al login en la misma landing */}
-        <li>
-          <a href="#login-section" onClick={scrollToLogin}>
-            Empezar Ahora
-          </a>
-        </li>
-      </ul>
-    </nav>
+        {/* Links de Navegación */}
+        <ul className={`navbar-links ${mobileMenuOpen ? 'open' : ''}`}>
+          <li className="has-submenu">
+            <span className="submenu-label">Sobre Nosotros <i className="fas fa-chevron-down" style={{ fontSize: '0.8rem', marginLeft: '5px' }}></i></span>
+            <ul className="submenu">
+              <li><Link to="/about#about" onClick={closeMenu}>Visión general</Link></li>
+              <li><Link to="/about#vision" onClick={closeMenu}>Misión</Link></li>
+              <li><Link to="/about#team" onClick={closeMenu}>Equipo</Link></li>
+            </ul>
+          </li>
+          
+          <li>
+            <a href="#features" onClick={(e) => {
+              e.preventDefault();
+              const el = document.getElementById('features');
+              if(el) el.scrollIntoView({ behavior: 'smooth' });
+              closeMenu();
+            }}>Características</a>
+          </li>
+          
+          <li>
+            <a href="#login-section" onClick={(e) => { 
+                scrollToLogin(e); 
+                closeMenu(); 
+            }} className="nav-cta">
+                Empezar
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </>
   );
 };
 
-// --- Componente del Chatbot de IA Público ---
+/* =========================================
+   CARRUSEL (CON FLECHAS Y DOTS)
+   ========================================= */
+const FeatureCarousel = () => {
+  const slides = [
+    {
+      id: 1,
+      title: "Integración WhatsApp",
+      text: "Envía audios, fotos o documentos a tu chat y la IA los organiza automáticamente en tu nube. Olvídate de subir archivos manualmente.",
+      img: "https://i.ibb.co/KzSCMsZS/unnamed.jpg", 
+      icon: "fab fa-whatsapp"
+    },
+    {
+      id: 2,
+      title: "Gestión de Archivos",
+      text: "Tu dashboard centralizado. Crea carpetas, mueve documentos y mantén todo ordenado sin esfuerzo. Acceso seguro desde cualquier lugar.",
+      img: "https://i.ibb.co/8D7gffDv/Chicos-viendo-el-programa.png",
+      icon: "fas fa-folder-open"
+    },
+    {
+      id: 3,
+      title: "Inteligencia Artificial",
+      text: "No solo guardamos tus archivos, los entendemos. Pide resúmenes de PDFs, transcripciones de audio o análisis de datos al instante.",
+      img: "https://i.ibb.co/4wSLZnbB/Gemini-Generated-Image-e1vynee1vynee1vy.png",
+      icon: "fas fa-brain"
+    }
+  ];
+
+  const [current, setCurrent] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+
+  const nextSlide = () => setCurrent(current === slides.length - 1 ? 0 : current + 1);
+  const prevSlide = () => setCurrent(current === 0 ? slides.length - 1 : current - 1);
+
+  // Auto-play
+  useEffect(() => {
+    if (isPaused) return;
+    const interval = setInterval(() => { nextSlide(); }, 6000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line
+  }, [isPaused, current]);
+
+  return (
+    <div 
+      className="carousel-section" 
+      id="features"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
+      <div className="carousel-container">
+        <button className="carousel-arrow left" onClick={prevSlide}>&#10094;</button>
+
+        <div className="carousel-content-wrapper">
+          <div className="carousel-badge">POTENCIA TU FLUJO</div>
+          <h2 key={`h2-${current}`} className="fade-in-text">
+            <i className={slides[current].icon}></i> {slides[current].title}
+          </h2>
+          <p key={`p-${current}`} className="fade-in-text">{slides[current].text}</p>
+          
+          <div className="carousel-dots">
+            {slides.map((_, idx) => (
+              <span key={idx} className={`dot ${current === idx ? 'active' : ''}`} onClick={() => setCurrent(idx)}></span>
+            ))}
+          </div>
+        </div>
+
+        <div className="carousel-image-wrapper">
+          <div className="image-overlay-gradient"></div>
+          <img src={slides[current].img} alt="Feature" className="carousel-img fade-in-img" key={`img-${current}`}/>
+        </div>
+
+        <button className="carousel-arrow right" onClick={nextSlide}>&#10095;</button>
+      </div>
+    </div>
+  );
+};
+
+/* =========================================
+   CHATBOT (SVG MANUAL PARA EL AVIÓN)
+   ========================================= */
 const PublicChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { sender: 'bot', text: '¡Hola! Soy Gestor IA. ¿Tienes preguntas sobre la aplicación? (Ej: ¿Qué hace esta página?)' }
-  ]);
+  const [messages, setMessages] = useState([{ sender: 'bot', text: '¡Hola! Soy Gestor IA. 🤖 ¿En qué te ayudo hoy?' }]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef(null);
+  const endRef = useRef(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(scrollToBottom, [messages]);
+  useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages, isOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
-
-    const userMessage = { sender: 'user', text: input };
-    setMessages(prev => [...prev, userMessage]);
+    
+    setMessages(prev => [...prev, { sender: 'user', text: input }]);
+    const currentInput = input;
     setInput('');
     setIsLoading(true);
 
     try {
-      // Este endpoint NO requiere autenticación
-      const response = await axios.post(CHAT_API_URL, { message: input });
-      const botMessage = { sender: 'bot', text: response.data.reply };
-      setMessages(prev => [...prev, botMessage]);
-    } catch (error) {
-      setMessages(prev => [
-        ...prev,
-        { sender: 'bot', text: 'Lo siento, no puedo responder ahora mismo.' }
-      ]);
+      const res = await axios.post(CHAT_API_URL, { message: currentInput });
+      setMessages(prev => [...prev, { sender: 'bot', text: res.data.reply }]);
+    } catch {
+      setMessages(prev => [...prev, { sender: 'bot', text: 'Error de conexión. Intenta más tarde.' }]);
     } finally {
       setIsLoading(false);
     }
@@ -121,256 +186,154 @@ const PublicChatbot = () => {
 
   if (!isOpen) {
     return (
-      <button className="chat-bubble" onClick={() => setIsOpen(true)} aria-label="Abrir chat de ayuda">
-        🤖
-      </button>
+      <div className="chat-trigger-container">
+        {/* TOOLTIP CON TEXTO ANIMADO */}
+        <div className="chat-tooltip-wrapper">
+           <span className="tooltip-text t-1">👋 Habla conmigo</span>
+           <span className="tooltip-text t-2">🤖 Resuelvo dudas</span>
+        </div>
+        
+        <button className="chat-bubble pulse-animation" onClick={() => setIsOpen(true)}>
+          🤖
+        </button>
+      </div>
     );
   }
 
   return (
     <div className="chat-window">
       <div className="chat-header">
-        <h3>Asistente IA</h3>
-        <button onClick={() => setIsOpen(false)} aria-label="Cerrar chat">×</button>
+        <div className="chat-header-info">
+          <span className="status-dot"></span>
+          <h3>Asistente IA</h3>
+        </div>
+        <button onClick={() => setIsOpen(false)} className="close-chat">×</button>
       </div>
+      
       <div className="chat-messages">
-        {messages.map((msg, index) => (
-          <div key={index} className={`message ${msg.sender}`}>
-            {msg.text}
-          </div>
-        ))}
-        {isLoading && <div className="message bot typing">...</div>}
-        <div ref={messagesEndRef} />
+        {messages.map((m, i) => <div key={i} className={`message ${m.sender}`}>{m.text}</div>)}
+        {isLoading && <div className="message bot typing"><span>.</span><span>.</span><span>.</span></div>}
+        <div ref={endRef} />
       </div>
+      
+      {/* INPUT CON BOTÓN SVG (SVG MANUAL) */}
       <form onSubmit={handleSubmit} className="chat-input-form">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Escribe tu pregunta..."
-          disabled={isLoading}
-          aria-label="Escribe tu pregunta"
+        <input 
+            value={input} 
+            onChange={e => setInput(e.target.value)} 
+            placeholder="Escribe aquí..." 
+            disabled={isLoading}
         />
-        <button type="submit" aria-label="Enviar mensaje">➤</button>
+        <button type="submit" disabled={!input.trim()} className="send-btn">
+          {/* SVG del Avión de papel (Material Design) */}
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+          </svg>
+        </button>
       </form>
     </div>
   );
 };
 
-// --- Componente Principal de la Página de Login/Landing ---
+/* =========================================
+   PAGE PRINCIPAL (LOGIN)
+   ========================================= */
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const { setUser } = useContext(UserContext);
   const navigate = useNavigate();
-
-  // Referencias para las secciones de scroll
-  const [visibleSection, setVisibleSection] = useState('whatsapp');
-  const sectionsRef = useRef([]);
-  const loginSectionRef = useRef(null); // Ref para la sección de login
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            setVisibleSection(entry.target.id);
-          }
-        });
-      },
-      { threshold: 0.6 } // La sección debe estar 60% visible
-    );
-
-    const currentRefs = sectionsRef.current;
-    currentRefs.forEach(section => {
-      if (section) observer.observe(section);
-    });
-
-    // Observar también la sección de login para el navbar
-    if (loginSectionRef.current) observer.observe(loginSectionRef.current);
-
-    return () => {
-      currentRefs.forEach(section => {
-        if (section) observer.unobserve(section);
-      });
-      if (loginSectionRef.current) observer.unobserve(loginSectionRef.current);
-    };
-  }, []);
+  const loginSectionRef = useRef(null);
 
   const scrollToLogin = (e) => {
-    e.preventDefault();
-    if (loginSectionRef.current) {
-      loginSectionRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (e) e.preventDefault();
+    loginSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setMessage('');
-
     try {
-      // authService.login guarda el token y devuelve data del backend
       const data = await authService.login(email, password);
-
-      // Si el backend envía el usuario en la respuesta (authController.login ya lo hace)
-      if (data.user) {
-        setUser(data.user); // incluye foto_perfil_url, whatsapp_number, etc.
-      } else {
-        // Fallback: por si en algún momento no viene user en la respuesta
-        try {
-          const userResponse = await authService.getSelf();
-          setUser(userResponse.data);
-        } catch (innerError) {
-          console.error('Error al obtener usuario con /me:', innerError);
-        }
+      if (data.user) setUser(data.user);
+      else {
+        const me = await authService.getSelf();
+        setUser(me.data);
       }
-
       navigate('/dashboard');
-    } catch (error) {
-      console.error('Error en login:', error);
-      setMessage(error.response?.data?.message || 'Error al iniciar sesión.');
+    } catch (err) {
+      setMessage(err.response?.data?.message || 'Error al iniciar sesión. Verifica tus credenciales.');
     }
   };
 
   return (
     <div className="landing-container">
-      <NavBar scrollToLogin={scrollToLogin} /> {/* <-- Navbar aquí */}
+      <NavBar scrollToLogin={scrollToLogin} />
 
-      {/* --- SECCIÓN 1: BIENVENIDA (Pantalla completa) --- */}
-      <section
-        className="scroll-section hero-section"
-        style={{ backgroundImage: `url('https://www.telemundo.com/sites/nbcutelemundo/files/mujer-usando-computadora-y-.jpg')` }}
-      >
+      {/* SECCIÓN 1: HERO */}
+      <section className="scroll-area hero-section" style={{ backgroundImage: `url('https://www.telemundo.com/sites/nbcutelemundo/files/mujer-usando-computadora-y-.jpg')` }}>
+        <div className="hero-overlay"></div>
         <div className="hero-content">
-          <h1>Tu Gestor Inteligente de Archivos</h1>
-          <p>
-            Organiza tu vida digital. Sincroniza tus documentos, PDFs e imágenes con tu WhatsApp usando el poder de la IA.
-          </p>
-          <a href="#login-section" onClick={scrollToLogin} className="cta-button">
-            Empezar Ahora
-          </a>
+          <div className="hero-badge">NUEVA GENERACIÓN</div>
+          <h1>Tu Gestor Inteligente</h1>
+          <p>Sincroniza tus archivos de WhatsApp, organízalos y analízalos con el poder de la Inteligencia Artificial.</p>
+          
+          <div className="hero-buttons">
+            <button onClick={scrollToLogin} className="cta-button primary-glow">Empezar Ahora</button>
+            <button 
+                onClick={() => document.getElementById('features').scrollIntoView({ behavior: 'smooth' })} 
+                className="cta-button secondary-outline"
+            >
+                Ver Demo
+            </button>
+          </div>
         </div>
       </section>
 
-      {/* --- CONTENEDOR PARA LA HISTORIA CON SCROLL --- */}
-      <div className="scroll-story-container">
-        {/* --- LADO IZQUIERDO (Texto que cambia) --- */}
-        <div className="story-text-panel">
-          <div className={`feature-text ${visibleSection === 'whatsapp' ? 'visible' : ''}`}>
-            <i className="fab fa-whatsapp story-icon"></i>
-            <h2>Integración Nativa con WhatsApp</h2>
-            <p>
-              Consulta, crea, y gestiona tus archivos usando lenguaje natural. Transcribe audios, genera PDFs y recibe
-              recordatorios, todo desde tu chat.
-            </p>
-          </div>
-          <div className={`feature-text ${visibleSection === 'files' ? 'visible' : ''}`}>
-            <i className="fas fa-archive story-icon"></i>
-            <h2>Gestión Total de Archivos</h2>
-            <p>
-              Tu dashboard centralizado te permite organizar todo en carpetas y subcarpetas. Sube cualquier tipo de
-              archivo de forma segura.
-            </p>
-          </div>
-          <div className={`feature-text ${visibleSection === 'ai' ? 'visible' : ''}`}>
-            <i className="fas fa-brain story-icon"></i>
-            <h2>Poderosa IA a tu Servicio</h2>
-            <p>
-              Genera informes completos con imágenes, obtén resúmenes de tus tareas y mantén conversaciones naturales con
-              un asistente que realmente entiende.
-            </p>
-          </div>
-        </div>
+      {/* SECCIÓN 2: CARRUSEL */}
+      <section className="scroll-area carousel-wrapper">
+        <FeatureCarousel />
+      </section>
 
-        {/* --- LADO DERECHO (Imágenes que cambian) --- */}
-        <div className="story-image-panel">
-          <div className="image-stack">
-            <img
-              src="https://i.ibb.co/KzSCMsZS/unnamed.jpg"
-              alt="Chat de WhatsApp"
-              className={visibleSection === 'whatsapp' ? 'visible' : ''}
-            />
-            <img
-              src="https://i.ibb.co/8D7gffDv/Chicos-viendo-el-programa.png"
-              alt="Gestor de archivos"
-              className={visibleSection === 'files' ? 'visible' : ''}
-            />
-            <img
-              src="https://i.ibb.co/4wSLZnbB/Gemini-Generated-Image-e1vynee1vynee1vy.png"
-              alt="Cerebro de IA"
-              className={visibleSection === 'ai' ? 'visible' : ''}
-            />
-          </div>
-          {/* Referencias invisibles para el Intersection Observer */}
-          <div
-            className="story-trigger"
-            id="whatsapp"
-            ref={el => (sectionsRef.current[0] = el)}
-          ></div>
-          <div
-            className="story-trigger"
-            id="files"
-            ref={el => (sectionsRef.current[1] = el)}
-          ></div>
-          <div
-            className="story-trigger"
-            id="ai"
-            ref={el => (sectionsRef.current[2] = el)}
-          ></div>
-        </div>
-      </div>
-
-      {/* --- SECCIÓN 3: LOGIN --- */}
-      <section
-        id="login-section"
-        className="scroll-section login-form-section"
-        ref={loginSectionRef}
-      >
+      {/* SECCIÓN 3: LOGIN (Glassmorphism Moderno) */}
+      <section id="login-section" className="scroll-area login-full-screen" ref={loginSectionRef}>
+        <div className="login-background-effect"></div>
+        
         <form onSubmit={handleLogin} className="auth-form-landing">
-          <h2>Inicia Sesión</h2>
-          <p>Accede a tu dashboard para gestionar todo tu contenido.</p>
-
-          <div className="input-container">
-            <i className="fas fa-user"></i>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Correo"
-              required
-            />
+          <div className="form-header">
+            <h2>Bienvenido</h2>
+            <p>Ingresa a tu espacio de trabajo</p>
           </div>
-
-          <div className="input-container">
-            <i className="fas fa-lock"></i>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Contraseña"
-              required
-            />
+          
+          <div className="input-group">
+            <div className="input-container">
+              <i className="fas fa-envelope"></i>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Correo electrónico" required />
+            </div>
+            <div className="input-container">
+              <i className="fas fa-lock"></i>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Contraseña" required />
+            </div>
           </div>
 
           <div className="form-options">
-            <label>
-              <input type="checkbox" /> Recuérdame
+            <label className="checkbox-container" style={{display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer'}}>
+              <input type="checkbox" style={{width: 'auto'}} /> Recordarme
             </label>
-            <a href="/forgot-password">¿Olvidaste tu contraseña?</a>
+            <a href="/forgot">¿Recuperar contraseña?</a>
           </div>
-
-          <button type="submit">LOGIN</button>
-
-          {message && <p className="message">{message}</p>}
-
-          <p className="register-link">
-            ¿No tienes cuenta? <Link to="/register">Regístrate</Link>
-          </p>
+          
+          <button type="submit" className="login-btn">INICIAR SESIÓN</button>
+          
+          {message && <p className="message-error">{message}</p>}
+          
+          <div className="register-footer">
+            ¿Aún no tienes cuenta? <Link to="/register">Crear cuenta gratis</Link>
+          </div>
         </form>
       </section>
 
-      {/* --- CHATBOT FLOTANTE --- */}
       <PublicChatbot />
     </div>
   );

@@ -1,0 +1,266 @@
+/* ==========================================================================
+   VARIABLES & RESET (Coincide con Dashboard)
+   ========================================================================== */
+:root {
+  --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  
+  /* Colores */
+  --primary: #007AFF;
+  --primary-dark: #0056b3;
+  --bg-main: #121212;
+  --bg-card: #1E1E1E;
+  --bg-input: #2C2C2C;
+  --text-main: #E0E0E0;
+  --text-muted: #A0A0A0;
+  --border: #333333;
+  
+  /* Efectos */
+  --glass-bg: rgba(30, 30, 30, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --transition: all 0.3s ease;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+a { text-decoration: none; color: inherit; transition: var(--transition); }
+ul { list-style: none; }
+
+/* ==========================================================================
+   NAVBAR (Transparente -> Glass al scroll)
+   ========================================================================== */
+.landing-navbar {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 70px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 5%;
+  z-index: 1000;
+  transition: var(--transition);
+  background: transparent;
+}
+
+/* Estado Scrolled */
+.landing-navbar.scrolled {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  height: 60px; /* Se hace un poco más pequeño */
+}
+
+.navbar-logo a {
+  font-size: 1.5rem; font-weight: 700; color: #fff; letter-spacing: -0.5px;
+}
+
+.navbar-links { display: flex; align-items: center; gap: 2rem; }
+.navbar-links li a { font-size: 0.95rem; color: var(--text-muted); font-weight: 500; }
+.navbar-links li a:hover { color: #fff; }
+
+/* Submenú Dropdown */
+.has-submenu { position: relative; cursor: pointer; color: var(--text-muted); }
+.has-submenu:hover .submenu-label { color: #fff; }
+.submenu {
+  position: absolute; top: 100%; left: 50%; transform: translateX(-50%) translateY(10px);
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px; width: 180px;
+  opacity: 0; visibility: hidden; transition: var(--transition);
+  box-shadow: var(--shadow);
+}
+.has-submenu:hover .submenu { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+.submenu li a { display: block; padding: 8px 12px; border-radius: 6px; color: var(--text-main); }
+.submenu li a:hover { background: var(--bg-input); color: var(--primary); }
+
+/* Botón Login Navbar */
+.navbar-cta {
+  background: var(--primary); color: #fff !important;
+  padding: 0.5rem 1.2rem; border-radius: 50px; font-weight: 600 !important;
+  box-shadow: 0 4px 15px rgba(0, 122, 255, 0.3);
+}
+.navbar-cta:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 122, 255, 0.5); }
+
+/* ==========================================================================
+   HERO SECTION
+   ========================================================================== */
+.hero-section {
+  height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  background-size: cover; background-position: center; background-attachment: fixed;
+  position: relative;
+  text-align: center; padding: 0 20px;
+}
+
+/* Overlay Oscuro para leer texto */
+.hero-section::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(18,18,18,0.3), rgba(18,18,18,1));
+  z-index: 1;
+}
+
+.hero-content { position: relative; z-index: 2; max-width: 800px; animation: fadeInUp 1s ease-out; }
+.hero-content h1 {
+  font-size: 3.5rem; font-weight: 800; margin-bottom: 1.5rem;
+  background: linear-gradient(90deg, #fff, #a0cfff); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero-content p { font-size: 1.2rem; color: var(--text-muted); margin-bottom: 2.5rem; }
+
+.hero-actions { display: flex; gap: 15px; justify-content: center; }
+
+.cta-button {
+  padding: 0.8rem 2rem; border-radius: 50px; border: none; font-size: 1rem; font-weight: 600; cursor: pointer; transition: var(--transition);
+  background: var(--primary); color: white; display: inline-block;
+}
+.cta-button:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,122,255,0.3); }
+
+/* ==========================================================================
+   SECCIONES GENERALES & ANIMACIONES
+   ========================================================================== */
+.scroll-section {
+  opacity: 0; transform: translateY(30px); transition: opacity 0.8s ease, transform 0.8s ease;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 60vh; /* Altura mínima para que se vea bien */
+}
+.scroll-section.visible { opacity: 1; transform: translateY(0); }
+
+h2 { font-size: 2.5rem; margin-bottom: 1rem; color: #fff; }
+.about-block { transition: var(--transition); }
+.about-block:hover { transform: translateY(-5px); border-color: var(--primary) !important; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.about-block h3 { color: var(--primary); margin-bottom: 10px; font-size: 1.5rem; }
+.about-block p { color: var(--text-muted); }
+
+/* ==========================================================================
+   FEATURES (TARJETAS IDÉNTICAS AL DASHBOARD)
+   ========================================================================== */
+.home-card-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem; width: 100%; max-width: 1200px; margin: 0 auto;
+}
+
+.home-card {
+  height: 250px; border-radius: 16px; overflow: hidden; position: relative;
+  border: 1px solid var(--border); cursor: default;
+}
+.home-card img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease; }
+.home-card:hover img { transform: scale(1.05); }
+
+/* Overlay siempre visible un poco oscuro, más oscuro al hover */
+.home-card::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.1));
+}
+
+.card-footer {
+  position: absolute; bottom: 0; left: 0; width: 100%; padding: 1.5rem; z-index: 2;
+}
+.card-footer h4 { color: #fff; font-size: 1.2rem; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+
+/* Overlay de texto al hover */
+.card-overlay {
+  position: absolute; inset: 0; z-index: 3;
+  display: flex; align-items: center; justify-content: center; padding: 20px; text-align: center;
+  background: rgba(0, 122, 255, 0.4); /* Azul glass */
+  backdrop-filter: blur(8px); opacity: 0; transition: var(--transition);
+}
+.home-card:hover .card-overlay { opacity: 1; }
+.card-overlay h3 { color: #fff; font-size: 1.1rem; font-weight: 600; }
+
+/* ==========================================================================
+   TIMELINE (HISTORIA)
+   ========================================================================== */
+.timeline-list { position: relative; border-left: 2px solid var(--border); margin-left: 13px !important; }
+.timeline-list li { position: relative; padding-left: 30px; }
+
+.timeline-badge {
+  position: absolute; left: -13px; top: 0;
+  box-shadow: 0 0 0 4px var(--bg-main); /* Borde falso para separar de la línea */
+}
+
+.timeline-content { text-align: left; }
+.timeline-content h4 { color: #fff; font-size: 1.2rem; margin-bottom: 5px; }
+.timeline-content p { color: var(--text-muted); font-size: 0.95rem; }
+
+/* ==========================================================================
+   TEAM TAGS & FAQ
+   ========================================================================== */
+.team-tags span {
+  background: rgba(255,255,255,0.05); color: var(--primary);
+  padding: 8px 16px; border-radius: 50px; font-size: 0.9rem; border: 1px solid var(--border);
+  transition: var(--transition);
+}
+.team-tags span:hover { background: var(--primary); color: #fff; border-color: var(--primary); cursor: default; }
+
+.faq-item {
+  background: var(--bg-card); border: 1px solid var(--border);
+  padding: 20px; border-radius: 12px; text-align: left; max-width: 800px; width: 100%; margin: 0 auto;
+  transition: var(--transition);
+}
+.faq-item:hover { border-color: var(--text-muted); }
+.faq-item h3 { font-size: 1.1rem; color: #fff; margin-bottom: 8px; }
+.faq-item p { color: var(--text-muted); margin: 0; font-size: 0.95rem; }
+
+/* ==========================================================================
+   CHATBOT FLOTANTE
+   ========================================================================== */
+.chat-bubble {
+  position: fixed; bottom: 30px; right: 30px;
+  width: 60px; height: 60px; border-radius: 50%;
+  background: var(--primary); border: none; cursor: pointer;
+  font-size: 2rem; color: #fff; box-shadow: 0 10px 30px rgba(0, 122, 255, 0.4);
+  z-index: 2000; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  display: flex; align-items: center; justify-content: center;
+}
+.chat-bubble:hover { transform: scale(1.1); }
+
+.chat-window {
+  position: fixed; bottom: 100px; right: 30px; width: 350px; height: 500px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column; overflow: hidden; z-index: 2000;
+  animation: slideUp 0.3s ease-out;
+}
+
+.chat-header {
+  background: var(--primary); padding: 15px; display: flex; justify-content: space-between; align-items: center;
+  color: #fff;
+}
+.chat-header h3 { margin: 0; font-size: 1rem; }
+.chat-header button { background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; }
+
+.chat-messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: var(--bg-main); }
+.message { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 0.9rem; line-height: 1.4; }
+.message.bot { background: var(--bg-input); color: var(--text-main); align-self: flex-start; border-bottom-left-radius: 2px; }
+.message.user { background: var(--primary); color: #fff; align-self: flex-end; border-bottom-right-radius: 2px; }
+
+.chat-input-form { display: flex; padding: 10px; border-top: 1px solid var(--border); background: var(--bg-card); }
+.chat-input-form input {
+  flex: 1; background: var(--bg-main); border: 1px solid var(--border); color: #fff;
+  padding: 10px; border-radius: 20px; font-size: 0.9rem; outline: none;
+}
+.chat-input-form button {
+  background: transparent; border: none; color: var(--primary); font-size: 1.2rem; margin-left: 10px; cursor: pointer;
+}
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+@media (max-width: 768px) {
+  .hero-content h1 { font-size: 2.5rem; }
+  .navbar-links { display: none; /* Ocultar links en móvil por simplicidad o usar menú hamburguesa */ }
+  .navbar-logo { margin: 0 auto; }
+  .home-card-grid { grid-template-columns: 1fr; }
+  
+  .chat-window { width: 90%; right: 5%; bottom: 90px; }
+  .chat-bubble { bottom: 20px; right: 20px; }
+  
+  .timeline-list { margin-left: 0 !important; }
+}
+
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }

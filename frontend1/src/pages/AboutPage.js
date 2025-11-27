@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
-import '../styles/AuthForm.css';
+import '../styles/AboutPage.css';
 
 const RENDER_BACKEND_URL = 'https://gestor-tareas-backend-11hi.onrender.com';
 const CHAT_API_URL = `${RENDER_BACKEND_URL}/api/public-chat`;

@@ -1,8 +1,8 @@
 /* eslint-disable react/prop-types */
-import React, { useState, useEffect, useContext, useMemo } from 'react';
+import React, { useState, useEffect, useContext, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import '../styles/ChatComponent.css'; // <--- AGREGA ESTO SI NO ESTÁ
+import '../styles/ChatComponent.css'; 
 import folderService from '../services/folderService';
 import fileService from '../services/fileService';
 import authService from '../services/authService';
@@ -210,7 +210,7 @@ const translations = {
     deleteTask: 'Delete task',
     updateTaskOk: 'Task updated',
     deleteTaskOk: 'Task deleted',
-    createTasksOk: 'Tasks created',
+    createTasksOk: 'Tareas creadas',
     createTaskOk: 'Task created',
     errorTasks: 'Could not load tasks',
     profile: 'Profile',
@@ -336,6 +336,7 @@ const Breadcrumbs = ({ path, currentFolder, onCrumbClick, t }) => {
   );
 };
 
+/* 🟢 NAVBAR MODIFICADO PARA MÓVIL Y CLIC FUERA DE NOTIFICACIONES */
 const DashboardNavbar = ({
   user,
   language,
@@ -348,6 +349,9 @@ const DashboardNavbar = ({
   hasUnread,
   onToggleNotificationPanel,
   onOpenProfile,
+  onToggleSidebar, 
+  onToggleChat,
+  bellRef // <--- RECIBIMOS LA REFERENCIA DE LA CAMPANA
 }) => {
   const navigate = useNavigate();
   const handleLogout = () => { authService.logout(); navigate('/'); };
@@ -358,6 +362,11 @@ const DashboardNavbar = ({
 
   return (
    <nav className="dashboard-navbar">
+  {/* Botón Hamburguesa (Izquierda) */}
+  <button className="mobile-toggle-btn mobile-menu-btn" onClick={onToggleSidebar} title="Menú">
+     <i className="fas fa-bars"></i>
+  </button>
+
   <div className="navbar-logo">
     <a href="/dashboard">
       <img
@@ -391,7 +400,21 @@ const DashboardNavbar = ({
 
       <div className="navbar-user">
         <LanguageSwitcher language={language} setLanguage={setLanguage} />
-        <div className="notification-bell bell-blue" onClick={onToggleNotificationPanel} title="Notificaciones" role="button" aria-label="Notificaciones">
+        
+        {/* Botón Chat (Móvil) */}
+        <button className="mobile-toggle-btn mobile-chat-btn" onClick={onToggleChat} title="Chat AI">
+           <i className="fas fa-robot"></i>
+        </button>
+
+        {/* CAMPANA CON REFERENCIA */}
+        <div 
+            className="notification-bell bell-blue" 
+            onClick={onToggleNotificationPanel} 
+            title="Notificaciones" 
+            role="button" 
+            aria-label="Notificaciones"
+            ref={bellRef} // <--- REFERENCIA ASIGNADA AQUÍ
+        >
           <svg className="bell-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
             <path d="M12 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 006 14h12a1 1 0 00.707-1.707L18 11.586V8a6 6 0 00-6-6zm0 20a3 3 0 002.995-2.824L15 19h-6a3 3 0 002.824 2.995L12 22z"></path>
           </svg>
@@ -731,6 +754,7 @@ const UserSearchResults = ({ query, results, onOpenChat }) => (
   </div>
 );
 
+/* 🟢 COMPONENTE FALTANTE RESTAURADO */
 const NotificationPanel = ({ notifications, onOpenChat, onClearNotifications }) => (
   <div className="notification-panel">
     <div className="notification-header">
@@ -783,14 +807,45 @@ const DashboardPage = () => {
   const [notifications, setNotifications] = useState([]);
   const [hasUnread, setHasUnread] = useState(false);
 
+  // 1. CREAMOS LAS REFERENCIAS PARA CLIC FUERA
+  const notificationPanelRef = useRef(null);
+  const bellRef = useRef(null);
+
+  // 2. DETECTAR CLIC AFUERA PARA CERRAR NOTIFICACIONES
+  useEffect(() => {
+    function handleClickOutside(event) {
+      // Si el panel está abierto Y
+      // El clic NO fue dentro del panel Y
+      // El clic NO fue en la campanita
+      if (
+        isNotificationOpen && 
+        notificationPanelRef.current && 
+        !notificationPanelRef.current.contains(event.target) &&
+        bellRef.current &&
+        !bellRef.current.contains(event.target)
+      ) {
+        setIsNotificationOpen(false);
+      }
+    }
+    // Escuchar toques o clics en todo el documento
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isNotificationOpen]);
+
   // TAREAS
   const [tasks, setTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
-  
+   
   // 🟢 ESTADO DEL TOGGLE CHAT/GESIA
   const [chatTab, setChatTab] = useState('gesia');
+
+  // 🟢 ESTADOS PARA RESPONSIVE (MÓVIL)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Menú carpetas
+  const [isChatOpen, setIsChatOpen] = useState(false);       // Menú Chat
 
   const { user } = useContext(UserContext);
 
@@ -846,7 +901,7 @@ const DashboardPage = () => {
     if (user) {
       // 🟢 SIEMPRE CARGAR LA RAIZ PARA EL SIDEBAR
       loadFolders(null);
-      
+       
       if (currentFolder) {
          loadFiles(currentFolder.id);
       } else {
@@ -943,6 +998,8 @@ const DashboardPage = () => {
     setCurrentFolder(folder);
     setMainView('home');
     setSearchTerm('');
+    // 🟢 En móvil, cerrar sidebar al hacer clic
+    setIsSidebarOpen(false);
   };
   const handleGoBack = () => {
     const newPath = [...path]; const parent = newPath.pop();
@@ -954,7 +1011,7 @@ const DashboardPage = () => {
     if (folder === null) { setPath([]); setCurrentFolder(null); setMainView('home'); }
     else { const newPath = path.slice(0, index); setPath(newPath); setCurrentFolder(folder); }
   };
-  
+   
   // 🟢 FUNCIÓN DE VOZ CORREGIDA (PLURAL/SINGULAR)
   const handleVoiceFolderOpen = (folderName) => {
     if (!folderName) return;
@@ -971,6 +1028,8 @@ const DashboardPage = () => {
     if (target) {
         showMessage(`📂 Voz: Abriendo "${target.nombre}"...`, 'success');
         handleFolderClick(target); 
+        // 🟢 Asegurar que en móvil se cierre el chat si fue por voz
+        setIsChatOpen(false);
     } else {
         showMessage(`⚠️ No veo la carpeta "${cleanTarget}" aquí.`, 'error');
     }
@@ -1038,7 +1097,7 @@ const DashboardPage = () => {
       setMessage({ text: translations.es.fileUpdated, type:'success' });
     } catch { setMessage({ text: translations.es.errorUpdateFolder, type:'error' }); }
   };
-  const handleDeleteFile = (fileId) => setModalState({ isOpen:true, title: translations.es.deleteFileTitle, message: translations.es.confirmDeleteFile, onConfirm: () => confirmDeleteFile(fileId) });
+  const handleDeleteFile = (fileId) => setModalState({ isOpen:true, title: translations.es.deleteFileTitle, message: translations.es.deleteFileTitle, onConfirm: () => confirmDeleteFile(fileId) });
   const confirmDeleteFile = async (fileId) => {
     try { await fileService.deleteFile(fileId); currentFolder ? loadFiles(currentFolder.id) : loadAllUserFiles(); setMessage({ text: translations.es.fileDeleted, type:'success' }); }
     catch { setMessage({ text: translations.es.errorDeleteFile, type:'error' }); }
@@ -1110,11 +1169,36 @@ const DashboardPage = () => {
       <ConfirmModal isOpen={modalState.isOpen} title={modalState.title} message={modalState.message} onConfirm={modalState.onConfirm} onClose={() => setModalState({ isOpen:false })} t={(k)=>t(k)} />
       {noteModalFile && <NoteModal file={noteModalFile} onClose={() => setNoteModalFile(null)} onSave={handleSaveNote} t={(k)=>t(k)} />}
 
-      <DashboardNavbar user={user} language={language} setLanguage={setLanguage} t={(k)=>t(k)} searchTerm={searchTerm} setSearchTerm={setSearchTerm} searchFilter={searchFilter} setSearchFilter={setSearchFilter} hasUnread={hasUnread} onToggleNotificationPanel={toggleNotificationPanel} onOpenProfile={() => setMainView('profile')} />
+      <DashboardNavbar 
+        user={user} 
+        language={language} 
+        setLanguage={setLanguage} 
+        t={(k)=>t(k)} 
+        searchTerm={searchTerm} 
+        setSearchTerm={setSearchTerm} 
+        searchFilter={searchFilter} 
+        setSearchFilter={setSearchFilter} 
+        hasUnread={hasUnread} 
+        onToggleNotificationPanel={toggleNotificationPanel} 
+        onOpenProfile={() => setMainView('profile')} 
+        // PROPS NUEVAS PARA MÓVIL
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        onToggleChat={() => setIsChatOpen(!isChatOpen)}
+        // PROP NUEVA: REFERENCIA PARA LA CAMPANA
+        bellRef={bellRef}
+      />
 
       <div className="dashboard-body">
-        {/* Sidebar carpetas - 🟢 SIEMPRE MUESTRA RAÍZ */}
-        <div className="sidebar">
+        {/* 🟢 OVERLAY PARA CERRAR MENÚS AL CLIC FUERA */}
+        {(isSidebarOpen || isChatOpen) && (
+            <div 
+                className="mobile-overlay" 
+                onClick={() => { setIsSidebarOpen(false); setIsChatOpen(false); }}
+            ></div>
+        )}
+
+        {/* Sidebar carpetas - 🟢 AGREGADA CLASE DINÁMICA 'mobile-active' */}
+        <div className={`sidebar ${isSidebarOpen ? 'mobile-active' : ''}`}>
           <h3>{t('myFolders')}</h3>
           {path.length > 0 && (
             <button onClick={handleGoBack} className="back-button">
@@ -1216,56 +1300,57 @@ const DashboardPage = () => {
           )}
         </div>
 
-       {/* 🟢 CHAT SIDEBAR: LÓGICA CENTRALIZADA EN EL DASHBOARD 🟢 */}
-<div className="chat-sidebar">
-  {/* Usamos la clase 'chat-container' para aprovechar tus estilos existentes */}
-  <div className="chat-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-    
-    {/* HEADER DE PESTAÑAS (Controlado por Dashboard) */}
-    <div className="chat-header">
-      <button 
-        className={`tab-button ${chatTab === 'chat' ? 'active' : ''}`} 
-        onClick={() => setChatTab('chat')}
-      >
-        Chat AI
-      </button>
-      <button 
-        className={`tab-button ${chatTab === 'gesia' ? 'active' : ''}`} 
-        onClick={() => setChatTab('gesia')}
-      >
-        Gesia AI
-      </button>
-    </div>
+       {/* 🟢 CHAT SIDEBAR: AGREGADA CLASE DINÁMICA 'mobile-active' */}
+        <div className={`chat-sidebar ${isChatOpen ? 'mobile-active' : ''}`}>
+          <div className="chat-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            
+            {/* Header con botón cerrar para móvil */}
+            <div className="chat-header">
+              <button 
+                className={`tab-button ${chatTab === 'chat' ? 'active' : ''}`} 
+                onClick={() => setChatTab('chat')}
+              >
+                Chat AI
+              </button>
+              <button 
+                className={`tab-button ${chatTab === 'gesia' ? 'active' : ''}`} 
+                onClick={() => setChatTab('gesia')}
+              >
+                Gesia AI
+              </button>
+            </div>
 
-    {/* CUERPO: Renderizado Condicional */}
-    <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-      {chatTab === 'chat' ? (
-        <ChatComponent 
-          onReloadFolders={() => loadFolders(null)}
-          onReloadFiles={() => { currentFolder ? loadFiles(currentFolder.id) : loadAllUserFiles(); }}
-        />
-      ) : (
-        <div className="panel gesia-panel" style={{ height: '100%' }}>
-          <Gesia 
-            onReloadFolders={() => loadFolders(null)}
-            onReloadFiles={() => { currentFolder ? loadFiles(currentFolder.id) : loadAllUserFiles(); }}
-            onOpenFolder={handleVoiceFolderOpen}
-          />
+            <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+              {chatTab === 'chat' ? (
+                <ChatComponent 
+                  onReloadFolders={() => loadFolders(null)}
+                  onReloadFiles={() => { currentFolder ? loadFiles(currentFolder.id) : loadAllUserFiles(); }}
+                />
+              ) : (
+                <div className="panel gesia-panel" style={{ height: '100%' }}>
+                  <Gesia 
+                    onReloadFolders={() => loadFolders(null)}
+                    onReloadFiles={() => { currentFolder ? loadFiles(currentFolder.id) : loadAllUserFiles(); }}
+                    onOpenFolder={handleVoiceFolderOpen}
+                  />
+                </div>
+              )}
+            </div>
+
+          </div>
         </div>
-      )}
-    </div>
-
-  </div>
-</div>
 
       </div>
 
+      {/* AQUÍ ESTÁ EL CAMBIO IMPORTANTE PARA EL PANEL DE NOTIFICACIONES */}
       {isNotificationOpen && (
-        <NotificationPanel
-          notifications={notifications}
-          onOpenChat={handleOpenChat}
-          onClearNotifications={handleClearNotifications}
-        />
+        <div ref={notificationPanelRef} style={{ position: 'absolute', zIndex: 6000, top: 0, right: 0 }}>
+            <NotificationPanel
+              notifications={notifications}
+              onOpenChat={handleOpenChat}
+              onClearNotifications={handleClearNotifications}
+            />
+        </div>
       )}
 
       <div className="chat-dock-container">
