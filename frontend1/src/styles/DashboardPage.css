@@ -316,16 +316,60 @@ a { text-decoration: none; color: var(--primary-color); }
 .home-card--reports { background-image: url("https://i.ibb.co/jkZcxy0F/2c19f447-10f8-4aab-a40a-1c9d49bd259d.png"); }
 
 .home-card--white {
-  background: var(--bg-content); cursor: default; display: flex; flex-direction: column;
-  border: 1px solid var(--border-color); padding-bottom: 1rem;
+  background: var(--bg-content);
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+  /* === CAMBIO AÑADIDO A CONTINUACIÓN === */
+  justify-content: flex-start; /* Esto empuja el contenido al inicio (arriba) */
+  /* ===================================== */
+  border: 1px solid var(--border-color);
+  padding: 0.0rem 1rem 1rem 1rem; /* Mucho menos padding arriba (0.25rem) */
+  font-size: 0.0rem; /* texto más chico sin amontonarse */
 }
-.home-card--white::after, .home-card--white::before, .home-card--white .card-overlay { display: none !important; }
-.home-card--white:hover { transform: none; border-color: var(--border-color); }
-.home-card--white .card-footer { position: relative; padding: 1.5rem; z-index: 1; background: transparent; }
-.home-card--white .card-icon { position: absolute; top: 1rem; right: 1rem; color: var(--font-color-light); font-size: 1.5rem; z-index: 1; background: transparent; padding: 0; }
-.home-card--white input, .home-card--white textarea { background: var(--bg-input); color: var(--font-color); border: 1px solid var(--border-color); width: 100%; }
-.home-card--white input:focus, .home-card--white textarea:focus { border-color: var(--primary-color); }
 
+.home-card--white::after,
+.home-card--white::before,
+.home-card--white .card-overlay {
+  display: none !important;
+}
+
+.home-card--white:hover {
+  transform: none;
+  border-color: var(--border-color);
+}
+
+.home-card--white .card-footer {
+  position: relative;
+  padding: 0.5rem; /* un poco más para mejorar la lectura */
+  z-index: 1;
+  background: transparent;
+}
+
+.home-card--white .card-icon {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  color: var(--font-color-light);
+  font-size: 1.3rem; /* apenas más chico si quieres */
+  z-index: 1;
+  background: transparent;
+  padding: 0;
+}
+
+.home-card--white input,
+.home-card--white textarea {
+  background: var(--bg-input);
+  color: var(--font-color);
+  border: 1px solid var(--border-color);
+  width: 100%;
+  font-size: 0.85rem; /* tamaño alineado con el resto */
+}
+
+.home-card--white input:focus,
+.home-card--white textarea:focus {
+  border-color: var(--primary-color);
+}
 /* ==========================================================================
    10. ALERTAS TIPO TOAST
    ========================================================================== */

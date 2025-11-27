@@ -226,27 +226,6 @@ h2 { font-size: 2.5rem; margin-bottom: 1rem; color: #fff; }
   animation: slideUp 0.3s ease-out;
 }
 
-.chat-header {
-  background: var(--primary); padding: 15px; display: flex; justify-content: space-between; align-items: center;
-  color: #fff;
-}
-.chat-header h3 { margin: 0; font-size: 1rem; }
-.chat-header button { background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; }
-
-.chat-messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: var(--bg-main); }
-.message { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 0.9rem; line-height: 1.4; }
-.message.bot { background: var(--bg-input); color: var(--text-main); align-self: flex-start; border-bottom-left-radius: 2px; }
-.message.user { background: var(--primary); color: #fff; align-self: flex-end; border-bottom-right-radius: 2px; }
-
-.chat-input-form { display: flex; padding: 10px; border-top: 1px solid var(--border); background: var(--bg-card); }
-.chat-input-form input {
-  flex: 1; background: var(--bg-main); border: 1px solid var(--border); color: #fff;
-  padding: 10px; border-radius: 20px; font-size: 0.9rem; outline: none;
-}
-.chat-input-form button {
-  background: transparent; border: none; color: var(--primary); font-size: 1.2rem; margin-left: 10px; cursor: pointer;
-}
-
 /* ==========================================================================
    RESPONSIVE
    ========================================================================== */

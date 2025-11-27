@@ -161,9 +161,18 @@ body {
   flex: 1.2; position: relative; border-radius: 24px; overflow: hidden;
   box-shadow: 0 30px 80px -20px rgba(0,0,0,0.8); border: 1px solid var(--glass-border);
   height: 450px;
+  /* Mantenemos la transición de opacidad para la imagen en sí */
+  transition: opacity 0.6s ease-in-out; 
 }
 .carousel-img { width: 100%; height: 100%; object-fit: cover; }
-.image-overlay-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent 40%); }
+
+/* ❌ ELIMINADO: La regla .image-overlay-gradient para quitar el sombreado */
+/* .image-overlay-gradient { 
+  position: absolute; 
+  inset: 0; 
+  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent 40%); 
+  transition: opacity 0.6s ease-in-out;
+} */
 
 .fade-in-text { animation: fadeIn 0.8s ease-out; }
 .fade-in-img { animation: zoomIn 0.8s ease-out; }
@@ -442,7 +451,11 @@ body {
 /* Keyframes */
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes zoomIn { from { transform: scale(1.1); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+/* MODIFICACIÓN: Ajuste de keyframe para una transición de imagen más suave */
+@keyframes zoomIn { 
+    from { opacity: 0; transform: scale(1.05); } 
+    to { opacity: 1; transform: scale(1); } 
+}
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(0, 122, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0); } }
 @keyframes slideUp { from { transform: translateY(100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
