@@ -11,11 +11,12 @@ const RENDER_BACKEND_URL = 'https://gestor-tareas-backend-11hi.onrender.com';
 const CHAT_API_URL = `${RENDER_BACKEND_URL}/api/public-chat`;
 
 /* =========================================
-   NAVBAR (CON HAMBURGUESA FUNCIONAL)
+   NAVBAR (CON PREFIJOS DE CLASE _dash)
    ========================================= */
 const NavBar = ({ scrollToLogin }) => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [submenuOpen, setSubmenuOpen] = useState(false); // ESTADO SUBMENÚ
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -23,30 +24,54 @@ const NavBar = ({ scrollToLogin }) => {
     return () => document.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const toggleMenu = () => setMobileMenuOpen(!mobileMenuOpen);
-  const closeMenu = () => setMobileMenuOpen(false);
+  const toggleMenu = () => {
+    setMobileMenuOpen(!mobileMenuOpen);
+    if (mobileMenuOpen) setSubmenuOpen(false); 
+  };
+  
+  const closeMenu = () => {
+    setMobileMenuOpen(false);
+    setSubmenuOpen(false); 
+  };
+
+  const toggleSubmenu = (e) => {
+      e.preventDefault();
+      setSubmenuOpen(!submenuOpen);
+  };
 
   return (
     <>
-      <div className={`nav-overlay ${mobileMenuOpen ? 'open' : ''}`} onClick={closeMenu} />
+      {/* CLASES ACTUALIZADAS: nav-overlay -> _dash-nav-overlay */}
+      <div className={`_dash-nav-overlay ${mobileMenuOpen ? 'open' : ''}`} onClick={closeMenu} />
       
-      <nav className={`landing-navbar ${scrolled ? 'scrolled' : ''}`}>
-        <div className="navbar-logo">
+      {/* CLASES ACTUALIZADAS: landing-navbar -> _dash-landing-navbar */}
+      <nav className={`_dash-landing-navbar ${scrolled ? '_dash-scrolled' : ''}`}>
+        <div className="_dash-navbar-logo">
           <Link to="/" onClick={closeMenu}>
-            <img src="https://i.ibb.co/G4JcrC0v/852ae06c-511e-4480-8441-afd340897585.png" alt="Gesia AI" className="navbar-logo-img" />
+            {/* CLASES ACTUALIZADAS: navbar-logo-img -> _dash-navbar-logo-img */}
+            <img src="https://i.ibb.co/G4JcrC0v/852ae06c-511e-4480-8441-afd340897585.png" alt="Gesia AI" className="_dash-navbar-logo-img" />
           </Link>
         </div>
 
-        {/* Botón Hamburguesa */}
-        <button className={`mobile-toggle ${mobileMenuOpen ? 'open' : ''}`} onClick={toggleMenu} aria-label="Menu">
+        {/* CLASES ACTUALIZADAS: mobile-toggle -> _dash-mobile-toggle */}
+        <button className={`_dash-mobile-toggle ${mobileMenuOpen ? 'open' : ''}`} onClick={toggleMenu} aria-label="Menu">
           <span></span><span></span><span></span>
         </button>
 
-        {/* Links de Navegación */}
-        <ul className={`navbar-links ${mobileMenuOpen ? 'open' : ''}`}>
-          <li className="has-submenu">
-            <span className="submenu-label">Sobre Nosotros <i className="fas fa-chevron-down" style={{ fontSize: '0.8rem', marginLeft: '5px' }}></i></span>
-            <ul className="submenu">
+        {/* CLASES ACTUALIZADAS: navbar-links -> _dash-navbar-links */}
+        <ul className={`_dash-navbar-links ${mobileMenuOpen ? 'open' : ''}`}>
+          
+          {/* CLASES ACTUALIZADAS: has-submenu -> _dash-has-submenu */}
+          <li className={`_dash-has-submenu ${submenuOpen ? 'open' : ''}`}>
+            {/* CLASES ACTUALIZADAS: submenu-label -> _dash-submenu-label */}
+            <span 
+                className="_dash-submenu-label" 
+                onClick={toggleSubmenu}
+            >
+                Sobre Nosotros <i className="fas fa-chevron-down" style={{ fontSize: '0.8rem', marginLeft: '5px', transform: submenuOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s' }}></i>
+            </span>
+            {/* CLASES ACTUALIZADAS: submenu -> _dash-submenu */}
+            <ul className="_dash-submenu">
               <li><Link to="/about#about" onClick={closeMenu}>Visión general</Link></li>
               <li><Link to="/about#vision" onClick={closeMenu}>Misión</Link></li>
               <li><Link to="/about#team" onClick={closeMenu}>Equipo</Link></li>
@@ -62,11 +87,12 @@ const NavBar = ({ scrollToLogin }) => {
             }}>Características</a>
           </li>
           
+          {/* CLASES ACTUALIZADAS: nav-cta -> _dash-nav-cta */}
           <li>
             <a href="#login-section" onClick={(e) => { 
                 scrollToLogin(e); 
                 closeMenu(); 
-            }} className="nav-cta">
+            }} className="_dash-nav-cta">
                 Empezar
             </a>
           </li>
@@ -75,7 +101,6 @@ const NavBar = ({ scrollToLogin }) => {
     </>
   );
 };
-
 /* =========================================
    CARRUSEL (CON FLECHAS Y DOTS)
    ========================================= */

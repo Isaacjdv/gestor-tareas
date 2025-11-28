@@ -46,7 +46,7 @@ const translations = {
   es: {
     searchPlaceholder: 'Buscar...',
     hello: 'Hola',
-    logout: 'Cerrar Sesión',
+    logout: 'Salir',
     root: 'Inicio',
     cancel: 'Cancelar',
     confirm: 'Confirmar',
@@ -336,7 +336,7 @@ const Breadcrumbs = ({ path, currentFolder, onCrumbClick, t }) => {
   );
 };
 
-/* 🟢 NAVBAR MODIFICADO PARA MÓVIL Y CLIC FUERA DE NOTIFICACIONES */
+/* 🟢 NAVBAR MODIFICADO: CON BARRA DE BÚSQUEDA FUNCIONAL EN MÓVIL */
 const DashboardNavbar = ({
   user,
   language,
@@ -351,7 +351,7 @@ const DashboardNavbar = ({
   onOpenProfile,
   onToggleSidebar, 
   onToggleChat,
-  bellRef // <--- RECIBIMOS LA REFERENCIA DE LA CAMPANA
+  bellRef 
 }) => {
   const navigate = useNavigate();
   const handleLogout = () => { authService.logout(); navigate('/'); };
@@ -362,21 +362,47 @@ const DashboardNavbar = ({
 
   return (
    <nav className="dashboard-navbar">
-  {/* Botón Hamburguesa (Izquierda) */}
-  <button className="mobile-toggle-btn mobile-menu-btn" onClick={onToggleSidebar} title="Menú">
-     <i className="fas fa-bars"></i>
-  </button>
+      {/* Botón Hamburguesa (Izquierda) */}
+      <button className="mobile-toggle-btn mobile-menu-btn" onClick={onToggleSidebar} title="Menú">
+         <i className="fas fa-bars"></i>
+      </button>
 
-  <div className="navbar-logo">
-    <a href="/dashboard">
-      <img
-        src="https://i.ibb.co/G4JcrC0v/852ae06c-511e-4480-8441-afd340897585.png"
-        alt="Gesia IA"
-        className="navbar-logo-img"
-      />
-    </a>
-  </div>
+      <div className="navbar-logo">
+        <a href="/dashboard">
+          <img
+            src="https://i.ibb.co/G4JcrC0v/852ae06c-511e-4480-8441-afd340897585.png"
+            alt="Gesia IA"
+            className="navbar-logo-img"
+          />
+        </a>
+      </div>
 
+      {/* 🟢 BARRA MÓVIL: SELECTOR + INPUT (Funcional) */}
+      <div className="mobile-search-container">
+          <div className="mobile-search-wrapper">
+            <select 
+              className="mobile-search-select" 
+              value={searchFilter} 
+              onChange={(e) => setSearchFilter(e.target.value)}
+            >
+              {/* Priorizamos Amigos como pidió */}
+              <option value="users">Amigos</option>
+              <option value="files">Archivos</option>
+              <option value="folders">Carpetas</option>
+            </select>
+            <input 
+              type="text" 
+              className="mobile-search-input"
+              placeholder={t('searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <i className="fas fa-search mobile-search-icon"></i>
+          </div>
+      </div>
+      {/* 🟢 FIN BARRA MÓVIL */}
+
+      {/* Barra de Escritorio (Se oculta en móvil por CSS) */}
       <div className="navbar-search">
         <select className="search-filter" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)}>
           <option value="files">{t('search_files')}</option>
@@ -413,7 +439,7 @@ const DashboardNavbar = ({
             title="Notificaciones" 
             role="button" 
             aria-label="Notificaciones"
-            ref={bellRef} // <--- REFERENCIA ASIGNADA AQUÍ
+            ref={bellRef} 
         >
           <svg className="bell-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
             <path d="M12 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 006 14h12a1 1 0 00.707-1.707L18 11.586V8a6 6 0 00-6-6zm0 20a3 3 0 002.995-2.824L15 19h-6a3 3 0 002.824 2.995L12 22z"></path>
@@ -486,7 +512,6 @@ const QuickTasksCard = ({ userId, t, tasks, setTasks, loading, setLoading, onToa
       className="home-card home-card--white"
       style={{
         position: 'relative',
-        // sin overlay ni efecto oscuro
         cursor: 'default'
       }}
     >
@@ -546,7 +571,6 @@ const QuickTasksCard = ({ userId, t, tasks, setTasks, loading, setLoading, onToa
               {loading ? t('creating') : `${t('addTasks')} 📚`}
             </button>
 
-            {/* Botón de accesibilidad: ir a pestaña de tareas */}
             <button
               className="btn btn-secondary"
               type="button"
@@ -1366,4 +1390,4 @@ const DashboardPage = () => {
   );
 };
 
-export default DashboardPage;
+export default DashboardPage; 
